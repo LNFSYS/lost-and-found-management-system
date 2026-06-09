@@ -1,0 +1,19 @@
+{
+  "name": "fptu-lost-found-system",
+  "private": true,
+  "version": "0.1.0",
+  "description": "AI-powered Lost & Found Management System for FPT University campus.",
+  "scripts": {
+    "dev:web": "npm --workspace apps/web run dev",
+    "dev:api": "npm --workspace apps/api-node run dev",
+    "migrate:api": "npm --workspace apps/api-node run migrate",
+    "build:web": "npm --workspace apps/web run build",
+    "build:api": "npm --workspace apps/api-node run build",
+    "build:java": "mvn -f apps/java-admin-service/pom.xml package -DskipTests",
+    "lint:web": "npm --workspace apps/web run lint"
+  },
+  "workspaces": [
+    "apps/*",
+    "shared"
+  ]
+}

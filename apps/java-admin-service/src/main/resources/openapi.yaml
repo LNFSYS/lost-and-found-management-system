@@ -1,0 +1,124 @@
+openapi: 3.0.3
+info:
+  title: FPTU Lost & Found Java Admin Service
+  version: 0.1.0
+servers:
+  - url: http://localhost:8080
+paths:
+  /admin/claims/{id}/request-info:
+    post:
+      summary: Request more information for a claim
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Claim moved to NEED_MORE_INFO
+  /admin/claims/{id}/accept:
+    post:
+      summary: Accept claim
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Claim accepted
+  /admin/claims/{id}/reject:
+    post:
+      summary: Reject claim
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Claim rejected
+  /admin/claims/{id}/cancel:
+    post:
+      summary: Claimant cancels a pending claim
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Claim cancelled
+  /admin/handover-points:
+    get:
+      summary: List active handover points
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Handover point list
+    post:
+      summary: Create handover point
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Handover point created
+  /admin/handover-points/{id}:
+    put:
+      summary: Update handover point
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Handover point updated
+  /admin/handover-points/{id}/toggle:
+    patch:
+      summary: Enable or disable handover point
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Handover point toggled
+  /admin/handover-points/{id}/receive:
+    post:
+      summary: Staff records item received at point
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Storage log written
+  /admin/handover-points/{id}/store:
+    post:
+      summary: Staff records item stored at point
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Storage log written
+  /admin/handover-points/{id}/return:
+    post:
+      summary: Staff records item returned
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Post resolved and storage log written
+  /admin/config:
+    get:
+      summary: List configuration entries
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Configuration list
+  /admin/config/{key}:
+    put:
+      summary: Update configuration entry
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Configuration updated
+  /admin/config/history:
+    get:
+      summary: List recent configuration changes
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Configuration history
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

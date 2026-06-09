@@ -1,0 +1,163 @@
+# FPTU Lost & Found System Architecture
+
+## Goal
+
+Build a campus-first Lost & Found platform for FPT University with public boards, verified claims, AI-assisted matching, handover points, appointments, realtime chat, reputation, and admin governance.
+
+## Proposed Monorepo
+
+```text
+apps/
+  web/                  React + TypeScript + Vite web app
+  api-node/             Node.js API for auth, migrations, posts, uploads and claims
+  mobile/               React Native app placeholder
+  java-admin-service/   Spring Boot service for admin/business modules
+shared/                 Shared TypeScript models and constants
+docs/
+  architecture.md       System architecture and team boundaries
+```
+
+## Service Boundaries
+
+| Area | Owner | Responsibility |
+| --- | --- | --- |
+| Web App | DEV 1 | Guest/User/Staff/Admin UI, dashboard, configuration screens |
+| Mobile App | DEV 2 | User mobile flows: auth, posts, claims, chat, appointments |
+| Node API | DEV 3 | Core REST API, auth, user profile, posts, Cloudinary, claim base, chat history |
+| AI/Realtime | DEV 4 | Vision/OCR, auto tags, matching engine, Socket.IO notifications |
+| Java Admin Service | DEV 5 | Admin config, moderation, dashboard APIs, handover, appointments, reputation, scheduled tasks |
+
+## Backend API Foundation
+
+`apps/api-node` now uses a standard Express structure:
+
+```text
+src/
+  models/
+  repositories/
+  controllers/
+  routes/
+  services/
+  middlewares/
+  validators/
+  config/
+  migrations/
+```
+
+Current Auth endpoints:
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/auth/register` | Register account with any valid email and create a verification OTP |
+| `POST` | `/api/auth/verify-otp` | Verify registration OTP, activate account, assign USER role and issue tokens |
+| `POST` | `/api/auth/login` | Login with email/password and receive access/refresh tokens |
+| `POST` | `/api/auth/refresh` | Rotate refresh token and issue a new token pair |
+| `POST` | `/api/auth/logout` | Revoke refresh token |
+| `GET` | `/api/auth/me` | Get current authenticated user |
+| `PUT` | `/api/auth/profile` | Update full name, student code and phone number |
+| `POST` | `/api/auth/avatar` | Upload avatar to Cloudinary and replace old asset |
+| `GET` | `/api/auth/activity` | Return user activity history |
+| `GET` | `/api/auth/reputation` | Return reputation score and recent reputation logs |
+| `POST` | `/api/posts` | Create LOST/FOUND post |
+| `GET` | `/api/posts` | Public board with pagination, search, filters and latest sort |
+| `GET` | `/api/posts/my` | Current user's posts with filters |
+| `GET` | `/api/posts/:id` | Post detail with media, AI tags and matches |
+| `PUT` | `/api/posts/:id` | Update owned/admin post |
+| `PATCH` | `/api/posts/:id/status` | Update post status |
+| `POST` | `/api/posts/:id/media` | Upload post images to Cloudinary and save metadata |
+| `DELETE` | `/api/posts/:id/media/:mediaId` | Delete post media asset and metadata |
+| `GET` | `/api/posts/:id/matches` | Return saved matching results for a post |
+| `DELETE` | `/api/posts/:id` | Soft-delete owned/admin post |
+| `GET` | `/api/search` | Search public posts by normalized keyword, filters and `sort=highest_match` |
+| `POST` | `/api/claims` | Submit claim for a FOUND post |
+| `GET` | `/api/claims/:id` | Get claim detail with permission guard |
+| `POST` | `/api/claims/:id/evidence` | Upload claim evidence image to Cloudinary private folder |
+| `GET` | `/api/posts/:id/claims` | List claims for a post owner, staff or admin |
+| `GET` | `/api/config/public` | Return public config entries for web/mobile validation |
+| `GET` | `/api/categories` | Return active item categories |
+| `GET` | `/api/locations/areas` | Return active campus areas |
+| `GET` | `/api/locations/areas/:id/buildings` | Return active buildings in an area |
+| `GET` | `/api/locations/buildings/:id/rooms` | Return active rooms in a building |
+| `GET` | `/api/handover-points` | Return active handover points |
+| `GET` | `/api/handover-points/:id` | Return one active handover point |
+| `GET` | `/api/health` | API health check |
+
+All Node API responses use `{ success, data?, error?, message? }`.
+
+## Database Foundation
+
+`apps/api-node/src/migrations` contains MySQL 8 migrations for:
+
+| File | Scope |
+| --- | --- |
+| `001_auth_schema.sql` | Users, roles, user roles, OTPs, OAuth accounts, refresh tokens, login audit logs and user activity logs |
+| `002_lost_found_schema.sql` | Posts, media, AI tags, matching, claims, handover points, storage logs, appointments, chat, notifications, reputation, reports, moderation and admin config |
+
+Run migrations with:
+
+```bash
+npm run migrate:api
+```
+
+The migration runner creates the configured database if needed and records applied files in `schema_migrations`.
+
+## AI And Matching
+
+Post image upload sends each Cloudinary `secure_url` through Google Vision when `GOOGLE_VISION_API_KEY` is configured. The Node API stores label/object/OCR tags in `ai_tags`, returns suggested categories in the upload response, and falls back to empty tags/OCR text if Vision is not configured or fails.
+
+The matching engine runs asynchronously after post create/update and after post image tags are saved. It builds TF-IDF vectors from normalized title, description and AI tags, calculates cosine text score plus category/location/time scores, applies weights from `config_entries`, and upserts rows into `match_results` when the total score passes `matching.threshold`.
+
+## Java Admin Service Foundation
+
+`apps/java-admin-service` now uses Spring Boot Security with JWT bearer tokens signed by the Node API `JWT_ACCESS_SECRET`. Implemented admin APIs cover claim state transitions, handover point management, storage logs, and typed configuration updates/history. The service maps directly to the MySQL tables created by the Node migrations and keeps Hibernate `ddl-auto=none`.
+
+## Core Data Modules
+
+| Module | Key Entities |
+| --- | --- |
+| Identity | User, Role, Session, OTP, ActivityLog |
+| Posts | LostFoundPost, Category, CampusLocation, PostMedia, SecretVerification |
+| Matching | MatchResult, MatchScoreBreakdown, AiTag, OcrText |
+| Claims | Claim, ClaimEvidence, ClaimDecision, ClaimStateLog |
+| Handover | HandoverPoint, StorageLog, ItemCustodyStatus |
+| Appointment | ReturnAppointment, AppointmentParticipant, Reminder |
+| Communication | ChatRoom, ChatMessage, Notification |
+| Governance | Report, ModerationAction, ReputationScore, ConfigEntry, ConfigHistory |
+
+## Project Documents
+
+| Module | Status | Document |
+| --- | --- | --- |
+| Project Overview | General thesis/use-case document updated | [lost-found-system-overview.md](lost-found-system-overview.md) |
+| Authentication, Authorization, User Profile | DB design completed | [db-auth-design.md](db-auth-design.md) |
+| Dev-Owned Tasks | Per-dev independent checklist created | [dev-owned-usecase-checklist.md](dev-owned-usecase-checklist.md) |
+
+## Integration Flow
+
+1. User creates LOST or FOUND post from web/mobile.
+2. Node API validates input, stores post/media, and emits an event.
+3. AI/matching worker analyzes images/text and saves match results.
+4. Realtime service notifies likely owners/finders when score passes threshold.
+5. Claimant submits evidence; finder/staff/admin reviews it.
+6. Accepted claim creates chat room and return appointment.
+7. Java service manages handover, appointment state, reputation, admin dashboard, and scheduled expiration.
+
+## Frontend Foundation
+
+`apps/web` now starts as an operational web app, not a marketing page. The first screen is the public Lost & Found board with API-backed search, filters, sorting, post detail, claim flow and account actions.
+
+| Route | Purpose |
+| --- | --- |
+| In-app board view | Public LOST/FOUND board with keyword, type, category, area, status, date and match-score filters |
+| In-app create view | Create LOST/FOUND post and upload images |
+| In-app account view | Register, OTP verification, login/logout, profile edit, avatar upload, activity and reputation |
+| Modal/drawer flows | Post detail, AI tags, matches and FOUND-post claim submission |
+
+## Brand Direction
+
+Use a restrained FPT University-inspired palette:
+
+- Orange `#F37124` for primary CTA and high-energy accents.
+- Blue `#0651A0` and `#008DDE` for trust, navigation, technology, and AI.
+- Green `#53B848` for campus, resolved status, and handover success.
+- Keep surfaces mostly white/off-white with crisp borders for a modern university system rather than a playful consumer app.

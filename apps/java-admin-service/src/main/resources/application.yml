@@ -1,0 +1,26 @@
+server:
+  port: ${JAVA_SERVICE_PORT:8080}
+
+spring:
+  application:
+    name: lnfs-java-admin-service
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:fptu_lost_found}?useUnicode=true&characterEncoding=utf8&connectionCollation=utf8mb4_unicode_ci&serverTimezone=UTC
+    username: ${DB_USER:}
+    password: ${DB_PASSWORD:}
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+lnfs:
+  jwt:
+    access-secret: ${JWT_ACCESS_SECRET:${JAVA_JWT_SECRET:}}
+
+springdoc:
+  swagger-ui:
+    path: /admin/docs

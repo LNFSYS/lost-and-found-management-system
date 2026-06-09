@@ -80,7 +80,6 @@ Current Auth endpoints:
 | `GET` | `/api/categories` | Return active item categories |
 | `GET` | `/api/locations/areas` | Return active campus areas |
 | `GET` | `/api/locations/areas/:id/buildings` | Return active buildings in an area |
-| `GET` | `/api/locations/buildings/:id/rooms` | Return active rooms in a building |
 | `GET` | `/api/handover-points` | Return active handover points |
 | `GET` | `/api/handover-points/:id` | Return one active handover point |
 | `GET` | `/api/admin/dashboard/overview` | Staff/Admin overview metrics |

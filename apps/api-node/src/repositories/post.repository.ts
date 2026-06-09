@@ -18,9 +18,10 @@ interface PostRow extends RowDataPacket {
   area_name: string | null;
   building_id: string | null;
   building_name: string | null;
-  room_id: string | null;
+  room_text: string | null;
   room_name: string | null;
   custom_location: string | null;
+  contact_info: string | null;
   lost_found_at: string | null;
   handover_point_id: string | null;
   handover_point_name: string | null;
@@ -74,7 +75,7 @@ interface MatchPostRow extends RowDataPacket {
   parent_category_id: string | null;
   area_id: string | null;
   building_id: string | null;
-  room_id: string | null;
+  room_text: string | null;
   lost_found_at: string | null;
 }
 
@@ -107,7 +108,7 @@ export interface MatchCandidatePost {
   parentCategoryId: string | null;
   areaId: string | null;
   buildingId: string | null;
-  roomId: string | null;
+  roomText: string | null;
   lostFoundAt: string | null;
 }
 
@@ -122,8 +123,9 @@ type CreatePostRecord = {
   categoryId: string;
   areaId?: string | null;
   buildingId?: string | null;
-  roomId?: string | null;
+  roomText?: string | null;
   customLocation?: string | null;
+  contactInfo?: string | null;
   lostFoundAt?: Date | null;
   handoverPointId?: string | null;
   secretVerificationHash?: string | null;
@@ -151,10 +153,11 @@ function mapPost(row: PostRow) {
       areaName: row.area_name,
       buildingId: row.building_id,
       buildingName: row.building_name,
-      roomId: row.room_id,
+      roomText: row.room_text,
       roomName: row.room_name,
       customLocation: row.custom_location
     },
+    contactInfo: row.contact_info,
     lostFoundAt: row.lost_found_at,
     handoverPoint: row.handover_point_id
       ? {
@@ -180,8 +183,8 @@ function basePostSelect() {
       p.category_id, c.name AS category_name,
       p.area_id, a.name AS area_name,
       p.building_id, b.name AS building_name,
-      p.room_id, r.name AS room_name,
-      p.custom_location, p.lost_found_at,
+      p.room_text, p.room_text AS room_name,
+      p.custom_location, p.contact_info, p.lost_found_at,
       p.handover_point_id, hp.name AS handover_point_name,
       p.resolved_at, p.view_count, p.created_at, p.updated_at,
       u.full_name AS owner_name
@@ -190,7 +193,6 @@ function basePostSelect() {
     LEFT JOIN item_categories c ON c.id = p.category_id
     LEFT JOIN campus_areas a ON a.id = p.area_id
     LEFT JOIN campus_buildings b ON b.id = p.building_id
-    LEFT JOIN campus_rooms r ON r.id = p.room_id
     LEFT JOIN handover_points hp ON hp.id = p.handover_point_id
   `;
 }
@@ -219,8 +221,8 @@ function buildListWhere(query: ListPostsQuery, userId?: string) {
     values.push(query.status);
   }
   if (query.categoryId) {
-    where.push("p.category_id = ?");
-    values.push(query.categoryId);
+    where.push("(p.category_id = ? OR p.category_id IN (SELECT id FROM item_categories WHERE parent_id = ?))");
+    values.push(query.categoryId, query.categoryId);
   }
   if (query.areaId) {
     where.push("p.area_id = ?");
@@ -229,10 +231,6 @@ function buildListWhere(query: ListPostsQuery, userId?: string) {
   if (query.buildingId) {
     where.push("p.building_id = ?");
     values.push(query.buildingId);
-  }
-  if (query.roomId) {
-    where.push("p.room_id = ?");
-    values.push(query.roomId);
   }
   if (query.from) {
     where.push("p.lost_found_at >= ?");
@@ -250,12 +248,12 @@ function mapMatchPost(row: MatchPostRow): MatchCandidatePost {
   return {
     id: row.id,
     type: row.type,
-    text: `${row.title_normalized} ${row.description_normalized} ${row.ai_tag_text ?? ""}`.trim(),
+    text: `${row.title_normalized} ${row.description_normalized} ${row.room_text ?? ""} ${row.ai_tag_text ?? ""}`.trim(),
     categoryId: row.category_id,
     parentCategoryId: row.parent_category_id,
     areaId: row.area_id,
     buildingId: row.building_id,
-    roomId: row.room_id,
+    roomText: row.room_text,
     lostFoundAt: row.lost_found_at
   };
 }
@@ -279,7 +277,7 @@ export const postRepository = {
   },
 
   async activeRecordExists(
-    table: "item_categories" | "campus_areas" | "campus_buildings" | "campus_rooms" | "handover_points",
+    table: "item_categories" | "campus_areas" | "campus_buildings" | "handover_points",
     id: string
   ) {
     const [rows] = await dbPool.query<CountRow[]>(
@@ -297,23 +295,15 @@ export const postRepository = {
     return rows[0]?.total > 0;
   },
 
-  async roomBelongsToBuilding(roomId: string, buildingId: string) {
-    const [rows] = await dbPool.query<CountRow[]>(
-      "SELECT COUNT(*) AS total FROM campus_rooms WHERE id = ? AND building_id = ? AND is_active = TRUE",
-      [roomId, buildingId]
-    );
-    return rows[0]?.total > 0;
-  },
-
   async create(input: CreatePostRecord) {
     await dbPool.execute(
       `
         INSERT INTO posts (
           id, user_id, type, title, title_normalized, description, description_normalized,
-          category_id, area_id, building_id, room_id, custom_location, lost_found_at,
+          category_id, area_id, building_id, room_text, custom_location, contact_info, lost_found_at,
           handover_point_id, secret_verification_hash, expires_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         input.id,
@@ -326,8 +316,9 @@ export const postRepository = {
         input.categoryId,
         input.areaId ?? null,
         input.buildingId ?? null,
-        input.roomId ?? null,
+        input.roomText ?? null,
         input.customLocation ?? null,
+        input.contactInfo ?? null,
         input.lostFoundAt ?? null,
         input.handoverPointId ?? null,
         input.secretVerificationHash ?? null,
@@ -550,7 +541,7 @@ export const postRepository = {
         SELECT
           p.id, p.type, p.title_normalized, p.description_normalized, tags.ai_tag_text,
           p.category_id, c.parent_id AS parent_category_id,
-          p.area_id, p.building_id, p.room_id, p.lost_found_at
+          p.area_id, p.building_id, p.room_text, p.lost_found_at
         FROM posts p
         LEFT JOIN item_categories c ON c.id = p.category_id
         LEFT JOIN (
@@ -577,7 +568,7 @@ export const postRepository = {
         SELECT
           p.id, p.type, p.title_normalized, p.description_normalized, tags.ai_tag_text,
           p.category_id, c.parent_id AS parent_category_id,
-          p.area_id, p.building_id, p.room_id, p.lost_found_at
+          p.area_id, p.building_id, p.room_text, p.lost_found_at
         FROM posts p
         LEFT JOIN item_categories c ON c.id = p.category_id
         LEFT JOIN (
@@ -715,8 +706,9 @@ export const postRepository = {
       ["categoryId", "category_id"],
       ["areaId", "area_id"],
       ["buildingId", "building_id"],
-      ["roomId", "room_id"],
+      ["roomText", "room_text"],
       ["customLocation", "custom_location"],
+      ["contactInfo", "contact_info"],
       ["lostFoundAt", "lost_found_at"],
       ["handoverPointId", "handover_point_id"],
       ["secretVerificationHash", "secret_verification_hash"]
@@ -740,7 +732,7 @@ export const postRepository = {
     return this.findById(id);
   },
 
-  async updateStatus(id: string, status: "OPEN" | "MATCHED" | "RESOLVED" | "CLOSED") {
+  async updateStatus(id: string, status: "OPEN" | "MATCHED" | "RESOLVED" | "CLOSED" | "HIDDEN") {
     await dbPool.execute(
       `
         UPDATE posts

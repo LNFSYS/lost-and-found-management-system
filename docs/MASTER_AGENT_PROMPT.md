@@ -219,15 +219,6 @@ CREATE TABLE campus_buildings (
   CONSTRAINT fk_buildings_area FOREIGN KEY (area_id) REFERENCES campus_areas(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE campus_rooms (
-  id CHAR(36) PRIMARY KEY,
-  building_id CHAR(36) NOT NULL,
-  name VARCHAR(100) NOT NULL,
-  is_active BOOLEAN NOT NULL DEFAULT TRUE,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT fk_rooms_building FOREIGN KEY (building_id) REFERENCES campus_buildings(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 -- Item categories
 CREATE TABLE item_categories (
   id CHAR(36) PRIMARY KEY,
@@ -255,8 +246,9 @@ CREATE TABLE posts (
   category_id CHAR(36) NULL,
   area_id CHAR(36) NULL,
   building_id CHAR(36) NULL,
-  room_id CHAR(36) NULL,
+  room_text VARCHAR(100) NULL,
   custom_location VARCHAR(255) NULL,
+  contact_info VARCHAR(255) NULL,
   lost_found_at DATETIME NULL,
   handover_point_id CHAR(36) NULL,
   secret_verification_hash VARCHAR(255) NULL,
@@ -270,7 +262,6 @@ CREATE TABLE posts (
   CONSTRAINT fk_posts_category FOREIGN KEY (category_id) REFERENCES item_categories(id),
   CONSTRAINT fk_posts_area FOREIGN KEY (area_id) REFERENCES campus_areas(id),
   CONSTRAINT fk_posts_building FOREIGN KEY (building_id) REFERENCES campus_buildings(id),
-  CONSTRAINT fk_posts_room FOREIGN KEY (room_id) REFERENCES campus_rooms(id),
   KEY idx_posts_type_status (type, status),
   KEY idx_posts_user (user_id),
   KEY idx_posts_created (created_at),
@@ -392,7 +383,6 @@ CREATE TABLE handover_points (
   address VARCHAR(255) NOT NULL,
   area_id CHAR(36) NULL,
   building_id CHAR(36) NULL,
-  room_id CHAR(36) NULL,
   opening_hours VARCHAR(255) NULL,
   contact_info VARCHAR(255) NULL,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -401,7 +391,6 @@ CREATE TABLE handover_points (
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_hp_area FOREIGN KEY (area_id) REFERENCES campus_areas(id),
   CONSTRAINT fk_hp_building FOREIGN KEY (building_id) REFERENCES campus_buildings(id),
-  CONSTRAINT fk_hp_room FOREIGN KEY (room_id) REFERENCES campus_rooms(id),
   CONSTRAINT fk_hp_created_by FOREIGN KEY (created_by) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -428,13 +417,13 @@ CREATE TABLE return_appointments (
   claim_id CHAR(36) NOT NULL,
   post_id CHAR(36) NOT NULL,
   proposer_id CHAR(36) NOT NULL,
-  status ENUM('PENDING', 'CONFIRMED', 'REJECTED', 'CANCELLED', 'COMPLETED', 'RESCHEDULED') NOT NULL DEFAULT 'PENDING',
+  status ENUM('PENDING', 'ACCEPTED', 'REJECTED', 'CANCELLED', 'COMPLETED', 'RESCHEDULED') NOT NULL DEFAULT 'PENDING',
   proposed_at DATETIME NOT NULL,
   handover_point_id CHAR(36) NULL,
   custom_location VARCHAR(255) NULL,
   rejection_reason TEXT NULL,
   cancellation_reason TEXT NULL,
-  confirmed_at DATETIME NULL,
+  accepted_at DATETIME NULL,
   completed_at DATETIME NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -671,7 +660,6 @@ Implement các route sau. Mỗi route cần: controller, service, repository, va
 |---|---|---|---|
 | GET | `/api/locations/areas` | Public | - |
 | GET | `/api/locations/areas/:id/buildings` | Public | - |
-| GET | `/api/locations/buildings/:id/rooms` | Public | - |
 | GET | `/api/categories` | Public | - |
 
 ### Swagger
@@ -711,7 +699,7 @@ Expose các REST API sau. Tất cả đều yêu cầu `ADMIN` hoặc `STAFF` ro
 | Method | Path | Role | UC |
 |---|---|---|---|
 | POST | `/admin/appointments` | USER | UC-112 |
-| POST | `/admin/appointments/:id/confirm` | USER | UC-117 |
+| POST | `/admin/appointments/:id/accept` | USER | UC-117 |
 | POST | `/admin/appointments/:id/reject` | USER | UC-118 |
 | POST | `/admin/appointments/:id/reschedule` | USER | UC-119 |
 | POST | `/admin/appointments/:id/cancel` | USER | UC-120 |
@@ -755,7 +743,6 @@ Expose các REST API sau. Tất cả đều yêu cầu `ADMIN` hoặc `STAFF` ro
 | GET  | `/admin/locations` | ADMIN | UC-165 |
 | POST | `/admin/locations/areas` | ADMIN | UC-165 |
 | POST | `/admin/locations/buildings` | ADMIN | UC-165 |
-| POST | `/admin/locations/rooms` | ADMIN | UC-165 |
 
 ### Reputation
 

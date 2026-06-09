@@ -1,4 +1,5 @@
 import { postRepository, type MatchCandidatePost } from "../repositories/post.repository.js";
+import { normalizeText } from "../utils/normalize-text.js";
 
 interface WeightedScores {
   textScore: number;
@@ -89,7 +90,7 @@ function categoryScore(left: MatchCandidatePost, right: MatchCandidatePost) {
 }
 
 function locationScore(left: MatchCandidatePost, right: MatchCandidatePost) {
-  if (left.roomId && left.roomId === right.roomId) {
+  if (left.roomText && right.roomText && normalizeText(left.roomText) === normalizeText(right.roomText)) {
     return 1;
   }
   if (left.buildingId && left.buildingId === right.buildingId) {

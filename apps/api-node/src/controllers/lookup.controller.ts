@@ -27,11 +27,6 @@ export const lookupController = {
     response.json(ok({ buildings }));
   },
 
-  async rooms(request: Request, response: Response) {
-    const rooms = await lookupRepository.listRoomsByBuilding(requireStringParam(request.params.id, "id"));
-    response.json(ok({ rooms }));
-  },
-
   async handoverPoints(_request: Request, response: Response) {
     const handoverPoints = await lookupRepository.listHandoverPoints();
     response.json(ok({ handoverPoints }));

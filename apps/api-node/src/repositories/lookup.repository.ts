@@ -24,19 +24,12 @@ interface BuildingRow extends RowDataPacket {
   sort_order: number;
 }
 
-interface RoomRow extends RowDataPacket {
-  id: string;
-  building_id: string;
-  name: string;
-}
-
 interface HandoverPointRow extends RowDataPacket {
   id: string;
   name: string;
   address: string;
   area_id: string | null;
   building_id: string | null;
-  room_id: string | null;
   opening_hours: string | null;
   contact_info: string | null;
 }
@@ -99,28 +92,10 @@ export const lookupRepository = {
     }));
   },
 
-  async listRoomsByBuilding(buildingId: string) {
-    const [rows] = await dbPool.query<RoomRow[]>(
-      `
-        SELECT id, building_id, name
-        FROM campus_rooms
-        WHERE building_id = ? AND is_active = TRUE
-        ORDER BY name
-      `,
-      [buildingId]
-    );
-
-    return rows.map((row) => ({
-      id: row.id,
-      buildingId: row.building_id,
-      name: row.name
-    }));
-  },
-
   async listHandoverPoints() {
     const [rows] = await dbPool.query<HandoverPointRow[]>(
       `
-        SELECT id, name, address, area_id, building_id, room_id, opening_hours, contact_info
+        SELECT id, name, address, area_id, building_id, opening_hours, contact_info
         FROM handover_points
         WHERE is_active = TRUE
         ORDER BY name
@@ -133,7 +108,6 @@ export const lookupRepository = {
       address: row.address,
       areaId: row.area_id,
       buildingId: row.building_id,
-      roomId: row.room_id,
       openingHours: row.opening_hours,
       contactInfo: row.contact_info
     }));
@@ -142,7 +116,7 @@ export const lookupRepository = {
   async findHandoverPointById(id: string) {
     const [rows] = await dbPool.query<HandoverPointRow[]>(
       `
-        SELECT id, name, address, area_id, building_id, room_id, opening_hours, contact_info
+        SELECT id, name, address, area_id, building_id, opening_hours, contact_info
         FROM handover_points
         WHERE id = ? AND is_active = TRUE
         LIMIT 1
@@ -161,7 +135,6 @@ export const lookupRepository = {
       address: row.address,
       areaId: row.area_id,
       buildingId: row.building_id,
-      roomId: row.room_id,
       openingHours: row.opening_hours,
       contactInfo: row.contact_info
     };

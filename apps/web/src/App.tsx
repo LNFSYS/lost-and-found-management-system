@@ -29,6 +29,7 @@ import {
   getStoredRefreshToken,
   hasAccessToken,
   saveTokens,
+  type Category,
   type AdminArea,
   type AdminBuilding,
   type AdminCategory,
@@ -37,23 +38,23 @@ import {
   type AdminOverview,
   type AdminReport,
   type AdminRole,
-  type AdminRoom,
   type AdminUser,
   type AdminUserStatus,
   type BoardPost,
   type Building,
   type HandoverPoint,
   type ListPostsParams,
+  type PostStatus,
   type PostType,
   type PublicConfigEntry,
   type PublicUser,
-  type Room
 } from "./services/api";
 
 type View = "board" | "my-posts" | "create" | "handover" | "account";
 type AuthMode = "login" | "register" | "forgot" | "reset";
+type AuthEntryMode = Extract<AuthMode, "login" | "register">;
 type AudienceRole = "STUDENT" | "LECTURER";
-type AdminTab = "overview" | "categories" | "locations" | "handover" | "users" | "reports";
+type AdminTab = "overview" | "moderation" | "categories" | "locations" | "handover" | "users" | "reports";
 
 interface ImageUploadRules {
   allowedFormats: string[];
@@ -84,6 +85,8 @@ export function App() {
   });
   const [claimPost, setClaimPost] = useState<BoardPost | null>(null);
   const [authVersion, setAuthVersion] = useState(0);
+  const [authEntryMode, setAuthEntryMode] = useState<AuthEntryMode>("login");
+  const [authEntryKey, setAuthEntryKey] = useState(0);
   const [adminMode, setAdminMode] = useState(false);
   const [adminTab, setAdminTab] = useState<AdminTab>("overview");
 
@@ -95,11 +98,6 @@ export function App() {
     queryKey: ["filter-buildings", filters.areaId],
     queryFn: () => api.buildings(filters.areaId!),
     enabled: Boolean(filters.areaId)
-  });
-  const filterRoomsQuery = useQuery({
-    queryKey: ["filter-rooms", filters.buildingId],
-    queryFn: () => api.rooms(filters.buildingId!),
-    enabled: Boolean(filters.buildingId)
   });
   const postsQuery = useQuery({ queryKey: ["posts", filters], queryFn: () => api.listPosts(filters) });
   const meQuery = useQuery({
@@ -114,6 +112,11 @@ export function App() {
     queryKey: ["admin-posts-overview", adminMode],
     queryFn: () => api.listPosts({ page: 1, pageSize: 100, sort: "latest" }),
     enabled: adminMode
+  });
+  const adminHiddenPostsQuery = useQuery({
+    queryKey: ["admin-hidden-posts", adminMode],
+    queryFn: () => api.listPosts({ page: 1, pageSize: 100, status: "HIDDEN", sort: "latest" }),
+    enabled: adminMode && isAdmin
   });
   const adminOverviewQuery = useQuery({
     queryKey: ["admin-overview", adminMode],
@@ -138,11 +141,6 @@ export function App() {
   const adminBuildingsQuery = useQuery({
     queryKey: ["admin-buildings", adminMode],
     queryFn: () => api.adminBuildings(),
-    enabled: adminMode && isAdmin
-  });
-  const adminRoomsQuery = useQuery({
-    queryKey: ["admin-rooms", adminMode],
-    queryFn: () => api.adminRooms(),
     enabled: adminMode && isAdmin
   });
   const adminHandoverQuery = useQuery({
@@ -170,6 +168,10 @@ export function App() {
   const activeList = view === "my-posts" ? myPostsQuery.data : postsQuery.data;
   const activeListLoading = view === "my-posts" ? myPostsQuery.isLoading : postsQuery.isLoading;
   const activeListError = view === "my-posts" ? myPostsQuery.error : postsQuery.error;
+  const moderationPosts = useMemo(
+    () => [...(adminPostsQuery.data?.items ?? []), ...(adminHiddenPostsQuery.data?.items ?? [])],
+    [adminHiddenPostsQuery.data?.items, adminPostsQuery.data?.items]
+  );
   const imageRules = useMemo(() => getImageUploadRules(publicConfigQuery.data?.entries), [publicConfigQuery.data?.entries]);
   const title = viewTitle(view);
 
@@ -190,10 +192,6 @@ export function App() {
       const next = { ...current, [key]: value, page: 1 };
       if (key === "areaId") {
         next.buildingId = undefined;
-        next.roomId = undefined;
-      }
-      if (key === "buildingId") {
-        next.roomId = undefined;
       }
       return next;
     });
@@ -223,6 +221,13 @@ export function App() {
     void queryClient.invalidateQueries({ queryKey: ["me"] });
   }
 
+  function openAuth(mode: AuthEntryMode) {
+    setAuthEntryMode(mode);
+    setAuthEntryKey((value) => value + 1);
+    setAdminMode(false);
+    setView("account");
+  }
+
   const stats = useMemo(() => {
     const items = activeList?.items ?? [];
     return {
@@ -233,7 +238,7 @@ export function App() {
   }, [activeList?.items]);
 
   return (
-    <main className={`app-shell ${adminMode ? "admin-shell" : "community-shell"}`}>
+    <main className={`app-shell ${adminMode ? "admin-shell" : "community-shell"} ${!isSignedIn ? "guest-shell" : ""}`}>
       <aside className="sidebar">
         <a className="brand" href="#" aria-label="FPTU Lost and Found">
           <span className="brand-mark">
@@ -255,6 +260,9 @@ export function App() {
               </button>
               {isAdmin && (
                 <>
+                  <button className={adminTab === "moderation" ? "active" : ""} type="button" onClick={() => setAdminTab("moderation")}>
+                    <ShieldCheck size={18} /> Kiểm duyệt
+                  </button>
                   <button className={adminTab === "categories" ? "active" : ""} type="button" onClick={() => setAdminTab("categories")}>
                     <Boxes size={18} /> Danh mục
                   </button>
@@ -278,21 +286,36 @@ export function App() {
               <button className={view === "board" ? "active" : ""} type="button" onClick={() => setView("board")}>
                 <Search size={18} /> Cộng đồng
               </button>
+              {isSignedIn && (
               <button className={view === "my-posts" ? "active" : ""} type="button" onClick={() => setView("my-posts")}>
                 <UserCircle size={18} /> Tin của tôi
               </button>
+              )}
               <button className={view === "create" ? "active" : ""} type="button" onClick={() => setView("create")}>
                 <Camera size={18} /> Đăng tin
               </button>
               <button className={view === "handover" ? "active" : ""} type="button" onClick={() => setView("handover")}>
                 <Handshake size={18} /> Bàn giao
               </button>
+              {isSignedIn && (
               <button className={view === "account" ? "active" : ""} type="button" onClick={() => setView("account")}>
                 <UserCircle size={18} /> Tài khoản
               </button>
+              )}
             </>
           )}
         </nav>
+
+        {!adminMode && !isSignedIn && (
+          <div className="guest-auth-actions" aria-label="Guest authentication actions">
+            <button className="guest-login-button" type="button" onClick={() => openAuth("login")}>
+              Đăng nhập
+            </button>
+            <button className="guest-register-button" type="button" onClick={() => openAuth("register")}>
+              Đăng ký
+            </button>
+          </div>
+        )}
 
         {canUseAdmin && (
           <button className="mode-switch" type="button" onClick={() => setAdminMode((value) => !value)}>
@@ -334,12 +357,12 @@ export function App() {
           <AdminDashboardView
             activeTab={adminTab}
             posts={adminPostsQuery.data?.items ?? []}
+            moderationPosts={moderationPosts}
             overview={adminOverviewQuery.data?.overview}
             users={adminUsersQuery.data?.users ?? []}
             categories={adminCategoriesQuery.data?.categories ?? []}
             areas={adminAreasQuery.data?.areas ?? []}
             buildings={adminBuildingsQuery.data?.buildings ?? []}
-            rooms={adminRoomsQuery.data?.rooms ?? []}
             handoverPoints={adminHandoverQuery.data?.handoverPoints ?? []}
             reports={adminReportsQuery.data?.reports ?? []}
             totalPosts={adminPostsQuery.data?.total ?? 0}
@@ -352,7 +375,6 @@ export function App() {
             categories={categoriesQuery.data?.categories ?? []}
             areas={areasQuery.data?.areas ?? []}
             buildings={filterBuildingsQuery.data?.buildings ?? []}
-            rooms={filterRoomsQuery.data?.rooms ?? []}
             filters={filters}
             posts={activeList?.items ?? []}
             stats={stats}
@@ -369,7 +391,7 @@ export function App() {
           <div className="empty-state">
             <ShieldCheck size={30} />
             <strong>Cần đăng nhập để xem tin của tôi</strong>
-            <span>Vào tab Tài khoản để đăng nhập hoặc tạo tài khoản mới.</span>
+            <span>Bấm Đăng nhập hoặc Đăng ký ở thanh trên để tiếp tục.</span>
           </div>
         )}
 
@@ -379,7 +401,6 @@ export function App() {
             categories={categoriesQuery.data?.categories ?? []}
             areas={areasQuery.data?.areas ?? []}
             buildings={filterBuildingsQuery.data?.buildings ?? []}
-            rooms={filterRoomsQuery.data?.rooms ?? []}
             filters={filters}
             posts={activeList?.items ?? []}
             stats={stats}
@@ -418,8 +439,14 @@ export function App() {
         {!adminMode && view === "account" && (
           <AccountView
             user={meQuery.data?.user}
+            entryMode={authEntryMode}
+            entryKey={authEntryKey}
             imageRules={imageRules}
             onAuthChange={afterAuthChange}
+            onSignedIn={() => {
+              afterAuthChange();
+              setView("board");
+            }}
             onSignedOut={() => {
               clearTokens();
               afterAuthChange();
@@ -429,15 +456,17 @@ export function App() {
       </section>
 
       {!adminMode && (
-        <nav className="mobile-bottom-nav" aria-label="Điều hướng nhanh">
+        <nav className={`mobile-bottom-nav ${isSignedIn ? "" : "guest-bottom-nav"}`} aria-label="Điều hướng nhanh">
           <button className={view === "board" ? "active" : ""} type="button" onClick={() => setView("board")}>
             <Search size={18} />
             <span>Cộng đồng</span>
           </button>
-          <button className={view === "my-posts" ? "active" : ""} type="button" onClick={() => setView("my-posts")}>
-            <UserCircle size={18} />
-            <span>Tin tôi</span>
-          </button>
+          {isSignedIn && (
+            <button className={view === "my-posts" ? "active" : ""} type="button" onClick={() => setView("my-posts")}>
+              <UserCircle size={18} />
+              <span>Tin tôi</span>
+            </button>
+          )}
           <button className={view === "create" ? "active" : ""} type="button" onClick={() => setView("create")}>
             <Camera size={20} />
             <span>Đăng</span>
@@ -446,10 +475,17 @@ export function App() {
             <Handshake size={18} />
             <span>Bàn giao</span>
           </button>
+          {isSignedIn ? (
           <button className={view === "account" ? "active" : ""} type="button" onClick={() => setView("account")}>
             <UserCircle size={18} />
             <span>Tài khoản</span>
           </button>
+          ) : (
+          <button className={view === "account" ? "active" : ""} type="button" onClick={() => openAuth("login")}>
+            <UserCircle size={18} />
+            <span>Đăng nhập</span>
+          </button>
+          )}
         </nav>
       )}
 
@@ -483,12 +519,12 @@ type AdminActionRunner = (task: () => Promise<unknown>) => void;
 function AdminDashboardView(props: {
   activeTab: AdminTab;
   posts: BoardPost[];
+  moderationPosts: BoardPost[];
   overview?: AdminOverview;
   users: AdminUser[];
   categories: AdminCategory[];
   areas: AdminArea[];
   buildings: AdminBuilding[];
-  rooms: AdminRoom[];
   handoverPoints: AdminHandoverPoint[];
   reports: AdminReport[];
   totalPosts: number;
@@ -504,11 +540,11 @@ function AdminDashboardView(props: {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["admin-overview"] }),
         queryClient.invalidateQueries({ queryKey: ["admin-posts-overview"] }),
+        queryClient.invalidateQueries({ queryKey: ["admin-hidden-posts"] }),
         queryClient.invalidateQueries({ queryKey: ["admin-users"] }),
         queryClient.invalidateQueries({ queryKey: ["admin-categories"] }),
         queryClient.invalidateQueries({ queryKey: ["admin-areas"] }),
         queryClient.invalidateQueries({ queryKey: ["admin-buildings"] }),
-        queryClient.invalidateQueries({ queryKey: ["admin-rooms"] }),
         queryClient.invalidateQueries({ queryKey: ["admin-handover"] }),
         queryClient.invalidateQueries({ queryKey: ["admin-reports"] }),
         queryClient.invalidateQueries({ queryKey: ["categories"] }),
@@ -536,6 +572,9 @@ function AdminDashboardView(props: {
       {props.activeTab === "overview" && (
         <AdminOverviewPanel posts={props.posts} users={props.users} reports={props.reports} foundCount={foundCount} />
       )}
+      {props.activeTab === "moderation" && (
+        <AdminModerationPanel posts={props.moderationPosts} pending={adminMutation.isPending} onRun={runAdminAction} />
+      )}
       {props.activeTab === "categories" && (
         <AdminCategoryPanel categories={props.categories} pending={adminMutation.isPending} onRun={runAdminAction} />
       )}
@@ -543,7 +582,6 @@ function AdminDashboardView(props: {
         <AdminLocationPanel
           areas={props.areas}
           buildings={props.buildings}
-          rooms={props.rooms}
           pending={adminMutation.isPending}
           onRun={runAdminAction}
         />
@@ -552,7 +590,6 @@ function AdminDashboardView(props: {
         <AdminHandoverPanel
           areas={props.areas}
           buildings={props.buildings}
-          rooms={props.rooms}
           handoverPoints={props.handoverPoints}
           pending={adminMutation.isPending}
           onRun={runAdminAction}
@@ -601,6 +638,106 @@ function AdminOverviewPanel(props: { posts: BoardPost[]; users: AdminUser[]; rep
       <AdminListPanel title="Người dùng mới" icon={<Users size={18} />} items={props.users.map((user) => `${user.fullName} · ${user.roles.join("/") || user.status}`)} />
       <AdminListPanel title="Báo cáo mới" icon={<Flag size={18} />} items={props.reports.map((report) => `${report.status} · ${report.reason}`)} />
     </section>
+  );
+}
+
+function AdminModerationPanel(props: { posts: BoardPost[]; pending: boolean; onRun: AdminActionRunner }) {
+  const [statusFilter, setStatusFilter] = useState<PostStatus | "ALL">("ALL");
+  const [typeFilter, setTypeFilter] = useState<PostType | "ALL">("ALL");
+  const [query, setQuery] = useState("");
+  const normalizedQuery = query.trim().toLowerCase();
+  const visiblePosts = props.posts.filter((post) => {
+    const statusMatched = statusFilter === "ALL" || post.status === statusFilter;
+    const typeMatched = typeFilter === "ALL" || post.type === typeFilter;
+    const textMatched =
+      normalizedQuery.length === 0 ||
+      `${post.title} ${post.description} ${post.owner.fullName} ${locationText(post)}`.toLowerCase().includes(normalizedQuery);
+    return statusMatched && typeMatched && textMatched;
+  });
+
+  return (
+    <section className="admin-panel wide-panel">
+      <div className="panel-heading">
+        <div>
+          <span className="eyebrow">Moderation</span>
+          <h2>Quản lý kiểm duyệt bài đăng</h2>
+        </div>
+        <span>{visiblePosts.length}/{props.posts.length}</span>
+      </div>
+
+      <div className="admin-moderation-filters">
+        <div className="search-box">
+          <Search size={18} />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm theo tiêu đề, mô tả, người đăng..." />
+        </div>
+        <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as PostType | "ALL")}>
+          <option value="ALL">Tất cả loại bài</option>
+          <option value="LOST">Đồ bị mất</option>
+          <option value="FOUND">Đồ nhặt được</option>
+        </select>
+        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as PostStatus | "ALL")}>
+          <option value="ALL">Tất cả trạng thái</option>
+          <option value="OPEN">Đang mở</option>
+          <option value="MATCHED">Có gợi ý</option>
+          <option value="RESOLVED">Đã hoàn thành</option>
+          <option value="CLOSED">Đã đóng</option>
+          <option value="HIDDEN">Đã ẩn</option>
+        </select>
+      </div>
+
+      <div className="admin-moderation-list">
+        {visiblePosts.map((post) => (
+          <AdminModerationRow key={post.id} pending={props.pending} post={post} onRun={props.onRun} />
+        ))}
+        {visiblePosts.length === 0 && <div className="notice">Không có bài đăng phù hợp bộ lọc.</div>}
+      </div>
+    </section>
+  );
+}
+
+function AdminModerationRow(props: { post: BoardPost; pending: boolean; onRun: AdminActionRunner }) {
+  function updateStatus(status: PostStatus) {
+    props.onRun(() => api.updatePostStatus(props.post.id, status));
+  }
+
+  function deletePost() {
+    const confirmed = window.confirm(`Xóa mềm bài "${props.post.title}"? Bài sẽ không còn hiển thị trên hệ thống.`);
+    if (confirmed) {
+      props.onRun(() => api.deletePost(props.post.id));
+    }
+  }
+
+  return (
+    <article className="admin-post-moderation-row">
+      <div className="admin-post-main">
+        <div className="admin-post-title-line">
+          <span className={`type-pill ${props.post.type.toLowerCase()}`}>{props.post.type}</span>
+          <span className="status-pill">{statusLabels[props.post.status] ?? props.post.status}</span>
+        </div>
+        <strong>{props.post.title}</strong>
+        <p>{props.post.description}</p>
+        <small>
+          {props.post.owner.fullName} · {locationText(props.post)} · {formatDate(props.post.createdAt)}
+        </small>
+      </div>
+      <div className="admin-inline-actions">
+        <button className="secondary-button" disabled={props.pending || props.post.status === "RESOLVED"} type="button" onClick={() => updateStatus("RESOLVED")}>
+          Hoàn thành
+        </button>
+        <button className="secondary-button" disabled={props.pending || props.post.status === "CLOSED"} type="button" onClick={() => updateStatus("CLOSED")}>
+          Đóng
+        </button>
+        <button className="secondary-button" disabled={props.pending || props.post.status === "OPEN"} type="button" onClick={() => updateStatus("OPEN")}>
+          Mở lại
+        </button>
+        <button className="secondary-button" disabled={props.pending || props.post.status === "HIDDEN"} type="button" onClick={() => updateStatus("HIDDEN")}>
+          Ẩn
+        </button>
+        <button className="danger-button" disabled={props.pending} type="button" onClick={deletePost}>
+          Xóa
+        </button>
+      </div>
+    </article>
   );
 }
 
@@ -709,13 +846,11 @@ function AdminCategoryPanel(props: { categories: AdminCategory[]; pending: boole
 function AdminLocationPanel(props: {
   areas: AdminArea[];
   buildings: AdminBuilding[];
-  rooms: AdminRoom[];
   pending: boolean;
   onRun: AdminActionRunner;
 }) {
   const [areaEdit, setAreaEdit] = useState<AdminArea | null>(null);
   const [buildingEdit, setBuildingEdit] = useState<AdminBuilding | null>(null);
-  const [roomEdit, setRoomEdit] = useState<AdminRoom | null>(null);
 
   function submitArea(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -740,18 +875,6 @@ function AdminLocationPanel(props: {
     };
     props.onRun(() => (buildingEdit ? api.adminUpdateBuilding(buildingEdit.id, payload) : api.adminCreateBuilding(payload)));
     setBuildingEdit(null);
-    event.currentTarget.reset();
-  }
-
-  function submitRoom(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    const payload = {
-      buildingId: formText(data, "buildingId"),
-      name: formText(data, "name")
-    };
-    props.onRun(() => (roomEdit ? api.adminUpdateRoom(roomEdit.id, payload) : api.adminCreateRoom(payload)));
-    setRoomEdit(null);
     event.currentTarget.reset();
   }
 
@@ -803,7 +926,7 @@ function AdminLocationPanel(props: {
           <div className="panel-heading">
             <div>
               <span className="eyebrow">Buildings</span>
-              <h2>{buildingEdit ? "Sửa tòa nhà" : "Tạo tòa nhà"}</h2>
+              <h2>{buildingEdit ? "Sửa địa điểm" : "Tạo địa điểm"}</h2>
             </div>
             <Building2 size={18} />
           </div>
@@ -817,8 +940,8 @@ function AdminLocationPanel(props: {
             </select>
           </label>
           <label>
-            Tên tòa nhà
-            <input name="name" required defaultValue={buildingEdit?.name ?? ""} placeholder="Ví dụ: Alpha" />
+            Tên địa điểm cụ thể
+            <input name="name" required defaultValue={buildingEdit?.name ?? ""} placeholder="Ví dụ: Tòa Alpha, Cổng chính" />
           </label>
           <label>
             Thứ tự
@@ -826,12 +949,12 @@ function AdminLocationPanel(props: {
           </label>
           <div className="admin-form-actions">
             {buildingEdit && <button className="secondary-button" type="button" onClick={() => setBuildingEdit(null)}>Hủy sửa</button>}
-            <button className="primary-button" disabled={props.pending} type="submit">{buildingEdit ? "Lưu tòa" : "Tạo tòa"}</button>
+            <button className="primary-button" disabled={props.pending} type="submit">{buildingEdit ? "Lưu địa điểm" : "Tạo địa điểm"}</button>
           </div>
         </form>
 
         <AdminResourceList
-          title="Danh sách tòa nhà"
+          title="Danh sách địa điểm cụ thể"
           items={props.buildings.map((building) => ({
             id: building.id,
             name: building.name,
@@ -844,46 +967,8 @@ function AdminLocationPanel(props: {
         />
       </div>
 
-      <div className="admin-management-grid">
-        <form className="admin-panel admin-form" key={roomEdit?.id ?? "new-room"} onSubmit={submitRoom}>
-          <div className="panel-heading">
-            <div>
-              <span className="eyebrow">Rooms</span>
-              <h2>{roomEdit ? "Sửa phòng" : "Tạo phòng"}</h2>
-            </div>
-            <MapPin size={18} />
-          </div>
-          <label>
-            Tòa nhà
-            <select name="buildingId" required defaultValue={roomEdit?.buildingId ?? ""}>
-              <option value="">Chọn tòa nhà</option>
-              {props.buildings.map((building) => (
-                <option key={building.id} value={building.id}>{building.name}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Tên phòng
-            <input name="name" required defaultValue={roomEdit?.name ?? ""} placeholder="Ví dụ: A101" />
-          </label>
-          <div className="admin-form-actions">
-            {roomEdit && <button className="secondary-button" type="button" onClick={() => setRoomEdit(null)}>Hủy sửa</button>}
-            <button className="primary-button" disabled={props.pending} type="submit">{roomEdit ? "Lưu phòng" : "Tạo phòng"}</button>
-          </div>
-        </form>
-
-        <AdminResourceList
-          title="Danh sách phòng"
-          items={props.rooms.map((room) => ({
-            id: room.id,
-            name: room.name,
-            meta: room.buildingName ?? "Chưa gắn tòa",
-            active: room.isActive,
-            onEdit: () => setRoomEdit(room),
-            onToggle: () => props.onRun(() => api.adminSetRoomActive(room.id, !room.isActive))
-          }))}
-          pending={props.pending}
-        />
+      <div className="notice">
+        Phòng học không quản lý bằng CRUD riêng. Khi đăng tin, user sẽ nhập phòng/vị trí chi tiết dạng text để tránh phải tạo quá nhiều phòng.
       </div>
     </section>
   );
@@ -892,7 +977,6 @@ function AdminLocationPanel(props: {
 function AdminHandoverPanel(props: {
   areas: AdminArea[];
   buildings: AdminBuilding[];
-  rooms: AdminRoom[];
   handoverPoints: AdminHandoverPoint[];
   pending: boolean;
   onRun: AdminActionRunner;
@@ -907,7 +991,6 @@ function AdminHandoverPanel(props: {
       address: formText(data, "address"),
       areaId: formNullable(data, "areaId"),
       buildingId: formNullable(data, "buildingId"),
-      roomId: formNullable(data, "roomId"),
       openingHours: formNullable(data, "openingHours"),
       contactInfo: formNullable(data, "contactInfo")
     };
@@ -945,7 +1028,7 @@ function AdminHandoverPanel(props: {
             </select>
           </label>
           <label>
-            Tòa nhà
+            Địa điểm cụ thể
             <select name="buildingId" defaultValue={editing?.buildingId ?? ""}>
               <option value="">Không gắn</option>
               {props.buildings.map((building) => (
@@ -954,15 +1037,6 @@ function AdminHandoverPanel(props: {
             </select>
           </label>
         </div>
-        <label>
-          Phòng
-          <select name="roomId" defaultValue={editing?.roomId ?? ""}>
-            <option value="">Không gắn</option>
-            {props.rooms.map((room) => (
-              <option key={room.id} value={room.id}>{room.name}</option>
-            ))}
-          </select>
-        </label>
         <div className="form-grid">
           <label>
             Giờ mở cửa
@@ -1244,7 +1318,6 @@ function LegacyAdminDashboardView(props: {
   users: AdminUser[];
   categories: AdminNamedResource[];
   areas: AdminNamedResource[];
-  rooms: AdminNamedResource[];
   handoverPoints: Array<AdminNamedResource & { address: string }>;
   totalPosts: number;
 }) {
@@ -1291,8 +1364,7 @@ function LegacyAdminDashboardView(props: {
         </article>
 
         <AdminListPanel title="Quản lý danh mục" icon={<Boxes size={18} />} items={props.categories.map(resourceLabel)} />
-        <AdminListPanel title="Khu vực / tòa nhà" icon={<Building2 size={18} />} items={props.areas.map(resourceLabel)} />
-        <AdminListPanel title="Phòng học" icon={<MapPin size={18} />} items={props.rooms.map(resourceLabel)} />
+        <AdminListPanel title="Khu vực / địa điểm" icon={<Building2 size={18} />} items={props.areas.map(resourceLabel)} />
         <AdminListPanel title="Điểm bàn giao" icon={<Handshake size={18} />} items={props.handoverPoints.map((item) => `${resourceLabel(item)} · ${item.address}`)} />
         <article className="admin-panel">
           <div className="panel-heading">
@@ -1352,10 +1424,9 @@ function AdminListPanel(props: { title: string; icon: React.ReactNode; items: st
 
 function BoardView(props: {
   variant: "feed" | "mine";
-  categories: Array<{ id: string; name: string }>;
+  categories: Category[];
   areas: Array<{ id: string; name: string }>;
   buildings: Building[];
-  rooms: Room[];
   filters: ListPostsParams;
   posts: BoardPost[];
   stats: { lost: number; found: number; matched: number };
@@ -1366,14 +1437,16 @@ function BoardView(props: {
   onSelect: (id: string) => void;
   onClaim: (post: BoardPost) => void;
 }) {
+  const rootCategories = useMemo(() => props.categories.filter((category) => !category.parentId), [props.categories]);
+  const categoryFilterOptions = useMemo(() => categorySelectOptions(props.categories), [props.categories]);
   const featuredCategories =
-    props.categories.length > 0
-      ? props.categories.slice(0, 4)
+    rootCategories.length > 0
+      ? rootCategories.slice(0, 4)
       : [
-          { id: "", name: "Thiết bị điện tử" },
-          { id: "", name: "Giấy tờ cá nhân" },
-          { id: "", name: "Balo & phụ kiện" },
-          { id: "", name: "Đồ học tập" }
+          { id: "", name: "Thiết bị điện tử", parentId: null },
+          { id: "", name: "Giấy tờ cá nhân", parentId: null },
+          { id: "", name: "Balo & phụ kiện", parentId: null },
+          { id: "", name: "Đồ học tập", parentId: null }
         ];
   const categoryIcons = [Boxes, Camera, UserCircle, Sparkles];
   const isMine = props.variant === "mine";
@@ -1445,9 +1518,9 @@ function BoardView(props: {
           onChange={(event) => props.onFilter("categoryId", event.target.value)}
         >
           <option value="">Tất cả danh mục</option>
-          {props.categories.map((category) => (
+          {categoryFilterOptions.map((category) => (
             <option key={category.id} value={category.id}>
-              {category.name}
+              {category.label}
             </option>
           ))}
         </select>
@@ -1464,22 +1537,10 @@ function BoardView(props: {
           disabled={!props.filters.areaId}
           onChange={(event) => props.onFilter("buildingId", event.target.value)}
         >
-          <option value="">Mọi tòa nhà</option>
+          <option value="">Mọi địa điểm cụ thể</option>
           {props.buildings.map((building) => (
             <option key={building.id} value={building.id}>
               {building.name}
-            </option>
-          ))}
-        </select>
-        <select
-          value={props.filters.roomId ?? ""}
-          disabled={!props.filters.buildingId}
-          onChange={(event) => props.onFilter("roomId", event.target.value)}
-        >
-          <option value="">Mọi phòng</option>
-          {props.rooms.map((room) => (
-            <option key={room.id} value={room.id}>
-              {room.name}
             </option>
           ))}
         </select>
@@ -1658,13 +1719,15 @@ function HandoverView(props: { handoverPoints: HandoverPoint[]; loading: boolean
 
 function CreatePostView(props: {
   signedIn: boolean;
-  categories: Array<{ id: string; name: string }>;
+  categories: Category[];
   areas: Array<{ id: string; name: string }>;
   handoverPoints: Array<{ id: string; name: string }>;
   imageRules: ImageUploadRules;
   onCreated: (postId: string) => Promise<void>;
 }) {
   const [type, setType] = useState<PostType>("LOST");
+  const [selectedParentCategoryId, setSelectedParentCategoryId] = useState("");
+  const [selectedChildCategoryId, setSelectedChildCategoryId] = useState("");
   const [selectedAreaId, setSelectedAreaId] = useState("");
   const [selectedBuildingId, setSelectedBuildingId] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -1675,11 +1738,12 @@ function CreatePostView(props: {
     queryFn: () => api.buildings(selectedAreaId),
     enabled: Boolean(selectedAreaId)
   });
-  const roomsQuery = useQuery({
-    queryKey: ["create-rooms", selectedBuildingId],
-    queryFn: () => api.rooms(selectedBuildingId),
-    enabled: Boolean(selectedBuildingId)
-  });
+  const rootCategories = useMemo(() => props.categories.filter((category) => !category.parentId), [props.categories]);
+  const childCategories = useMemo(
+    () => props.categories.filter((category) => category.parentId === selectedParentCategoryId),
+    [props.categories, selectedParentCategoryId]
+  );
+  const selectedCategoryId = childCategories.length > 0 ? selectedChildCategoryId : selectedParentCategoryId;
 
   useEffect(() => {
     const urls = files.map((file) => URL.createObjectURL(file));
@@ -1693,13 +1757,14 @@ function CreatePostView(props: {
         type,
         title: String(formData.get("title")),
         description: String(formData.get("description")),
-        categoryId: String(formData.get("categoryId")),
+        categoryId: selectedCategoryId,
         areaId: emptyToNull(formData.get("areaId")),
         buildingId: emptyToNull(formData.get("buildingId")),
-        roomId: emptyToNull(formData.get("roomId")),
+        roomText: emptyToNull(formData.get("roomText")),
         customLocation: emptyToNull(formData.get("customLocation")),
+        contactInfo: String(formData.get("contactInfo")),
         lostFoundAt: toDateTimeIso(formData.get("lostFoundAt")),
-        handoverPointId: type === "FOUND" ? String(formData.get("handoverPointId")) : null,
+        handoverPointId: type === "FOUND" ? emptyToNull(formData.get("handoverPointId")) : null,
         secretVerification: type === "LOST" ? String(formData.get("secretVerification")) : null
       });
 
@@ -1718,6 +1783,14 @@ function CreatePostView(props: {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage(null);
+    if (!selectedParentCategoryId) {
+      setMessage("Vui lòng chọn danh mục lớn.");
+      return;
+    }
+    if (childCategories.length > 0 && !selectedChildCategoryId) {
+      setMessage("Vui lòng chọn loại đồ cụ thể.");
+      return;
+    }
     const validationErrors = validateImageFiles(files, props.imageRules, props.imageRules.maxImages);
     if (validationErrors.length > 0) {
       setMessage(validationErrors[0]);
@@ -1727,10 +1800,20 @@ function CreatePostView(props: {
   }
 
   function selectFiles(fileList: FileList | null) {
-    const nextFiles = Array.from(fileList ?? []);
+    const incomingFiles = Array.from(fileList ?? []);
+    const nextFiles = [...files];
+    const existingKeys = new Set(nextFiles.map(fileKey));
+
+    for (const file of incomingFiles) {
+      const key = fileKey(file);
+      if (!existingKeys.has(key)) {
+        nextFiles.push(file);
+        existingKeys.add(key);
+      }
+    }
+
     const validationErrors = validateImageFiles(nextFiles, props.imageRules, props.imageRules.maxImages);
     if (validationErrors.length > 0) {
-      setFiles([]);
       setMessage(validationErrors[0]);
       return;
     }
@@ -1739,12 +1822,20 @@ function CreatePostView(props: {
     setMessage(nextFiles.length > 0 ? `${nextFiles.length} ảnh đã sẵn sàng upload.` : null);
   }
 
+  function removeFile(index: number) {
+    setFiles((current) => {
+      const nextFiles = current.filter((_, fileIndex) => fileIndex !== index);
+      setMessage(nextFiles.length > 0 ? `${nextFiles.length} ảnh đã sẵn sàng upload.` : null);
+      return nextFiles;
+    });
+  }
+
   if (!props.signedIn) {
     return (
       <div className="empty-state">
         <ShieldCheck size={30} />
         <strong>Cần đăng nhập để đăng tin</strong>
-        <span>Vào tab Tài khoản để đăng nhập hoặc tạo tài khoản mới.</span>
+        <span>Bấm Đăng nhập hoặc Đăng ký ở thanh trên để tiếp tục.</span>
       </div>
     );
   }
@@ -1781,12 +1872,23 @@ function CreatePostView(props: {
         Mô tả
         <textarea name="description" required minLength={10} rows={4} placeholder="Mô tả đặc điểm, nơi thấy/mất..." />
       </label>
+      <label>
+        Thông tin liên hệ
+        <input name="contactInfo" required minLength={3} placeholder="SĐT, email hoặc Zalo để người liên quan liên hệ" />
+      </label>
       <div className="form-grid">
         <label>
-          Danh mục
-          <select name="categoryId" required>
-            <option value="">Chọn danh mục</option>
-            {props.categories.map((category) => (
+          Danh mục lớn
+          <select
+            required
+            value={selectedParentCategoryId}
+            onChange={(event) => {
+              setSelectedParentCategoryId(event.target.value);
+              setSelectedChildCategoryId("");
+            }}
+          >
+            <option value="">Chọn nhóm đồ</option>
+            {rootCategories.map((category) => (
               <option key={category.id} value={category.id}>
                 {category.name}
               </option>
@@ -1794,19 +1896,23 @@ function CreatePostView(props: {
           </select>
         </label>
         <label>
-          Khu vực
+          Loại đồ cụ thể
           <select
-            name="areaId"
-            value={selectedAreaId}
-            onChange={(event) => {
-              setSelectedAreaId(event.target.value);
-              setSelectedBuildingId("");
-            }}
+            required={childCategories.length > 0}
+            disabled={!selectedParentCategoryId || childCategories.length === 0}
+            value={selectedChildCategoryId}
+            onChange={(event) => setSelectedChildCategoryId(event.target.value)}
           >
-            <option value="">Chưa rõ</option>
-            {props.areas.map((area) => (
-              <option key={area.id} value={area.id}>
-                {area.name}
+            <option value="">
+              {!selectedParentCategoryId
+                ? "Chọn danh mục lớn trước"
+                : childCategories.length === 0
+                  ? "Danh mục này chưa có loại con"
+                  : "Chọn loại đồ"}
+            </option>
+            {childCategories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
               </option>
             ))}
           </select>
@@ -1821,31 +1927,43 @@ function CreatePostView(props: {
       </div>
       <div className="form-grid">
         <label>
-          Tòa nhà
+          Khu vực
+          <select
+            name="areaId"
+            value={selectedAreaId}
+            onChange={(event) => {
+              setSelectedAreaId(event.target.value);
+              setSelectedBuildingId("");
+            }}
+          >
+            <option value="">Chọn khu vực</option>
+            {props.areas.map((area) => (
+              <option key={area.id} value={area.id}>
+                {area.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Địa điểm cụ thể
           <select
             name="buildingId"
             disabled={!selectedAreaId}
             value={selectedBuildingId}
             onChange={(event) => setSelectedBuildingId(event.target.value)}
           >
-            <option value="">Chưa rõ</option>
+            <option value="">{selectedAreaId ? "Chọn địa điểm cụ thể" : "Chọn khu vực trước"}</option>
             {(buildingsQuery.data?.buildings ?? []).map((building) => (
               <option key={building.id} value={building.id}>
                 {building.name}
               </option>
             ))}
           </select>
+          {selectedAreaId && buildingsQuery.data?.buildings.length === 0 && <small className="form-hint">Khu vực này chưa có địa điểm cụ thể active.</small>}
         </label>
         <label>
           Phòng
-          <select name="roomId" disabled={!selectedBuildingId}>
-            <option value="">Chưa rõ</option>
-            {(roomsQuery.data?.rooms ?? []).map((room) => (
-              <option key={room.id} value={room.id}>
-                {room.name}
-              </option>
-            ))}
-          </select>
+          <input name="roomText" placeholder="VD: A101, LAB 302, hành lang tầng 2..." />
         </label>
       </div>
       <div className="form-grid">
@@ -1867,9 +1985,9 @@ function CreatePostView(props: {
       </div>
       {type === "FOUND" ? (
         <label>
-          Điểm bàn giao
-          <select name="handoverPointId" required>
-            <option value="">Chọn điểm bàn giao</option>
+          Điểm bàn giao nếu đã gửi về trường
+          <select name="handoverPointId">
+            <option value="">Tôi đang giữ đồ / chưa gửi về điểm bàn giao</option>
             {props.handoverPoints.map((point) => (
               <option key={point.id} value={point.id}>
                 {point.name}
@@ -1879,8 +1997,14 @@ function CreatePostView(props: {
         </label>
       ) : (
         <label>
-          Câu xác minh bí mật
-          <input name="secretVerification" required placeholder="Đặc điểm chỉ chủ sở hữu biết" />
+          Mô tả chi tiết về vật bị mất
+          <textarea
+            name="secretVerification"
+            required
+            minLength={3}
+            rows={3}
+            placeholder="Màu sắc, dấu hiệu riêng, nội dung bên trong hoặc chi tiết chỉ chủ sở hữu biết"
+          />
         </label>
       )}
       <label className="upload-dropzone">
@@ -1891,13 +2015,21 @@ function CreatePostView(props: {
           type="file"
           accept={acceptAttribute(props.imageRules)}
           multiple
-          onChange={(event) => selectFiles(event.target.files)}
+          onChange={(event) => {
+            selectFiles(event.target.files);
+            event.currentTarget.value = "";
+          }}
         />
       </label>
       {imagePreviews.length > 0 && (
         <div className="preview-grid">
           {imagePreviews.map((previewUrl, index) => (
-            <img key={previewUrl} src={previewUrl} alt={`Ảnh ${index + 1}`} />
+            <div className="preview-item" key={previewUrl}>
+              <img src={previewUrl} alt={`Ảnh ${index + 1}`} />
+              <button type="button" onClick={() => removeFile(index)} aria-label={`Xóa ảnh ${index + 1}`}>
+                Xóa
+              </button>
+            </div>
           ))}
         </div>
       )}
@@ -1918,20 +2050,31 @@ function CreatePostView(props: {
 
 function AccountView(props: {
   user?: PublicUser;
+  entryMode: AuthEntryMode;
+  entryKey: number;
   imageRules: ImageUploadRules;
   onAuthChange: () => void;
+  onSignedIn: () => void;
   onSignedOut: () => void;
 }) {
-  const [mode, setMode] = useState<AuthMode>("login");
+  const [mode, setMode] = useState<AuthMode>(props.entryMode);
   const [registeredEmail, setRegisteredEmail] = useState("");
   const [authMessage, setAuthMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!props.user) {
+      setAuthMessage(null);
+      setMode(props.entryMode);
+    }
+  }, [props.entryKey, props.entryMode, props.user]);
+
   const activityQuery = useQuery({ queryKey: ["activity"], queryFn: () => api.activity(), enabled: Boolean(props.user) });
   const reputationQuery = useQuery({ queryKey: ["reputation"], queryFn: () => api.reputation(), enabled: Boolean(props.user) });
   const loginMutation = useMutation({
     mutationFn: (formData: FormData) => api.login({ email: formData.get("email"), password: formData.get("password") }),
     onSuccess: (result) => {
       saveTokens(result.tokens);
-      props.onAuthChange();
+      props.onSignedIn();
     }
   });
   const registerMutation = useMutation({
@@ -1949,7 +2092,7 @@ function AccountView(props: {
     },
     onSuccess: (result) => {
       saveTokens(result.tokens);
-      props.onAuthChange();
+      props.onSignedIn();
     }
   });
   const requestRegistrationOtpMutation = useMutation({
@@ -2033,34 +2176,41 @@ function AccountView(props: {
   }
 
   return (
-    <section className="account-panel">
-      <div className="segmented">
-        <button className={mode === "login" ? "active" : ""} type="button" onClick={() => {
+    <section className={`account-panel auth-card ${mode === "register" ? "register-mode" : ""}`}>
+      <div className="auth-card-heading">
+        <span className="eyebrow">FPTU Lost & Found</span>
+        <h2>{mode === "register" ? "Tạo tài khoản" : mode === "forgot" ? "Lấy lại mật khẩu" : mode === "reset" ? "Đặt mật khẩu mới" : "Đăng nhập"}</h2>
+        <p>
+          {mode === "register"
+            ? "Xác thực email bằng OTP trước khi tham gia cộng đồng Lost & Found."
+            : mode === "forgot" || mode === "reset"
+              ? "Nhập email và mã OTP để đặt lại mật khẩu tài khoản của bạn."
+              : "Đăng nhập để đăng tin, claim đồ nhặt được và theo dõi bài viết của bạn."}
+        </p>
+      </div>
+
+      {(mode === "forgot" || mode === "reset") && (
+        <button className="text-link auth-back-link" type="button" onClick={() => {
           setAuthMessage(null);
           setMode("login");
         }}>
-          Đăng nhập
+          Quay lại đăng nhập
         </button>
-        <button className={mode === "register" ? "active" : ""} type="button" onClick={() => {
-          setAuthMessage(null);
-          setMode("register");
-        }}>
-          Đăng ký
-        </button>
-        <button className={mode === "forgot" || mode === "reset" ? "active" : ""} type="button" onClick={() => {
-          setAuthMessage(null);
-          setMode("forgot");
-        }}>
-          Quên mật khẩu
-        </button>
-      </div>
+      )}
+
       {authMessage && <div className="notice success">{authMessage}</div>}
       {mode === "login" && (
-        <AuthForm
-          fields={["email", "password"]}
-          submitLabel="Đăng nhập"
+        <LoginForm
           pending={loginMutation.isPending}
           error={loginMutation.error}
+          onForgotPassword={() => {
+            setAuthMessage(null);
+            setMode("forgot");
+          }}
+          onRegister={() => {
+            setAuthMessage(null);
+            setMode("register");
+          }}
           onSubmit={(data) => loginMutation.mutate(data)}
         />
       )}
@@ -2072,6 +2222,10 @@ function AccountView(props: {
           requestPending={requestRegistrationOtpMutation.isPending}
           requestError={requestRegistrationOtpMutation.error}
           onRequestOtp={(email) => requestRegistrationOtpMutation.mutate(email)}
+          onLogin={() => {
+            setAuthMessage(null);
+            setMode("login");
+          }}
           onSubmit={(data) => registerMutation.mutate(data)}
         />
       )}
@@ -2134,6 +2288,45 @@ function ProfileForm({ user, onUpdated }: { user: PublicUser; onUpdated: () => v
   );
 }
 
+function LoginForm(props: {
+  pending: boolean;
+  error: unknown;
+  onForgotPassword: () => void;
+  onRegister: () => void;
+  onSubmit: (formData: FormData) => void;
+}) {
+  return (
+    <form className="form-panel compact-form" onSubmit={(event) => {
+      event.preventDefault();
+      props.onSubmit(new FormData(event.currentTarget));
+    }}>
+      <label>
+        Email
+        <input name="email" type="email" required />
+      </label>
+      <label>
+        Mật khẩu
+        <input name="password" type="password" required minLength={8} />
+      </label>
+      <button className="text-link auth-forgot-link" type="button" onClick={props.onForgotPassword}>
+        Quên mật khẩu?
+      </button>
+      {props.error instanceof Error && <div className="notice error">{props.error.message}</div>}
+      <div className="auth-submit-row">
+        <button className="primary-button" disabled={props.pending} type="submit">
+          {props.pending ? "Đang đăng nhập..." : "Đăng nhập"}
+        </button>
+        <span>
+          Bạn chưa có tài khoản?{" "}
+          <button className="text-link" type="button" onClick={props.onRegister}>
+            Đăng ký
+          </button>
+        </span>
+      </div>
+    </form>
+  );
+}
+
 function RegisterForm(props: {
   defaultEmail: string;
   pending: boolean;
@@ -2141,6 +2334,7 @@ function RegisterForm(props: {
   requestPending: boolean;
   requestError: unknown;
   onRequestOtp: (email: string) => void;
+  onLogin: () => void;
   onSubmit: (formData: FormData) => void;
 }) {
   const [email, setEmail] = useState(props.defaultEmail);
@@ -2195,9 +2389,17 @@ function RegisterForm(props: {
       </label>
       {props.requestError instanceof Error && <div className="notice error">{props.requestError.message}</div>}
       {props.error instanceof Error && <div className="notice error">{props.error.message}</div>}
-      <button className="primary-button wide" disabled={props.pending} type="submit">
-        {props.pending ? "Đang tạo..." : "Tạo tài khoản"}
-      </button>
+      <div className="auth-submit-row">
+        <button className="primary-button" disabled={props.pending} type="submit">
+          {props.pending ? "Đang tạo..." : "Tạo tài khoản"}
+        </button>
+        <span>
+          Đã có tài khoản?{" "}
+          <button className="text-link" type="button" onClick={props.onLogin}>
+            Đăng nhập
+          </button>
+        </span>
+      </div>
     </form>
   );
 }
@@ -2331,6 +2533,14 @@ function PostDrawer(props: {
                 {storageLocationText(props.detail.post)}
               </span>
               <small>{props.detail.post.resolvedAt ? `Đã hoàn tất: ${formatDate(props.detail.post.resolvedAt)}` : "Chưa hoàn tất bàn giao"}</small>
+            </div>
+            <h3>Liên hệ</h3>
+            <div className="storage-panel">
+              <span>
+                <UserCircle size={17} />
+                {props.detail.post.contactInfo ?? "Chưa có thông tin liên hệ"}
+              </span>
+              <small>Thông tin do người đăng cung cấp để trao đổi thêm.</small>
             </div>
             <h3>AI tags</h3>
             <div className="tag-list">
@@ -2511,6 +2721,10 @@ function validateImageFiles(files: File[], rules: ImageUploadRules, maxFiles: nu
   return errors;
 }
 
+function fileKey(file: File) {
+  return `${file.name}:${file.size}:${file.lastModified}`;
+}
+
 function storageLocationText(post: BoardPost) {
   if (post.handoverPoint?.name) {
     return `Điểm bàn giao: ${post.handoverPoint.name}`;
@@ -2526,6 +2740,30 @@ function locationText(post: BoardPost) {
     post.handoverPoint?.name ||
     "Chưa rõ vị trí"
   );
+}
+
+function categorySelectOptions(categories: Category[]) {
+  const roots = categories.filter((category) => !category.parentId);
+  const options: Array<{ id: string; label: string }> = [];
+
+  for (const root of roots) {
+    const children = categories.filter((category) => category.parentId === root.id);
+    options.push({
+      id: root.id,
+      label: children.length > 0 ? `${root.name} (tất cả)` : root.name
+    });
+    for (const child of children) {
+      options.push({ id: child.id, label: `- ${child.name}` });
+    }
+  }
+
+  for (const category of categories) {
+    if (category.parentId && !categories.some((parent) => parent.id === category.parentId)) {
+      options.push({ id: category.id, label: category.name });
+    }
+  }
+
+  return options;
 }
 
 function formatDate(value: string) {

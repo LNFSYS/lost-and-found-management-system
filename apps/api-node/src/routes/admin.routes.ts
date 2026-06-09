@@ -66,19 +66,6 @@ adminRoutes.patch("/locations/buildings/:id/active", requireAdmin, (request, res
   adminController.setBuildingActive(request, response).catch(next);
 });
 
-adminRoutes.get("/locations/rooms", requireAdmin, (request, response, next) => {
-  adminController.rooms(request, response).catch(next);
-});
-adminRoutes.post("/locations/rooms", requireAdmin, (request, response, next) => {
-  adminController.createRoom(request, response).catch(next);
-});
-adminRoutes.put("/locations/rooms/:id", requireAdmin, (request, response, next) => {
-  adminController.updateRoom(request, response).catch(next);
-});
-adminRoutes.patch("/locations/rooms/:id/active", requireAdmin, (request, response, next) => {
-  adminController.setRoomActive(request, response).catch(next);
-});
-
 adminRoutes.get("/handover-points", requireAdmin, (request, response, next) => {
   adminController.handoverPoints(request, response).catch(next);
 });

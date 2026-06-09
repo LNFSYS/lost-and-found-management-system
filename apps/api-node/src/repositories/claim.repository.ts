@@ -37,6 +37,11 @@ interface EvidenceRow extends RowDataPacket {
   created_at: string;
 }
 
+interface ExistingClaimRow extends RowDataPacket {
+  id: string;
+  status: "PENDING" | "NEED_MORE_INFO" | "ACCEPTED" | "REJECTED" | "CANCELLED";
+}
+
 function mapClaim(row: ClaimRow) {
   return {
     id: row.id,
@@ -78,6 +83,14 @@ export const claimRepository = {
     const [rows] = await dbPool.query<ClaimPostRow[]>(
       "SELECT id, user_id, type, status FROM posts WHERE id = ? AND deleted_at IS NULL LIMIT 1",
       [postId]
+    );
+    return rows[0] ?? null;
+  },
+
+  async findByPostAndClaimant(postId: string, claimantId: string) {
+    const [rows] = await dbPool.query<ExistingClaimRow[]>(
+      "SELECT id, status FROM claims WHERE post_id = ? AND claimant_id = ? LIMIT 1",
+      [postId, claimantId]
     );
     return rows[0] ?? null;
   },

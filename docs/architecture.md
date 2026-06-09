@@ -48,11 +48,14 @@ Current Auth endpoints:
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
-| `POST` | `/api/auth/register` | Register account with any valid email and create a verification OTP |
-| `POST` | `/api/auth/verify-otp` | Verify registration OTP, activate account, assign USER role and issue tokens |
+| `POST` | `/api/auth/register/request-otp` | Send registration OTP before account creation |
+| `POST` | `/api/auth/register` | Verify registration OTP, create account, assign USER plus Student/Lecturer role and issue tokens |
+| `POST` | `/api/auth/resend-otp` | Resend OTP for pending registration flows |
 | `POST` | `/api/auth/login` | Login with email/password and receive access/refresh tokens |
 | `POST` | `/api/auth/refresh` | Rotate refresh token and issue a new token pair |
 | `POST` | `/api/auth/logout` | Revoke refresh token |
+| `POST` | `/api/auth/forgot-password` | Send password reset OTP |
+| `POST` | `/api/auth/reset-password` | Verify reset OTP, update password and revoke active refresh tokens |
 | `GET` | `/api/auth/me` | Get current authenticated user |
 | `PUT` | `/api/auth/profile` | Update full name, student code and phone number |
 | `POST` | `/api/auth/avatar` | Upload avatar to Cloudinary and replace old asset |
@@ -80,6 +83,16 @@ Current Auth endpoints:
 | `GET` | `/api/locations/buildings/:id/rooms` | Return active rooms in a building |
 | `GET` | `/api/handover-points` | Return active handover points |
 | `GET` | `/api/handover-points/:id` | Return one active handover point |
+| `GET` | `/api/admin/dashboard/overview` | Staff/Admin overview metrics |
+| `GET` | `/api/admin/users` | Admin-only user management list |
+| `POST` | `/api/admin/users` | Admin-only user creation |
+| `PATCH` | `/api/admin/users/:id/status` | Admin-only user status update |
+| `PATCH` | `/api/admin/users/:id/roles` | Admin-only role update |
+| `GET/POST/PUT/PATCH` | `/api/admin/categories...` | Admin-only category CRUD and active toggle |
+| `GET/POST/PUT/PATCH` | `/api/admin/locations/...` | Admin-only area, building and room CRUD |
+| `GET/POST/PUT/PATCH` | `/api/admin/handover-points...` | Admin-only handover point CRUD |
+| `GET` | `/api/admin/reports` | Admin-only report queue |
+| `PATCH` | `/api/admin/reports/:id/handle` | Admin-only report handling and moderation action |
 | `GET` | `/api/health` | API health check |
 
 All Node API responses use `{ success, data?, error?, message? }`.
@@ -92,6 +105,9 @@ All Node API responses use `{ success, data?, error?, message? }`.
 | --- | --- |
 | `001_auth_schema.sql` | Users, roles, user roles, OTPs, OAuth accounts, refresh tokens, login audit logs and user activity logs |
 | `002_lost_found_schema.sql` | Posts, media, AI tags, matching, claims, handover points, storage logs, appointments, chat, notifications, reputation, reports, moderation and admin config |
+| `003_auth_recovery_schema.sql` | Password reset OTP support |
+| `004_user_audience_roles.sql` | Student/Lecturer audience role backfill |
+| `005_integrity_constraints.sql` | FK for post handover point and unique claim per post/user |
 
 Run migrations with:
 
@@ -100,6 +116,13 @@ npm run migrate:api
 ```
 
 The migration runner creates the configured database if needed and records applied files in `schema_migrations`.
+
+Security and integrity notes:
+
+- Password and LOST-post secret verification values are stored with bcrypt; default salt rounds are 12.
+- Password reset revokes all active refresh tokens for that user.
+- A user can submit only one claim per post, enforced by both service validation and a database unique key.
+- Sensitive admin management endpoints require `ADMIN`; `STAFF` can access only the overview-style admin surface.
 
 ## AI And Matching
 

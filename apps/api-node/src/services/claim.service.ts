@@ -21,6 +21,15 @@ function parseOptionalDate(value: string | null | undefined) {
   return date;
 }
 
+function isDuplicateEntry(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "ER_DUP_ENTRY"
+  );
+}
+
 export const claimService = {
   async createClaim(auth: AccessTokenPayload, input: CreateClaimInput) {
     const post = await claimRepository.findPostForClaim(input.postId);
@@ -36,16 +45,28 @@ export const claimService = {
     if (post.user_id === auth.sub) {
       throw new HttpError(409, "Post owner cannot claim their own found item");
     }
+    const existingClaim = await claimRepository.findByPostAndClaimant(input.postId, auth.sub);
+    if (existingClaim) {
+      throw new HttpError(409, "You already submitted a claim for this post");
+    }
 
-    const result = await claimRepository.create({
-      id: randomUUID(),
-      postId: input.postId,
-      claimantId: auth.sub,
-      description: input.description?.trim() ?? null,
-      secretAnswer: input.secretAnswer.trim(),
-      approximateLostAt: parseOptionalDate(input.approximateLostAt),
-      approximateLocation: input.approximateLocation.trim()
-    });
+    let result;
+    try {
+      result = await claimRepository.create({
+        id: randomUUID(),
+        postId: input.postId,
+        claimantId: auth.sub,
+        description: input.description?.trim() ?? null,
+        secretAnswer: input.secretAnswer.trim(),
+        approximateLostAt: parseOptionalDate(input.approximateLostAt),
+        approximateLocation: input.approximateLocation.trim()
+      });
+    } catch (error) {
+      if (isDuplicateEntry(error)) {
+        throw new HttpError(409, "You already submitted a claim for this post");
+      }
+      throw error;
+    }
 
     if (!result) {
       throw new HttpError(500, "Unable to create claim");

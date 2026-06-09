@@ -37,7 +37,7 @@ export const env = {
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET,
   jwtAccessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN ?? "15m",
   jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN ?? "30d",
-  bcryptSaltRounds: numberFromEnv("BCRYPT_SALT_ROUNDS", 10),
+  bcryptSaltRounds: numberFromEnv("BCRYPT_SALT_ROUNDS", 12),
   smtp: {
     host: process.env.SMTP_HOST,
     port: numberFromEnv("SMTP_PORT", 587),

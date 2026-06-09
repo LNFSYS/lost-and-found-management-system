@@ -3,7 +3,7 @@ import { z } from "zod";
 const optionalUuid = z.string().uuid().nullable().optional();
 
 export const postTypeSchema = z.enum(["LOST", "FOUND"]);
-export const postStatusSchema = z.enum(["OPEN", "MATCHED", "RESOLVED", "CLOSED"]);
+export const postStatusSchema = z.enum(["OPEN", "MATCHED", "RESOLVED", "CLOSED", "HIDDEN"]);
 
 const postBaseSchema = z.object({
   type: postTypeSchema,
@@ -12,20 +12,37 @@ const postBaseSchema = z.object({
   categoryId: z.string().uuid(),
   areaId: optionalUuid,
   buildingId: optionalUuid,
-  roomId: optionalUuid,
+  roomText: z.string().trim().max(100).nullable().optional(),
   customLocation: z.string().trim().max(255).nullable().optional(),
+  contactInfo: z.string().trim().min(3).max(255).nullable().optional(),
   lostFoundAt: z.string().datetime().nullable().optional(),
   handoverPointId: optionalUuid,
-  secretVerification: z.string().trim().min(3).max(255).nullable().optional()
+  secretVerification: z.string().trim().min(3).max(2000).nullable().optional()
 });
 
 export const createPostSchema = postBaseSchema
   .superRefine((input, context) => {
-    if (input.type === "FOUND" && !input.handoverPointId) {
+    const hasHoldingLocation = Boolean(
+      input.handoverPointId ||
+        input.roomText?.trim() ||
+        input.buildingId ||
+        input.areaId ||
+        input.customLocation?.trim()
+    );
+
+    if (input.type === "FOUND" && !hasHoldingLocation) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["handoverPointId"],
-        message: "FOUND posts require a handover point"
+        message: "FOUND posts require a handover point or current holding location"
+      });
+    }
+
+    if (!input.contactInfo?.trim()) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["contactInfo"],
+        message: "Posts require contact information"
       });
     }
 
@@ -38,15 +55,7 @@ export const createPostSchema = postBaseSchema
     }
   });
 
-export const updatePostSchema = postBaseSchema.partial().superRefine((input, context) => {
-  if (input.type === "FOUND" && input.handoverPointId === null) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["handoverPointId"],
-      message: "FOUND posts require a handover point"
-    });
-  }
-});
+export const updatePostSchema = postBaseSchema.partial();
 
 export const updatePostStatusSchema = z.object({
   status: postStatusSchema
@@ -61,7 +70,6 @@ export const listPostsQuerySchema = z.object({
   categoryId: z.string().uuid().optional(),
   areaId: z.string().uuid().optional(),
   buildingId: z.string().uuid().optional(),
-  roomId: z.string().uuid().optional(),
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
   sort: z.enum(["latest", "oldest", "highest_match"]).default("latest")

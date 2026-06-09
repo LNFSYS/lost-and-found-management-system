@@ -39,16 +39,11 @@ const buildingSchema = z.object({
   name: z.string().trim().min(1).max(100),
   sortOrder: z.coerce.number().int().min(0).default(0)
 });
-const roomSchema = z.object({
-  buildingId: z.string().uuid(),
-  name: z.string().trim().min(1).max(100)
-});
 const handoverSchema = z.object({
   name: z.string().trim().min(2).max(150),
   address: z.string().trim().min(2).max(255),
   areaId: z.string().uuid().nullable().optional(),
   buildingId: z.string().uuid().nullable().optional(),
-  roomId: z.string().uuid().nullable().optional(),
   openingHours: z.string().trim().max(255).nullable().optional(),
   contactInfo: z.string().trim().max(255).nullable().optional()
 });
@@ -150,22 +145,6 @@ export const adminController = {
 
   async setBuildingActive(request: Request, response: Response) {
     response.json(ok(await adminRepository.setBuildingActive(idParam(request), activeSchema.parse(request.body).isActive)));
-  },
-
-  async rooms(_request: Request, response: Response) {
-    response.json(ok({ rooms: await adminRepository.rooms() }));
-  },
-
-  async createRoom(request: Request, response: Response) {
-    response.status(201).json(ok(await adminRepository.createRoom(roomSchema.parse(request.body))));
-  },
-
-  async updateRoom(request: Request, response: Response) {
-    response.json(ok(await adminRepository.updateRoom(idParam(request), roomSchema.parse(request.body))));
-  },
-
-  async setRoomActive(request: Request, response: Response) {
-    response.json(ok(await adminRepository.setRoomActive(idParam(request), activeSchema.parse(request.body).isActive)));
   },
 
   async handoverPoints(_request: Request, response: Response) {

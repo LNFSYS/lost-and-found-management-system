@@ -41,12 +41,6 @@ export interface Building {
   name: string;
 }
 
-export interface Room {
-  id: string;
-  buildingId: string;
-  name: string;
-}
-
 export interface HandoverPoint {
   id: string;
   name: string;
@@ -61,7 +55,6 @@ export interface AdminOverview {
   reports: number;
   categories: number;
   areas: number;
-  rooms: number;
   handoverPoints: number;
   postsByStatus: Array<{ status: string; total: number }>;
   postsByType: Array<{ type: string; total: number }>;
@@ -103,16 +96,10 @@ export interface AdminBuilding extends AdminNamedResource {
   sortOrder: number;
 }
 
-export interface AdminRoom extends AdminNamedResource {
-  buildingId: string;
-  buildingName: string | null;
-}
-
 export interface AdminHandoverPoint extends AdminNamedResource {
   address: string;
   areaId: string | null;
   buildingId: string | null;
-  roomId: string | null;
   openingHours: string | null;
   contactInfo: string | null;
 }
@@ -151,10 +138,11 @@ export interface BoardPost {
     areaName: string | null;
     buildingId: string | null;
     buildingName: string | null;
-    roomId: string | null;
+    roomText: string | null;
     roomName: string | null;
     customLocation: string | null;
   };
+  contactInfo: string | null;
   lostFoundAt: string | null;
   handoverPoint: { id: string; name: string | null } | null;
   resolvedAt: string | null;
@@ -215,7 +203,6 @@ export interface ListPostsParams {
   categoryId?: string;
   areaId?: string;
   buildingId?: string;
-  roomId?: string;
   from?: string;
   to?: string;
   sort?: "latest" | "oldest" | "highest_match";
@@ -303,10 +290,15 @@ export const api = {
       body: JSON.stringify(input)
     });
   },
-  updatePostStatus(id: string, status: string) {
+  updatePostStatus(id: string, status: PostStatus) {
     return request<{ post: BoardPost }>(`/posts/${id}/status`, {
       method: "PATCH",
       body: JSON.stringify({ status })
+    });
+  },
+  deletePost(id: string) {
+    return request<{ deleted: boolean }>(`/posts/${id}`, {
+      method: "DELETE"
     });
   },
   uploadPostImages(id: string, files: FileList | File[]) {
@@ -412,9 +404,6 @@ export const api = {
   buildings(areaId: string) {
     return request<{ buildings: Building[] }>(`/locations/areas/${areaId}/buildings`);
   },
-  rooms(buildingId: string) {
-    return request<{ rooms: Room[] }>(`/locations/buildings/${buildingId}/rooms`);
-  },
   handoverPoints() {
     return request<{ handoverPoints: HandoverPoint[] }>("/handover-points");
   },
@@ -504,27 +493,6 @@ export const api = {
   },
   adminSetBuildingActive(id: string, isActive: boolean) {
     return request<{ updated: boolean }>(`/admin/locations/buildings/${id}/active`, {
-      method: "PATCH",
-      body: JSON.stringify({ isActive })
-    });
-  },
-  adminRooms() {
-    return request<{ rooms: AdminRoom[] }>("/admin/locations/rooms");
-  },
-  adminCreateRoom(input: Record<string, unknown>) {
-    return request<{ id: string }>("/admin/locations/rooms", {
-      method: "POST",
-      body: JSON.stringify(input)
-    });
-  },
-  adminUpdateRoom(id: string, input: Record<string, unknown>) {
-    return request<{ updated: boolean }>(`/admin/locations/rooms/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(input)
-    });
-  },
-  adminSetRoomActive(id: string, isActive: boolean) {
-    return request<{ updated: boolean }>(`/admin/locations/rooms/${id}/active`, {
       method: "PATCH",
       body: JSON.stringify({ isActive })
     });

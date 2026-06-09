@@ -17,10 +17,6 @@ locationRoutes.get("/areas/:id/buildings", (request, response, next) => {
   lookupController.buildings(request, response).catch(next);
 });
 
-locationRoutes.get("/buildings/:id/rooms", (request, response, next) => {
-  lookupController.rooms(request, response).catch(next);
-});
-
 handoverPointRoutes.get("/", (request, response, next) => {
   lookupController.handoverPoints(request, response).catch(next);
 });

@@ -161,18 +161,6 @@ export const openApiDocument = {
         responses: { "201": { description: "Building created" } }
       }
     },
-    "/admin/locations/rooms": {
-      get: {
-        security: [{ bearerAuth: [] }],
-        summary: "Admin list campus rooms",
-        responses: { "200": { description: "Room list" } }
-      },
-      post: {
-        security: [{ bearerAuth: [] }],
-        summary: "Admin create campus room",
-        responses: { "201": { description: "Room created" } }
-      }
-    },
     "/admin/handover-points": {
       get: {
         security: [{ bearerAuth: [] }],
@@ -303,12 +291,6 @@ export const openApiDocument = {
       get: {
         summary: "List active buildings in an area",
         responses: { "200": { description: "Building list" } }
-      }
-    },
-    "/locations/buildings/{id}/rooms": {
-      get: {
-        summary: "List active rooms in a building",
-        responses: { "200": { description: "Room list" } }
       }
     },
     "/handover-points": {

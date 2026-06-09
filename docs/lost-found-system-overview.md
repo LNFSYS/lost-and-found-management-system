@@ -119,9 +119,9 @@ Xây dựng một hệ thống quản lý đồ thất lạc hoàn chỉnh cho F
 ### 3.2 Phạm vi địa lý
 
 Hệ thống được xây dựng trong phạm vi **FPT University — Campus Đà Nẵng**. Dữ liệu vị trí trong hệ thống được tổ chức theo cấu trúc phân cấp để phù hợp với môi trường trường học:
-- **Cấp độ 1 — Khu vực:** Khu học tập, thư viện, căng-tin, sân trường, bãi xe, ký túc xá...
-- **Cấp độ 2 — Tòa nhà:** Các tòa nhà/khu chức năng trong campus
-- **Cấp độ 3 — Phòng/Tầng/Vị trí cụ thể:** Phòng học, tầng, quầy bảo vệ, khu vực gửi đồ...
+- **Cấp độ 1 — Khu vực lớn:** Nhà xe, nhà võ, ký túc xá, tòa, khu thể thao, cổng, căn tin...
+- **Cấp độ 2 — Địa điểm cụ thể:** Tòa Alpha, Tòa Beta, Tòa Gamma, cổng chính, cổng phụ, cổng nhà xe...
+- **Cấp độ 3 — Mô tả text:** Phòng, tầng, hành lang, quầy bảo vệ hoặc vị trí chi tiết do user nhập tự do.
 
 ### 3.3 Phạm vi chức năng
 
@@ -227,7 +227,7 @@ Trường bắt buộc:
   ├── Tiêu đề (tối đa 100 ký tự)
   ├── Mô tả chi tiết (đặc điểm nhận dạng, màu sắc, nhãn hiệu...)
   ├── Danh mục (Category): Điện tử / Giấy tờ / Phụ kiện / Quần áo / Khác
-  ├── Vị trí mất (Khu vực → Tòa nhà → Phòng)
+  ├── Vị trí mất (Khu vực lớn → Địa điểm cụ thể → Mô tả text)
   └── Thời gian mất (date + time)
 
 Trường tùy chọn:
@@ -493,7 +493,7 @@ Bài đăng chuyển sang RESOLVED và cập nhật Reputation Score
 **Trạng thái lịch hẹn:**
 
 ```
-PROPOSED → ACCEPTED → COMPLETED
+PENDING → ACCEPTED → COMPLETED
     │          │
     │          ├── RESCHEDULED
     │          └── CANCELLED
@@ -543,7 +543,7 @@ Admin Configuration Management cho phép Admin cấu hình các rule quan trọn
 | Post rule | Thời hạn bài đăng, số bài tối đa/ngày, số ảnh tối đa/bài |
 | Matching rule | Ngưỡng điểm hiển thị, ngưỡng gửi thông báo, trọng số text/category/location/time |
 | Category | Danh mục đồ vật, nhóm cha/con |
-| Campus location | Khu vực, tòa nhà, phòng/tầng, handover point |
+| Campus location | Khu vực lớn, địa điểm cụ thể, mô tả text, handover point |
 | Notification rule | Bật/tắt email, in-app, realtime, digest |
 | Upload rule | Dung lượng ảnh tối đa, định dạng ảnh cho phép, folder Cloudinary |
 
@@ -770,7 +770,7 @@ HANDOVER_POINT ─ STORAGE_LOG (1:N)
 | description | TEXT | |
 | category_id | INT FK | |
 | location_area | VARCHAR(100) | Khu vực |
-| location_building | VARCHAR(50) | Tòa nhà |
+| location_building | VARCHAR(50) | Địa điểm cụ thể |
 | location_room | VARCHAR(50) | Phòng |
 | incident_time | DATETIME | Thời gian mất/nhặt |
 | status | ENUM | OPEN, MATCHED, RESOLVED, EXPIRED, CLOSED |
@@ -839,7 +839,7 @@ HANDOVER_POINT ─ STORAGE_LOG (1:N)
 | id | BIGINT PK | |
 | name | VARCHAR(150) | Tên điểm tiếp nhận, ví dụ: Quầy bảo vệ |
 | area | VARCHAR(100) | Khu vực |
-| building | VARCHAR(100) | Tòa nhà |
+| building | VARCHAR(100) | Địa điểm cụ thể |
 | room | VARCHAR(100) | Phòng/quầy/tầng |
 | contact_phone | VARCHAR(20) | SĐT liên hệ nếu có |
 | working_hours | VARCHAR(255) | Giờ làm việc |
@@ -881,7 +881,7 @@ HANDOVER_POINT ─ STORAGE_LOG (1:N)
 | location_type | ENUM | HANDOVER_POINT, CUSTOM_LOCATION |
 | handover_point_id | BIGINT FK NULL | Nếu nhận tại điểm tiếp nhận |
 | custom_location | VARCHAR(255) | Nếu nhận tại vị trí tự thỏa thuận |
-| status | ENUM | PROPOSED, ACCEPTED, REJECTED, RESCHEDULED, CANCELLED, COMPLETED |
+| status | ENUM | PENDING, ACCEPTED, REJECTED, CANCELLED, COMPLETED, RESCHEDULED |
 | note | TEXT | Ghi chú |
 | created_at | TIMESTAMP | |
 
@@ -994,9 +994,9 @@ CategoryScore = 0.0   nếu hoàn toàn khác nhau
 Vì đây là không gian trong khuôn viên trường (không cần tọa độ GPS chính xác), mô hình hóa bằng cây phân cấp:
 
 ```
-LocationScore = 1.0   nếu cùng phòng
-LocationScore = 0.8   nếu cùng tòa nhà
-LocationScore = 0.5   nếu cùng khu vực
+LocationScore = 1.0   nếu cùng vị trí text hoặc cùng địa điểm cụ thể
+LocationScore = 0.7   nếu cùng địa điểm cụ thể
+LocationScore = 0.4   nếu cùng khu vực lớn
 LocationScore = 0.2   nếu cùng khuôn viên trường
 LocationScore = 0.0   nếu khác địa điểm hoàn toàn
 ```
@@ -1327,7 +1327,7 @@ Lưu ý: mục 15.2 là danh sách UC tổng quát theo module; mục 15.3 bên 
 | UC-016 | Tạo bài đăng LOST | User | Cao |
 | UC-017 | Tạo bài đăng FOUND | User/Finder/Staff | Cao |
 | UC-018 | Nhập thông tin tiêu đề, mô tả, danh mục | User | Cao |
-| UC-019 | Chọn vị trí mất/nhặt theo khu vực, tòa nhà, phòng | User | Cao |
+| UC-019 | Chọn vị trí mất/nhặt theo khu vực lớn, địa điểm cụ thể và nhập phòng/vị trí text | User | Cao |
 | UC-020 | Nhập thời gian mất/nhặt đồ | User | Cao |
 | UC-021 | Nhập thông tin xác minh bí mật cho bài LOST | User | Cao |
 | UC-022 | Cập nhật bài đăng LOST/FOUND | User | Cao |
@@ -1370,7 +1370,7 @@ Lưu ý: mục 15.2 là danh sách UC tổng quát theo module; mục 15.3 bên 
 | UC-049 | Tìm kiếm tiếng Việt có dấu/không dấu | User | Trung bình |
 | UC-050 | Lọc theo loại LOST/FOUND | User | Cao |
 | UC-051 | Lọc theo danh mục | User | Cao |
-| UC-052 | Lọc theo khu vực/tòa nhà/phòng | User | Cao |
+| UC-052 | Lọc theo khu vực lớn và địa điểm cụ thể | User | Cao |
 | UC-053 | Lọc theo thời gian | User | Cao |
 | UC-054 | Lọc theo trạng thái bài đăng | User/Admin | Trung bình |
 | UC-055 | Sắp xếp theo mới nhất | User | Cao |
@@ -1528,7 +1528,7 @@ Lưu ý: mục 15.2 là danh sách UC tổng quát theo module; mục 15.3 bên 
 | UC-162 | Cấu hình dung lượng ảnh tối đa | Admin | Cao |
 | UC-163 | Cấu hình định dạng ảnh cho phép | Admin | Trung bình |
 | UC-164 | Cấu hình danh mục đồ vật | Admin | Cao |
-| UC-165 | Cấu hình khu vực/tòa nhà/phòng trong campus | Admin | Cao |
+| UC-165 | Cấu hình khu vực lớn và địa điểm cụ thể trong campus | Admin | Cao |
 | UC-166 | Cấu hình handover point | Admin | Cao |
 | UC-167 | Cấu hình matching threshold | Admin | Cao |
 | UC-168 | Cấu hình trọng số Text/Category/Location/Time | Admin | Cao |
@@ -1608,7 +1608,7 @@ Phần này phân công trực tiếp theo 5 thành viên trong nhóm. Nguyên t
 | UC-113 | Đề xuất thời gian trả đồ, validate không trùng lịch cũ hoặc thời gian không hợp lệ. |
 | UC-114 | Đề xuất địa điểm trả đồ, liên kết handover point hoặc custom location. |
 | UC-115 | Chọn handover point làm nơi nhận đồ, kiểm tra điểm đang hoạt động. |
-| UC-117 | Chấp nhận lịch hẹn, cập nhật trạng thái `CONFIRMED` hoặc `ACCEPTED`. |
+| UC-117 | Chấp nhận lịch hẹn, cập nhật trạng thái `ACCEPTED`. |
 | UC-118 | Từ chối lịch hẹn kèm lý do. |
 | UC-119 | Đổi lịch hẹn, tạo đề xuất mới và chờ xác nhận bên kia. |
 | UC-120 | Hủy lịch hẹn, ghi lý do và tạo notification cho hai bên. |
@@ -1655,7 +1655,7 @@ Phần này phân công trực tiếp theo 5 thành viên trong nhóm. Nguyên t
 | UC-162 | Cấu hình dung lượng ảnh tối đa. |
 | UC-163 | Cấu hình định dạng ảnh cho phép: JPG, PNG, WEBP. |
 | UC-164 | Cấu hình danh mục đồ vật: thêm/sửa/xóa category. |
-| UC-165 | Cấu hình khu vực/tòa nhà/phòng trong campus. |
+| UC-165 | Cấu hình khu vực lớn và địa điểm cụ thể trong campus; không dùng bảng `campus_rooms`. |
 | UC-166 | Cấu hình handover point, liên kết campus location. |
 | UC-167 | Cấu hình matching threshold, gồm ngưỡng hiển thị và gửi notification. |
 | UC-168 | Cấu hình trọng số Text/Category/Location/Time cho matching. |
@@ -1702,7 +1702,7 @@ Phần này phân công trực tiếp theo 5 thành viên trong nhóm. Nguyên t
 | UC-016 | API tạo bài LOST, validate DTO bằng Zod, lưu posts và tags. |
 | UC-017 | API tạo bài FOUND, validate DTO, lưu posts và handover point ref. |
 | UC-018 | Validate tiêu đề, mô tả, danh mục khi tạo/cập nhật bài. |
-| UC-019 | Validate và lưu vị trí phân cấp khu vực → tòa → phòng. |
+| UC-019 | Validate và lưu vị trí phân cấp khu vực lớn → địa điểm cụ thể; phòng/vị trí chi tiết lưu dạng text. |
 | UC-020 | Validate và lưu thời gian mất/nhặt đồ. |
 | UC-021 | Lưu thông tin xác minh bí mật cho bài LOST, encrypt trước khi lưu. |
 | UC-022 | API cập nhật bài đăng, kiểm tra owner, trigger re-matching nếu cần. |
@@ -1741,7 +1741,7 @@ Phần này phân công trực tiếp theo 5 thành viên trong nhóm. Nguyên t
 | UC-049 | Xử lý tìm kiếm tiếng Việt có dấu/không dấu bằng normalize trước query. |
 | UC-050 | Filter theo loại LOST/FOUND. |
 | UC-051 | Filter theo danh mục, lấy danh sách category từ config. |
-| UC-052 | Filter theo khu vực/tòa nhà/phòng. |
+| UC-052 | Filter theo khu vực lớn và địa điểm cụ thể. |
 | UC-053 | Filter theo khoảng thời gian. |
 | UC-054 | Filter theo trạng thái bài đăng. |
 | UC-055 | Sắp xếp theo mới nhất bằng `ORDER BY created_at DESC`. |
@@ -1803,7 +1803,7 @@ Phần này phân công trực tiếp theo 5 thành viên trong nhóm. Nguyên t
 | UC-072 | Tính Cosine Similarity giữa cặp LOST–FOUND. |
 | UC-073 | Tính TextScore từ Cosine Similarity. |
 | UC-074 | Tính CategoryScore theo khớp chính xác/cùng nhóm/khác hoàn toàn. |
-| UC-075 | Tính LocationScore theo cây phân cấp phòng → tòa → khu vực → campus. |
+| UC-075 | Tính LocationScore theo địa điểm text, địa điểm cụ thể và khu vực lớn. |
 | UC-076 | Tính TimeScore bằng hàm mũ phân rã `e^(-Δt/72)`. |
 | UC-077 | Tính TotalScore tổng hợp từ 4 thành phần theo trọng số. |
 | UC-078 | Lưu matching result vào bảng matching_results. |
@@ -1875,7 +1875,7 @@ Phần này phân công trực tiếp theo 5 thành viên trong nhóm. Nguyên t
 | UC-016 | Màn hình tạo bài LOST, form đầy đủ bằng React Hook Form. |
 | UC-017 | Màn hình tạo bài FOUND, form đầy đủ, chọn handover point. |
 | UC-018 | Validate tiêu đề, mô tả, danh mục phía client. |
-| UC-019 | Picker chọn vị trí phân cấp khu vực → tòa → phòng. |
+| UC-019 | Picker chọn khu vực lớn → địa điểm cụ thể, kèm input phòng/vị trí text. |
 | UC-020 | DateTimePicker chọn thời gian mất/nhặt. |
 | UC-021 | Form nhập thông tin xác minh bí mật cho bài LOST. |
 | UC-022 | Màn hình chỉnh sửa bài đăng. |
@@ -1999,7 +1999,7 @@ Phần này phân công trực tiếp theo 5 thành viên trong nhóm. Nguyên t
 | UC-016 | Trang tạo bài LOST, form đầy đủ, drag & drop ảnh. |
 | UC-017 | Trang tạo bài FOUND, form đầy đủ, chọn handover point. |
 | UC-018 | Validate tiêu đề, mô tả, danh mục phía client. |
-| UC-019 | Dropdown chọn vị trí phân cấp khu vực → tòa → phòng. |
+| UC-019 | Dropdown chọn khu vực lớn → địa điểm cụ thể, kèm input phòng/vị trí text. |
 | UC-020 | DateTimePicker chọn thời gian mất/nhặt. |
 | UC-021 | Form nhập thông tin xác minh bí mật cho bài LOST. |
 | UC-022 | Trang chỉnh sửa bài đăng. |
@@ -2032,7 +2032,7 @@ Phần này phân công trực tiếp theo 5 thành viên trong nhóm. Nguyên t
 | UC-049 | Xử lý tìm kiếm tiếng Việt có dấu/không dấu. |
 | UC-050 | Filter loại LOST/FOUND bằng toggle button. |
 | UC-051 | Filter danh mục bằng multi-select dropdown. |
-| UC-052 | Filter khu vực/tòa nhà/phòng bằng cascading dropdown. |
+| UC-052 | Filter khu vực lớn và địa điểm cụ thể bằng cascading dropdown. |
 | UC-053 | Filter thời gian bằng date range picker. |
 | UC-054 | Filter trạng thái bài đăng. |
 | UC-055 | Sắp xếp theo mới nhất. |
@@ -2120,7 +2120,7 @@ Phần này phân công trực tiếp theo 5 thành viên trong nhóm. Nguyên t
 | UC-162 | Config dung lượng ảnh tối đa. |
 | UC-163 | Config định dạng ảnh cho phép. |
 | UC-164 | Trang quản lý danh mục: thêm/sửa/xóa category. |
-| UC-165 | Trang quản lý campus location: khu vực, tòa, phòng. |
+| UC-165 | Trang quản lý campus location: khu vực lớn và địa điểm cụ thể; phòng là text khi đăng tin. |
 | UC-166 | Trang quản lý handover point: tạo/sửa/bật/tắt. |
 | UC-167 | Config matching threshold bằng slider điểm hiển thị. |
 | UC-168 | Config trọng số matching bằng slider 4 thành phần. |

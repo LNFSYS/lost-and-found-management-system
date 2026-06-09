@@ -236,7 +236,8 @@ img {
 }
 
 .primary-button,
-.secondary-button {
+.secondary-button,
+.danger-button {
   display: inline-flex;
   min-height: 42px;
   align-items: center;
@@ -260,8 +261,15 @@ img {
   color: var(--fpt-blue);
 }
 
+.danger-button {
+  border: 1px solid rgba(193, 46, 46, 0.32);
+  background: #fff0f0;
+  color: #b42318;
+}
+
 .primary-button:disabled,
-.secondary-button:disabled {
+.secondary-button:disabled,
+.danger-button:disabled {
   cursor: not-allowed;
   opacity: 0.58;
 }
@@ -476,6 +484,26 @@ img {
   object-fit: cover;
 }
 
+.preview-item {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.preview-item button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  min-height: 30px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 10px;
+  background: rgba(16, 24, 39, 0.82);
+  color: white;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
 .post-card,
 .form-panel,
 .account-panel,
@@ -587,6 +615,87 @@ img {
   gap: 14px;
   max-width: 860px;
   padding: 18px;
+}
+
+.auth-card {
+  width: min(460px, 100%);
+  max-width: none;
+  margin: 24px auto 0;
+  gap: 18px;
+  padding: 26px;
+  border: 0;
+  box-shadow: 0 18px 44px rgba(22, 32, 51, 0.1);
+}
+
+.auth-card.register-mode {
+  width: min(620px, 100%);
+}
+
+.auth-card-heading {
+  display: grid;
+  gap: 6px;
+  text-align: center;
+}
+
+.auth-card-heading h2,
+.auth-card-heading p {
+  margin: 0;
+}
+
+.auth-card-heading h2 {
+  color: var(--ink);
+  font-size: 1.65rem;
+  line-height: 1.15;
+}
+
+.auth-card-heading p {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.text-link {
+  width: fit-content;
+  min-height: auto;
+  border: 0;
+  background: transparent;
+  color: var(--fpt-blue);
+  padding: 0;
+  font-size: 0.84rem;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.text-link:hover {
+  color: var(--fpt-sky);
+  text-decoration: underline;
+}
+
+.auth-back-link {
+  justify-self: start;
+}
+
+.auth-forgot-link {
+  justify-self: end;
+  margin-top: -4px;
+}
+
+.auth-submit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 2px;
+}
+
+.auth-submit-row .primary-button {
+  min-width: 170px;
+}
+
+.auth-submit-row span {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 800;
+  text-align: right;
 }
 
 .compact-form {
@@ -1033,6 +1142,82 @@ label {
   color: var(--fpt-blue);
 }
 
+.admin-moderation-filters {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(150px, 0.28fr) minmax(170px, 0.32fr);
+  gap: 10px;
+}
+
+.admin-moderation-filters select {
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  padding: 0 11px;
+}
+
+.admin-moderation-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-post-moderation-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, auto);
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.admin-post-main {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.admin-post-main strong,
+.admin-post-main p,
+.admin-post-main small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-post-main p {
+  display: -webkit-box;
+  margin: 0;
+  color: #52647d;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.admin-post-main small {
+  color: var(--muted);
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.admin-post-title-line,
+.admin-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-inline-actions {
+  justify-content: flex-end;
+}
+
+.admin-inline-actions button {
+  min-height: 36px;
+  padding-inline: 10px;
+  font-size: 0.82rem;
+}
+
 .admin-management-grid {
   display: grid;
   grid-template-columns: minmax(280px, 0.85fr) minmax(0, 1.4fr);
@@ -1202,6 +1387,15 @@ label {
     grid-template-columns: minmax(0, 1fr) repeat(2, minmax(120px, 0.4fr));
   }
 
+  .admin-post-moderation-row,
+  .admin-moderation-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-inline-actions {
+    justify-content: flex-start;
+  }
+
   .admin-report-row input,
   .admin-report-row button,
   .admin-user-row button {
@@ -1283,6 +1477,7 @@ label {
 
   .admin-resource-row,
   .admin-user-row,
+  .admin-post-moderation-row,
   .admin-report-row {
     grid-template-columns: 1fr;
   }
@@ -1297,13 +1492,19 @@ label {
   }
 
   .post-actions,
-  .dialog-actions {
+  .dialog-actions,
+  .auth-submit-row {
     align-items: stretch;
     flex-direction: column;
   }
 
+  .auth-submit-row span {
+    text-align: center;
+  }
+
   .primary-button,
-  .secondary-button {
+  .secondary-button,
+  .danger-button {
     width: 100%;
   }
 }
@@ -1375,6 +1576,38 @@ label {
   min-height: 40px;
   padding: 0 14px;
   white-space: nowrap;
+}
+
+.guest-auth-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.guest-login-button,
+.guest-register-button {
+  min-height: 40px;
+  border-radius: 8px;
+  padding: 0 15px;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.guest-login-button {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--fpt-blue);
+}
+
+.guest-login-button:hover {
+  background: #eef6ff;
+}
+
+.guest-register-button {
+  border: 1px solid var(--fpt-orange);
+  background: var(--fpt-orange);
+  color: white;
 }
 
 .community-shell .sidebar-card,
@@ -1781,6 +2014,15 @@ label {
     display: none;
   }
 
+  .guest-auth-actions {
+    gap: 6px;
+  }
+
+  .guest-login-button,
+  .guest-register-button {
+    padding-inline: 11px;
+  }
+
   .community-shell .nav-list {
     justify-content: flex-start;
   }
@@ -1804,6 +2046,10 @@ label {
     background: rgba(255, 255, 255, 0.94);
     box-shadow: 0 18px 42px rgba(22, 32, 51, 0.16);
     backdrop-filter: blur(16px);
+  }
+
+  .mobile-bottom-nav.guest-bottom-nav {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .mobile-bottom-nav button {
@@ -1832,6 +2078,14 @@ label {
 
   .community-shell .sidebar {
     justify-content: center;
+  }
+
+  .community-shell.guest-shell .sidebar {
+    justify-content: space-between;
+  }
+
+  .community-shell.guest-shell .brand {
+    min-width: 0;
   }
 
   .community-shell .workspace {

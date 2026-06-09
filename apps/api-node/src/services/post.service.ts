@@ -31,7 +31,7 @@ async function validateReferences(input: {
   categoryId?: string | null;
   areaId?: string | null;
   buildingId?: string | null;
-  roomId?: string | null;
+  roomText?: string | null;
   handoverPointId?: string | null;
 }) {
   if (input.categoryId) {
@@ -55,19 +55,6 @@ async function validateReferences(input: {
     }
     if (input.areaId && !(await postRepository.buildingBelongsToArea(input.buildingId, input.areaId))) {
       throw new HttpError(422, "Campus building does not belong to the selected area");
-    }
-  }
-
-  if (input.roomId) {
-    const exists = await postRepository.activeRecordExists("campus_rooms", input.roomId);
-    if (!exists) {
-      throw new HttpError(422, "Campus room does not exist or is inactive");
-    }
-    if (!input.buildingId) {
-      throw new HttpError(422, "Room selection requires a building");
-    }
-    if (!(await postRepository.roomBelongsToBuilding(input.roomId, input.buildingId))) {
-      throw new HttpError(422, "Campus room does not belong to the selected building");
     }
   }
 
@@ -109,8 +96,9 @@ export const postService = {
       categoryId: input.categoryId,
       areaId: input.areaId ?? null,
       buildingId: input.buildingId ?? null,
-      roomId: input.roomId ?? null,
+      roomText: input.roomText?.trim() || null,
       customLocation: input.customLocation?.trim() ?? null,
+      contactInfo: input.contactInfo?.trim() || null,
       lostFoundAt,
       handoverPointId: input.handoverPointId ?? null,
       secretVerificationHash,
@@ -156,13 +144,6 @@ export const postService = {
     await validateReferences(input);
 
     const nextType = input.type ?? current.type;
-    if (input.type === "FOUND" && !input.handoverPointId) {
-      throw new HttpError(422, "FOUND posts require a handover point");
-    }
-    if (nextType === "FOUND" && input.handoverPointId === null) {
-      throw new HttpError(422, "FOUND posts require a handover point");
-    }
-
     const secretVerificationHash =
       nextType === "LOST" && input.secretVerification
         ? await bcrypt.hash(input.secretVerification, env.bcryptSaltRounds)
@@ -176,8 +157,9 @@ export const postService = {
       categoryId: input.categoryId,
       areaId: input.areaId,
       buildingId: input.buildingId,
-      roomId: input.roomId,
+      roomText: input.roomText === undefined ? undefined : input.roomText?.trim() || null,
       customLocation: input.customLocation,
+      contactInfo: input.contactInfo === undefined ? undefined : input.contactInfo?.trim() || null,
       lostFoundAt: input.lostFoundAt === undefined ? undefined : parseOptionalDate(input.lostFoundAt),
       handoverPointId: input.handoverPointId,
       secretVerificationHash
@@ -194,7 +176,7 @@ export const postService = {
     return post;
   },
 
-  async updateStatus(auth: AccessTokenPayload, postId: string, status: "OPEN" | "MATCHED" | "RESOLVED" | "CLOSED") {
+  async updateStatus(auth: AccessTokenPayload, postId: string, status: "OPEN" | "MATCHED" | "RESOLVED" | "CLOSED" | "HIDDEN") {
     const current = await postRepository.findOwnerAndStatus(postId);
     if (!current) {
       throw new HttpError(404, "Post not found");

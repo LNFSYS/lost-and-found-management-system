@@ -59,7 +59,7 @@ Tech stack: Spring Boot, Spring Security, JPA/Hibernate, Jakarta Validation, MyS
 | [ ] | UC-113 | Validate proposed return time and avoid schedule conflicts |
 | [ ] | UC-114 | Validate return location as handover point or custom location |
 | [ ] | UC-115 | Validate active handover point selection |
-| [ ] | UC-117 | Accept appointment and update status to `CONFIRMED` |
+| [ ] | UC-117 | Accept appointment and update status to `ACCEPTED` |
 | [ ] | UC-118 | Reject appointment with reason |
 | [ ] | UC-119 | Reschedule appointment by creating a new proposal |
 | [ ] | UC-120 | Cancel appointment with reason and notify both sides |
@@ -106,7 +106,7 @@ Tech stack: Spring Boot, Spring Security, JPA/Hibernate, Jakarta Validation, MyS
 | [x] | UC-162 | Configure max image size |
 | [x] | UC-163 | Configure allowed image formats |
 | [ ] | UC-164 | Manage item categories |
-| [ ] | UC-165 | Manage campus areas, buildings and rooms |
+| [ ] | UC-165 | Manage campus areas and specific locations; post room/detail is free-text |
 | [x] | UC-166 | Manage handover points linked to campus locations |
 | [x] | UC-167 | Configure matching threshold |
 | [x] | UC-168 | Configure Text/Category/Location/Time matching weights |
@@ -185,7 +185,7 @@ Tech stack: Node.js, Express, TypeScript, Auth, Post, Cloudinary, Search, Claim 
 | [x] | UC-049 | Normalize Vietnamese text for accent-insensitive search |
 | [x] | UC-050 | Filter by LOST/FOUND |
 | [x] | UC-051 | Filter by category |
-| [x] | UC-052 | Filter by area/building/room |
+| [x] | UC-052 | Filter by area and specific location |
 | [x] | UC-053 | Filter by time range |
 | [x] | UC-054 | Filter by post status |
 | [x] | UC-055 | Sort by latest |
@@ -220,7 +220,7 @@ Tech stack: Node.js, Express, TypeScript, Auth, Post, Cloudinary, Search, Claim 
 | [x] | UC-150 | Admin handles report with warn/hide/delete/ban/unban moderation actions |
 | [x] | UC-151 | Admin overview dashboard API |
 | [x] | UC-164 | Admin manages item categories |
-| [x] | UC-165 | Admin manages campus areas, buildings and rooms |
+| [x] | UC-165 | Admin manages campus areas and specific locations; post room/detail is free-text |
 | [x] | UC-166 | Admin manages handover points |
 | [x] | UC-177 | Restrict sensitive admin management endpoints to `ADMIN`, not `STAFF` |
 
@@ -386,7 +386,7 @@ Tech stack: React Native, TypeScript, React Navigation, React Hook Form, Socket.
 | [ ] | UC-117 | Accept appointment |
 | [ ] | UC-119 | Reschedule appointment screen |
 | [ ] | UC-120 | Cancel appointment |
-| [ ] | UC-122 | Confirm appointment completed |
+| [ ] | UC-122 | Mark appointment completed |
 
 ### Chat & Notification Mobile
 
@@ -512,7 +512,7 @@ Tech stack: React, TypeScript, Vite, TailwindCSS, TanStack Query, Recharts, Sock
 | [ ] | UC-118 | Reject appointment with reason |
 | [ ] | UC-119 | Reschedule appointment page |
 | [ ] | UC-120 | Cancel appointment modal |
-| [ ] | UC-122 | Confirm appointment completed |
+| [ ] | UC-122 | Mark appointment completed |
 
 ### Chat & Notification Web
 

@@ -44,21 +44,12 @@ interface BuildingAdminRow extends RowDataPacket {
   sort_order: number;
 }
 
-interface RoomAdminRow extends RowDataPacket {
-  id: string;
-  building_id: string;
-  building_name: string | null;
-  name: string;
-  is_active: number;
-}
-
 interface HandoverAdminRow extends RowDataPacket {
   id: string;
   name: string;
   address: string;
   area_id: string | null;
   building_id: string | null;
-  room_id: string | null;
   opening_hours: string | null;
   contact_info: string | null;
   is_active: number;
@@ -125,7 +116,6 @@ export const adminRepository = {
       reports: await count("reports"),
       categories: await count("item_categories", "is_active = TRUE"),
       areas: await count("campus_areas", "is_active = TRUE"),
-      rooms: await count("campus_rooms", "is_active = TRUE"),
       handoverPoints: await count("handover_points", "is_active = TRUE"),
       postsByStatus: statusRows,
       postsByType: typeRows
@@ -363,52 +353,10 @@ export const adminRepository = {
     return { updated: true };
   },
 
-  async rooms() {
-    const [rows] = await dbPool.query<RoomAdminRow[]>(
-      `
-        SELECT r.id, r.building_id, b.name AS building_name, r.name, r.is_active
-        FROM campus_rooms r
-        LEFT JOIN campus_buildings b ON b.id = r.building_id
-        ORDER BY b.name, r.name
-      `
-    );
-    return rows.map((row) => ({
-      id: row.id,
-      buildingId: row.building_id,
-      buildingName: row.building_name,
-      name: row.name,
-      isActive: activeFlag(row.is_active)
-    }));
-  },
-
-  async createRoom(input: { buildingId: string; name: string }) {
-    const id = randomUUID();
-    await dbPool.execute("INSERT INTO campus_rooms (id, building_id, name) VALUES (?, ?, ?)", [
-      id,
-      input.buildingId,
-      input.name.trim()
-    ]);
-    return { id };
-  },
-
-  async updateRoom(id: string, input: { buildingId: string; name: string }) {
-    await dbPool.execute("UPDATE campus_rooms SET building_id = ?, name = ? WHERE id = ?", [
-      input.buildingId,
-      input.name.trim(),
-      id
-    ]);
-    return { updated: true };
-  },
-
-  async setRoomActive(id: string, isActive: boolean) {
-    await dbPool.execute("UPDATE campus_rooms SET is_active = ? WHERE id = ?", [isActive, id]);
-    return { updated: true };
-  },
-
   async handoverPoints() {
     const [rows] = await dbPool.query<HandoverAdminRow[]>(
       `
-        SELECT id, name, address, area_id, building_id, room_id, opening_hours, contact_info, is_active
+        SELECT id, name, address, area_id, building_id, opening_hours, contact_info, is_active
         FROM handover_points
         ORDER BY name
       `
@@ -419,7 +367,6 @@ export const adminRepository = {
       address: row.address,
       areaId: row.area_id,
       buildingId: row.building_id,
-      roomId: row.room_id,
       openingHours: row.opening_hours,
       contactInfo: row.contact_info,
       isActive: activeFlag(row.is_active)
@@ -432,7 +379,6 @@ export const adminRepository = {
       address: string;
       areaId?: string | null;
       buildingId?: string | null;
-      roomId?: string | null;
       openingHours?: string | null;
       contactInfo?: string | null;
     },
@@ -442,9 +388,9 @@ export const adminRepository = {
     await dbPool.execute(
       `
         INSERT INTO handover_points (
-          id, name, address, area_id, building_id, room_id, opening_hours, contact_info, created_by
+          id, name, address, area_id, building_id, opening_hours, contact_info, created_by
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         id,
@@ -452,7 +398,6 @@ export const adminRepository = {
         input.address.trim(),
         input.areaId ?? null,
         input.buildingId ?? null,
-        input.roomId ?? null,
         input.openingHours ?? null,
         input.contactInfo ?? null,
         actorId
@@ -466,14 +411,13 @@ export const adminRepository = {
     address: string;
     areaId?: string | null;
     buildingId?: string | null;
-    roomId?: string | null;
     openingHours?: string | null;
     contactInfo?: string | null;
   }) {
     await dbPool.execute(
       `
         UPDATE handover_points
-        SET name = ?, address = ?, area_id = ?, building_id = ?, room_id = ?, opening_hours = ?, contact_info = ?
+        SET name = ?, address = ?, area_id = ?, building_id = ?, opening_hours = ?, contact_info = ?
         WHERE id = ?
       `,
       [
@@ -481,7 +425,6 @@ export const adminRepository = {
         input.address.trim(),
         input.areaId ?? null,
         input.buildingId ?? null,
-        input.roomId ?? null,
         input.openingHours ?? null,
         input.contactInfo ?? null,
         id

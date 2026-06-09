@@ -24,11 +24,14 @@ Auth now follows the database design in `docs/db-auth-design.md`:
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
-| `POST` | `/api/auth/register` | Register with any valid email, password, full name and create OTP |
-| `POST` | `/api/auth/verify-otp` | Verify OTP and activate account |
+| `POST` | `/api/auth/register/request-otp` | Send registration OTP before account creation |
+| `POST` | `/api/auth/register` | Verify OTP, create account, assign Student/Lecturer role and issue tokens |
+| `POST` | `/api/auth/resend-otp` | Resend pending registration OTP |
 | `POST` | `/api/auth/login` | Login with email/password and receive access/refresh tokens |
 | `POST` | `/api/auth/refresh` | Rotate refresh token |
 | `POST` | `/api/auth/logout` | Revoke refresh token |
+| `POST` | `/api/auth/forgot-password` | Send password reset OTP |
+| `POST` | `/api/auth/reset-password` | Reset password and revoke active refresh tokens |
 | `GET` | `/api/auth/me` | Get current user by Bearer access token |
 | `PUT` | `/api/auth/profile` | Update profile |
 | `POST` | `/api/auth/avatar` | Upload avatar image |
@@ -56,16 +59,32 @@ Auth now follows the database design in `docs/db-auth-design.md`:
 | `GET` | `/api/locations/buildings/:id/rooms` | Get active rooms in a building |
 | `GET` | `/api/handover-points` | Get active handover points |
 | `GET` | `/api/handover-points/:id` | Get one active handover point |
+| `GET` | `/api/admin/dashboard/overview` | Staff/Admin dashboard overview |
+| `GET/POST/PATCH` | `/api/admin/users...` | Admin-only user management |
+| `GET/POST/PUT/PATCH` | `/api/admin/categories...` | Admin-only category management |
+| `GET/POST/PUT/PATCH` | `/api/admin/locations...` | Admin-only area/building/room management |
+| `GET/POST/PUT/PATCH` | `/api/admin/handover-points...` | Admin-only handover point management |
+| `GET/PATCH` | `/api/admin/reports...` | Admin-only report review and moderation |
 | `GET` | `/api/health` | Health check |
 
-Example register body:
+Example registration OTP request body:
+
+```json
+{
+  "email": "student@example.com"
+}
+```
+
+Example register body after OTP is delivered:
 
 ```json
 {
   "email": "student@example.com",
   "password": "password123",
   "fullName": "Nguyen Van A",
-  "studentCode": "SE190001"
+  "studentCode": "SE190001",
+  "accountType": "STUDENT",
+  "otp": "123456"
 }
 ```
 
@@ -85,5 +104,8 @@ Default URL: `http://localhost:3001`.
 - SMTP is guarded. If `SMTP_*` variables are not configured, OTP creation succeeds and the service logs a warning instead of crashing.
 - Cloudinary is guarded. Upload endpoints return a structured 503 response if `CLOUDINARY_*` variables are not configured.
 - Google Vision is guarded. If `GOOGLE_VISION_API_KEY` is missing or Vision fails, post image upload returns empty AI tags/OCR text and continues.
-- Matching runs after post create/update and post image upload, using weights from public/admin config.
+- Matching runs asynchronously after post create/update and post image upload, using weights from public/admin config.
+- Claim duplication is blocked by service validation and `uq_claim_per_post_user`.
+- `posts.handover_point_id` is protected by a foreign key in migration `005_integrity_constraints.sql`.
+- Sensitive admin management endpoints require `ADMIN`; `STAFF` can access overview only.
 - Google OAuth and realtime chat are planned next.

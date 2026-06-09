@@ -25,6 +25,8 @@ The service now includes:
 
 All admin endpoints return `{ success, data?, error?, message? }` and authenticate JWT access tokens signed by the Node API `JWT_ACCESS_SECRET`.
 
+Claim state transitions run inside transactions and load the claim with a write lock. Accepting a `NEED_MORE_INFO` claim requires new claim evidence after the information request timestamp.
+
 ## Run
 
 Set the same DB/JWT variables as the Node API, then run:

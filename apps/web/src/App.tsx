@@ -102,6 +102,14 @@ export function App() {
     enabled: Boolean(filters.buildingId)
   });
   const postsQuery = useQuery({ queryKey: ["posts", filters], queryFn: () => api.listPosts(filters) });
+  const meQuery = useQuery({
+    queryKey: ["me", authVersion],
+    queryFn: () => api.me(),
+    enabled: hasAccessToken()
+  });
+  const userRoles = meQuery.data?.user.roles ?? [];
+  const isAdmin = userRoles.includes("ADMIN");
+  const canUseAdmin = isAdmin || userRoles.includes("STAFF");
   const adminPostsQuery = useQuery({
     queryKey: ["admin-posts-overview", adminMode],
     queryFn: () => api.listPosts({ page: 1, pageSize: 100, sort: "latest" }),
@@ -115,49 +123,43 @@ export function App() {
   const adminUsersQuery = useQuery({
     queryKey: ["admin-users", adminMode],
     queryFn: () => api.adminUsers(),
-    enabled: adminMode && hasAccessToken()
+    enabled: adminMode && isAdmin
   });
   const adminCategoriesQuery = useQuery({
     queryKey: ["admin-categories", adminMode],
     queryFn: () => api.adminCategories(),
-    enabled: adminMode && hasAccessToken()
+    enabled: adminMode && isAdmin
   });
   const adminAreasQuery = useQuery({
     queryKey: ["admin-areas", adminMode],
     queryFn: () => api.adminAreas(),
-    enabled: adminMode && hasAccessToken()
+    enabled: adminMode && isAdmin
   });
   const adminBuildingsQuery = useQuery({
     queryKey: ["admin-buildings", adminMode],
     queryFn: () => api.adminBuildings(),
-    enabled: adminMode && hasAccessToken()
+    enabled: adminMode && isAdmin
   });
   const adminRoomsQuery = useQuery({
     queryKey: ["admin-rooms", adminMode],
     queryFn: () => api.adminRooms(),
-    enabled: adminMode && hasAccessToken()
+    enabled: adminMode && isAdmin
   });
   const adminHandoverQuery = useQuery({
     queryKey: ["admin-handover", adminMode],
     queryFn: () => api.adminHandoverPoints(),
-    enabled: adminMode && hasAccessToken()
+    enabled: adminMode && isAdmin
   });
   const adminReportsQuery = useQuery({
     queryKey: ["admin-reports", adminMode],
     queryFn: () => api.adminReports(),
-    enabled: adminMode && hasAccessToken()
+    enabled: adminMode && isAdmin
   });
   const myPostsQuery = useQuery({
     queryKey: ["my-posts", filters, authVersion],
     queryFn: () => api.myPosts(filters),
     enabled: view === "my-posts" && hasAccessToken()
   });
-  const meQuery = useQuery({
-    queryKey: ["me", authVersion],
-    queryFn: () => api.me(),
-    enabled: hasAccessToken()
-  });
-
   const selectedPostQuery = useQuery({
     queryKey: ["post", selectedPostId],
     queryFn: () => api.getPost(selectedPostId!),
@@ -165,8 +167,6 @@ export function App() {
   });
 
   const isSignedIn = Boolean(meQuery.data?.user);
-  const userRoles = meQuery.data?.user.roles ?? [];
-  const canUseAdmin = userRoles.includes("ADMIN") || userRoles.includes("STAFF");
   const activeList = view === "my-posts" ? myPostsQuery.data : postsQuery.data;
   const activeListLoading = view === "my-posts" ? myPostsQuery.isLoading : postsQuery.isLoading;
   const activeListError = view === "my-posts" ? myPostsQuery.error : postsQuery.error;
@@ -178,6 +178,12 @@ export function App() {
       setAdminMode(false);
     }
   }, [canUseAdmin]);
+
+  useEffect(() => {
+    if (adminMode && !isAdmin && adminTab !== "overview") {
+      setAdminTab("overview");
+    }
+  }, [adminMode, adminTab, isAdmin]);
 
   function updateFilter<Key extends keyof ListPostsParams>(key: Key, value: ListPostsParams[Key]) {
     setFilters((current) => {
@@ -247,21 +253,25 @@ export function App() {
               <button className={adminTab === "overview" ? "active" : ""} type="button" onClick={() => setAdminTab("overview")}>
                 <LayoutDashboard size={18} /> Dashboard
               </button>
-              <button className={adminTab === "categories" ? "active" : ""} type="button" onClick={() => setAdminTab("categories")}>
-                <Boxes size={18} /> Danh mục
-              </button>
-              <button className={adminTab === "locations" ? "active" : ""} type="button" onClick={() => setAdminTab("locations")}>
-                <Building2 size={18} /> Khu vực
-              </button>
-              <button className={adminTab === "handover" ? "active" : ""} type="button" onClick={() => setAdminTab("handover")}>
-                <Handshake size={18} /> Bàn giao
-              </button>
-              <button className={adminTab === "users" ? "active" : ""} type="button" onClick={() => setAdminTab("users")}>
-                <Users size={18} /> Người dùng
-              </button>
-              <button className={adminTab === "reports" ? "active" : ""} type="button" onClick={() => setAdminTab("reports")}>
-                <Flag size={18} /> Báo cáo
-              </button>
+              {isAdmin && (
+                <>
+                  <button className={adminTab === "categories" ? "active" : ""} type="button" onClick={() => setAdminTab("categories")}>
+                    <Boxes size={18} /> Danh mục
+                  </button>
+                  <button className={adminTab === "locations" ? "active" : ""} type="button" onClick={() => setAdminTab("locations")}>
+                    <Building2 size={18} /> Khu vực
+                  </button>
+                  <button className={adminTab === "handover" ? "active" : ""} type="button" onClick={() => setAdminTab("handover")}>
+                    <Handshake size={18} /> Bàn giao
+                  </button>
+                  <button className={adminTab === "users" ? "active" : ""} type="button" onClick={() => setAdminTab("users")}>
+                    <Users size={18} /> Người dùng
+                  </button>
+                  <button className={adminTab === "reports" ? "active" : ""} type="button" onClick={() => setAdminTab("reports")}>
+                    <Flag size={18} /> Báo cáo
+                  </button>
+                </>
+              )}
             </>
           ) : (
             <>

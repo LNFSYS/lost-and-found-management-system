@@ -32,10 +32,10 @@ Tech stack: Spring Boot, Spring Security, JPA/Hibernate, Jakarta Validation, MyS
 | [ ] | UC-090 | Hide evidence from unrelated users with permission guard |
 | [ ] | UC-091 | Guard finder/staff/admin access to claim evidence |
 | [x] | UC-092 | Request more claim information and move status to `NEED_MORE_INFO` |
-| [x] | UC-093 | Accept claim with valid state transition |
+| [x] | UC-093 | Accept claim with valid state transition, row lock and `NEED_MORE_INFO` evidence guard |
 | [x] | UC-094 | Reject claim with required reason |
 | [x] | UC-095 | Allow claimant to cancel only when claim is still `PENDING` |
-| [x] | UC-096 | Manage claim states: PENDING, NEED_MORE_INFO, ACCEPTED, REJECTED, CANCELLED |
+| [x] | UC-096 | Manage claim states: PENDING, NEED_MORE_INFO, ACCEPTED, REJECTED, CANCELLED with locked transition writes |
 
 ### Handover Point Business
 
@@ -128,13 +128,15 @@ Tech stack: Node.js, Express, TypeScript, Auth, Post, Cloudinary, Search, Claim 
 | [x] | UC-005 | Login with email/password, verify bcrypt, issue JWT access/refresh token |
 | [ ] | UC-006 | Google OAuth login with any valid email |
 | [x] | UC-007 | Logout by revoking refresh token |
+| [x] | UC-008 | Refresh access token: verify/rotate refresh token and issue new token pair |
+| [x] | UC-009 | Store and validate bcrypt password hashes with configurable salt rounds |
 | [x] | UC-011 | Get current profile by JWT |
 | [x] | UC-012 | Update profile with validation |
 | [x] | UC-013 | Upload avatar to Cloudinary and save URL/public_id |
 | [x] | UC-014 | Return user activity history |
 | [x] | UC-015 | Return reputation score, level and recent log |
 | [x] | UC-173 | Request registration OTP before account creation and resend when needed |
-| [x] | UC-174 | Forgot password and reset password with OTP |
+| [x] | UC-174 | Forgot password and reset password with OTP, then revoke active refresh tokens |
 | [x] | UC-175 | Assign Student/Lecturer audience role during registration |
 
 ### Post API
@@ -142,7 +144,7 @@ Tech stack: Node.js, Express, TypeScript, Auth, Post, Cloudinary, Search, Claim 
 | Done | UC | Task |
 | --- | --- | --- |
 | [x] | UC-016 | Create LOST post with DTO validation |
-| [x] | UC-017 | Create FOUND post with handover point reference |
+| [x] | UC-017 | Create FOUND post with handover point reference and FK-backed integrity |
 | [x] | UC-018 | Validate title, description and category |
 | [x] | UC-019 | Validate and save hierarchical location |
 | [x] | UC-020 | Validate lost/found time |
@@ -206,6 +208,21 @@ Tech stack: Node.js, Express, TypeScript, Auth, Post, Cloudinary, Search, Claim 
 | [ ] | UC-129 | Persist chat messages by claim/chat room |
 | [ ] | UC-148 | Submit violation report |
 | [x] | UC-172 | Return public config for Web/Mobile validation |
+| [x] | UC-176 | Prevent duplicate claims per post/user with service guard and DB unique constraint |
+
+### Admin API & Data Governance
+
+| Done | UC | Task |
+| --- | --- | --- |
+| [x] | UC-144 | Admin lists users through protected admin API |
+| [x] | UC-145 | Admin locks/unlocks user account and updates roles |
+| [x] | UC-149 | Admin views report queue |
+| [x] | UC-150 | Admin handles report with warn/hide/delete/ban/unban moderation actions |
+| [x] | UC-151 | Admin overview dashboard API |
+| [x] | UC-164 | Admin manages item categories |
+| [x] | UC-165 | Admin manages campus areas, buildings and rooms |
+| [x] | UC-166 | Admin manages handover points |
+| [x] | UC-177 | Restrict sensitive admin management endpoints to `ADMIN`, not `STAFF` |
 
 ## QD - Trương Quang Đạt - AI, Matching, Realtime
 
@@ -520,13 +537,13 @@ Tech stack: React, TypeScript, Vite, TailwindCSS, TanStack Query, Recharts, Sock
 
 | Done | UC | Task |
 | --- | --- | --- |
-| [ ] | UC-144 | User management page |
-| [ ] | UC-145 | Lock/unlock account button |
+| [x] | UC-144 | User management page |
+| [x] | UC-145 | Lock/unlock account button |
 | [ ] | UC-146 | Post management page |
 | [ ] | UC-147 | Hide/delete violating post modal |
-| [ ] | UC-149 | Report review queue |
-| [ ] | UC-150 | Report handling UI |
-| [x] | UC-151 | Admin dashboard metric cards and charts |
+| [x] | UC-149 | Report review queue |
+| [x] | UC-150 | Report handling UI |
+| [x] | UC-151 | Admin dashboard metric cards and overview lists |
 | [ ] | UC-152 | LOST/FOUND by week/month chart |
 | [ ] | UC-153 | Successful return rate chart |
 | [ ] | UC-154 | Most lost categories chart |
@@ -539,9 +556,9 @@ Tech stack: React, TypeScript, Vite, TailwindCSS, TanStack Query, Recharts, Sock
 | [ ] | UC-161 | Max images per post config |
 | [ ] | UC-162 | Max image size config |
 | [ ] | UC-163 | Allowed image formats config |
-| [ ] | UC-164 | Category management page |
-| [ ] | UC-165 | Campus location management page |
-| [ ] | UC-166 | Handover point management page |
+| [x] | UC-164 | Category management page |
+| [x] | UC-165 | Campus location management page |
+| [x] | UC-166 | Handover point management page |
 | [ ] | UC-167 | Matching threshold config |
 | [ ] | UC-168 | Matching weight sliders |
 | [ ] | UC-169 | Notification/email rule config |

@@ -27,7 +27,7 @@ public class ClaimBusinessService {
 
   @Transactional
   public ClaimEntity requestInfo(String claimId, String message) {
-    ClaimEntity claim = load(claimId);
+    ClaimEntity claim = loadForUpdate(claimId);
     requireStatus(claim, ClaimStatus.PENDING);
     ClaimStatus from = claim.getStatus();
     claim.setStatus(ClaimStatus.NEED_MORE_INFO);
@@ -39,9 +39,12 @@ public class ClaimBusinessService {
 
   @Transactional
   public ClaimEntity accept(String claimId) {
-    ClaimEntity claim = load(claimId);
+    ClaimEntity claim = loadForUpdate(claimId);
     if (claim.getStatus() != ClaimStatus.PENDING && claim.getStatus() != ClaimStatus.NEED_MORE_INFO) {
       throw new IllegalStateException("Only pending claims can be accepted");
+    }
+    if (claim.getStatus() == ClaimStatus.NEED_MORE_INFO && !hasNewEvidenceAfterInfoRequest(claim)) {
+      throw new IllegalStateException("Claim needs additional evidence before it can be accepted");
     }
     ClaimStatus from = claim.getStatus();
     claim.setStatus(ClaimStatus.ACCEPTED);
@@ -53,7 +56,7 @@ public class ClaimBusinessService {
 
   @Transactional
   public ClaimEntity reject(String claimId, String reason) {
-    ClaimEntity claim = load(claimId);
+    ClaimEntity claim = loadForUpdate(claimId);
     if (claim.getStatus() != ClaimStatus.PENDING && claim.getStatus() != ClaimStatus.NEED_MORE_INFO) {
       throw new IllegalStateException("Only pending claims can be rejected");
     }
@@ -68,7 +71,7 @@ public class ClaimBusinessService {
 
   @Transactional
   public ClaimEntity cancel(String claimId, String reason) {
-    ClaimEntity claim = load(claimId);
+    ClaimEntity claim = loadForUpdate(claimId);
     if (!claim.getClaimantId().equals(authContext.currentUserId())) {
       throw new AccessDeniedException("Only the claimant can cancel this claim");
     }
@@ -83,6 +86,18 @@ public class ClaimBusinessService {
 
   private ClaimEntity load(String claimId) {
     return claimRepository.findById(claimId).orElseThrow(() -> new NoSuchElementException("Claim not found"));
+  }
+
+  private ClaimEntity loadForUpdate(String claimId) {
+    return claimRepository.findByIdForUpdate(claimId)
+        .orElseThrow(() -> new NoSuchElementException("Claim not found"));
+  }
+
+  private boolean hasNewEvidenceAfterInfoRequest(ClaimEntity claim) {
+    if (claim.getUpdatedAt() == null) {
+      return false;
+    }
+    return claimRepository.countEvidenceCreatedAfter(claim.getId(), claim.getUpdatedAt()) > 0;
   }
 
   private void requireStatus(ClaimEntity claim, ClaimStatus status) {

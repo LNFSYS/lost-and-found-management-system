@@ -27,17 +27,17 @@ const categorySchema = z.object({
   name: z.string().trim().min(2).max(100),
   icon: z.string().trim().max(100).nullable().optional(),
   parentId: z.string().uuid().nullable().optional(),
-  sortOrder: z.coerce.number().int().min(0).default(0)
+  sortOrder: z.coerce.number().int().min(0).optional()
 });
 const areaSchema = z.object({
   name: z.string().trim().min(2).max(100),
   description: z.string().trim().max(255).nullable().optional(),
-  sortOrder: z.coerce.number().int().min(0).default(0)
+  sortOrder: z.coerce.number().int().min(0).optional()
 });
 const buildingSchema = z.object({
   areaId: z.string().uuid(),
   name: z.string().trim().min(1).max(100),
-  sortOrder: z.coerce.number().int().min(0).default(0)
+  sortOrder: z.coerce.number().int().min(0).optional()
 });
 const handoverSchema = z.object({
   name: z.string().trim().min(2).max(150),

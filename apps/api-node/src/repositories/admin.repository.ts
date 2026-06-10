@@ -2,6 +2,7 @@ import type { RowDataPacket } from "mysql2/promise";
 import { randomUUID } from "node:crypto";
 import { dbPool } from "../config/db.js";
 import type { UserRole } from "../models/user.model.js";
+import { HttpError } from "../utils/http-error.js";
 import { normalizeText } from "../utils/normalize-text.js";
 
 interface CountRow extends RowDataPacket {
@@ -25,6 +26,29 @@ interface CategoryAdminRow extends RowDataPacket {
   parent_id: string | null;
   is_active: number;
   sort_order: number;
+}
+
+interface CategoryParentRow extends RowDataPacket {
+  parent_id: string | null;
+}
+
+interface CategoryInput {
+  name: string;
+  icon?: string | null;
+  parentId?: string | null;
+  sortOrder?: number;
+}
+
+interface AreaInput {
+  name: string;
+  description?: string | null;
+  sortOrder?: number;
+}
+
+interface BuildingInput {
+  areaId: string;
+  name: string;
+  sortOrder?: number;
 }
 
 interface AreaAdminRow extends RowDataPacket {
@@ -90,6 +114,37 @@ async function count(table: string, where = "1 = 1") {
 
 function activeFlag(value: number) {
   return value === 1;
+}
+
+async function assertValidCategoryParent(parentId: string | null | undefined, categoryId?: string) {
+  if (!parentId) {
+    return;
+  }
+
+  if (parentId === categoryId) {
+    throw new HttpError(400, "A category cannot be its own parent");
+  }
+
+  const [parentRows] = await dbPool.query<CategoryParentRow[]>(
+    "SELECT parent_id FROM item_categories WHERE id = ? LIMIT 1",
+    [parentId]
+  );
+  if (parentRows.length === 0) {
+    throw new HttpError(400, "Parent category does not exist");
+  }
+  if (parentRows[0].parent_id) {
+    throw new HttpError(400, "Child categories can only be placed under a parent category");
+  }
+
+  if (categoryId) {
+    const [childRows] = await dbPool.query<CountRow[]>(
+      "SELECT COUNT(*) AS total FROM item_categories WHERE parent_id = ?",
+      [categoryId]
+    );
+    if ((childRows[0]?.total ?? 0) > 0) {
+      throw new HttpError(400, "A parent category with child categories cannot become a child category");
+    }
+  }
 }
 
 function uniqueRoles(roles: UserRole[]) {
@@ -244,7 +299,8 @@ export const adminRepository = {
     }));
   },
 
-  async createCategory(input: { name: string; icon?: string | null; parentId?: string | null; sortOrder?: number }) {
+  async createCategory(input: CategoryInput) {
+    await assertValidCategoryParent(input.parentId);
     const id = randomUUID();
     await dbPool.execute(
       `
@@ -256,14 +312,24 @@ export const adminRepository = {
     return { id };
   },
 
-  async updateCategory(id: string, input: { name: string; icon?: string | null; parentId?: string | null; sortOrder?: number }) {
+  async updateCategory(id: string, input: CategoryInput) {
+    await assertValidCategoryParent(input.parentId, id);
+
+    const assignments = ["name = ?", "name_normalized = ?", "parent_id = ?"];
+    const params: Array<string | number | null> = [input.name.trim(), normalizeText(input.name), input.parentId ?? null];
+    if (input.icon !== undefined) {
+      assignments.push("icon = ?");
+      params.push(input.icon);
+    }
+    if (input.sortOrder !== undefined) {
+      assignments.push("sort_order = ?");
+      params.push(input.sortOrder);
+    }
+    params.push(id);
+
     await dbPool.execute(
-      `
-        UPDATE item_categories
-        SET name = ?, name_normalized = ?, icon = ?, parent_id = ?, sort_order = ?
-        WHERE id = ?
-      `,
-      [input.name.trim(), normalizeText(input.name), input.icon ?? null, input.parentId ?? null, input.sortOrder ?? 0, id]
+      `UPDATE item_categories SET ${assignments.join(", ")} WHERE id = ?`,
+      params
     );
     return { updated: true };
   },
@@ -286,7 +352,7 @@ export const adminRepository = {
     }));
   },
 
-  async createArea(input: { name: string; description?: string | null; sortOrder?: number }) {
+  async createArea(input: AreaInput) {
     const id = randomUUID();
     await dbPool.execute(
       "INSERT INTO campus_areas (id, name, description, sort_order) VALUES (?, ?, ?, ?)",
@@ -295,10 +361,18 @@ export const adminRepository = {
     return { id };
   },
 
-  async updateArea(id: string, input: { name: string; description?: string | null; sortOrder?: number }) {
+  async updateArea(id: string, input: AreaInput) {
+    const assignments = ["name = ?", "description = ?"];
+    const params: Array<string | number | null> = [input.name.trim(), input.description ?? null];
+    if (input.sortOrder !== undefined) {
+      assignments.push("sort_order = ?");
+      params.push(input.sortOrder);
+    }
+    params.push(id);
+
     await dbPool.execute(
-      "UPDATE campus_areas SET name = ?, description = ?, sort_order = ? WHERE id = ?",
-      [input.name.trim(), input.description ?? null, input.sortOrder ?? 0, id]
+      `UPDATE campus_areas SET ${assignments.join(", ")} WHERE id = ?`,
+      params
     );
     return { updated: true };
   },
@@ -327,7 +401,7 @@ export const adminRepository = {
     }));
   },
 
-  async createBuilding(input: { areaId: string; name: string; sortOrder?: number }) {
+  async createBuilding(input: BuildingInput) {
     const id = randomUUID();
     await dbPool.execute("INSERT INTO campus_buildings (id, area_id, name, sort_order) VALUES (?, ?, ?, ?)", [
       id,
@@ -338,13 +412,19 @@ export const adminRepository = {
     return { id };
   },
 
-  async updateBuilding(id: string, input: { areaId: string; name: string; sortOrder?: number }) {
-    await dbPool.execute("UPDATE campus_buildings SET area_id = ?, name = ?, sort_order = ? WHERE id = ?", [
-      input.areaId,
-      input.name.trim(),
-      input.sortOrder ?? 0,
-      id
-    ]);
+  async updateBuilding(id: string, input: BuildingInput) {
+    const assignments = ["area_id = ?", "name = ?"];
+    const params: Array<string | number | null> = [input.areaId, input.name.trim()];
+    if (input.sortOrder !== undefined) {
+      assignments.push("sort_order = ?");
+      params.push(input.sortOrder);
+    }
+    params.push(id);
+
+    await dbPool.execute(
+      `UPDATE campus_buildings SET ${assignments.join(", ")} WHERE id = ?`,
+      params
+    );
     return { updated: true };
   },
 

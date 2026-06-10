@@ -6,6 +6,7 @@ import {
   Camera,
   CheckCircle2,
   Clock,
+  Eye,
   Flag,
   Filter,
   Handshake,
@@ -366,6 +367,7 @@ export function App() {
             handoverPoints={adminHandoverQuery.data?.handoverPoints ?? []}
             reports={adminReportsQuery.data?.reports ?? []}
             totalPosts={adminPostsQuery.data?.total ?? 0}
+            onSelectPost={openPost}
           />
         )}
 
@@ -528,6 +530,7 @@ function AdminDashboardView(props: {
   handoverPoints: AdminHandoverPoint[];
   reports: AdminReport[];
   totalPosts: number;
+  onSelectPost: (postId: string) => void;
 }) {
   const queryClient = useQueryClient();
   const foundCount = props.posts.filter((post) => post.type === "FOUND").length;
@@ -573,7 +576,12 @@ function AdminDashboardView(props: {
         <AdminOverviewPanel posts={props.posts} users={props.users} reports={props.reports} foundCount={foundCount} />
       )}
       {props.activeTab === "moderation" && (
-        <AdminModerationPanel posts={props.moderationPosts} pending={adminMutation.isPending} onRun={runAdminAction} />
+        <AdminModerationPanel
+          posts={props.moderationPosts}
+          pending={adminMutation.isPending}
+          onRun={runAdminAction}
+          onSelectPost={props.onSelectPost}
+        />
       )}
       {props.activeTab === "categories" && (
         <AdminCategoryPanel categories={props.categories} pending={adminMutation.isPending} onRun={runAdminAction} />
@@ -641,7 +649,12 @@ function AdminOverviewPanel(props: { posts: BoardPost[]; users: AdminUser[]; rep
   );
 }
 
-function AdminModerationPanel(props: { posts: BoardPost[]; pending: boolean; onRun: AdminActionRunner }) {
+function AdminModerationPanel(props: {
+  posts: BoardPost[];
+  pending: boolean;
+  onRun: AdminActionRunner;
+  onSelectPost: (postId: string) => void;
+}) {
   const [statusFilter, setStatusFilter] = useState<PostStatus | "ALL">("ALL");
   const [typeFilter, setTypeFilter] = useState<PostType | "ALL">("ALL");
   const [query, setQuery] = useState("");
@@ -687,7 +700,13 @@ function AdminModerationPanel(props: { posts: BoardPost[]; pending: boolean; onR
 
       <div className="admin-moderation-list">
         {visiblePosts.map((post) => (
-          <AdminModerationRow key={post.id} pending={props.pending} post={post} onRun={props.onRun} />
+          <AdminModerationRow
+            key={post.id}
+            pending={props.pending}
+            post={post}
+            onRun={props.onRun}
+            onSelectPost={props.onSelectPost}
+          />
         ))}
         {visiblePosts.length === 0 && <div className="notice">Không có bài đăng phù hợp bộ lọc.</div>}
       </div>
@@ -695,7 +714,12 @@ function AdminModerationPanel(props: { posts: BoardPost[]; pending: boolean; onR
   );
 }
 
-function AdminModerationRow(props: { post: BoardPost; pending: boolean; onRun: AdminActionRunner }) {
+function AdminModerationRow(props: {
+  post: BoardPost;
+  pending: boolean;
+  onRun: AdminActionRunner;
+  onSelectPost: (postId: string) => void;
+}) {
   function updateStatus(status: PostStatus) {
     props.onRun(() => api.updatePostStatus(props.post.id, status));
   }
@@ -721,6 +745,9 @@ function AdminModerationRow(props: { post: BoardPost; pending: boolean; onRun: A
         </small>
       </div>
       <div className="admin-inline-actions">
+        <button className="secondary-button" type="button" onClick={() => props.onSelectPost(props.post.id)}>
+          <Eye size={16} /> Xem chi tiết
+        </button>
         <button className="secondary-button" disabled={props.pending || props.post.status === "RESOLVED"} type="button" onClick={() => updateStatus("RESOLVED")}>
           Hoàn thành
         </button>
@@ -743,15 +770,20 @@ function AdminModerationRow(props: { post: BoardPost; pending: boolean; onRun: A
 
 function AdminCategoryPanel(props: { categories: AdminCategory[]; pending: boolean; onRun: AdminActionRunner }) {
   const [editing, setEditing] = useState<AdminCategory | null>(null);
+  const parentCategories = useMemo(() => props.categories.filter((category) => !category.parentId), [props.categories]);
+  const childCategories = useMemo(() => props.categories.filter((category) => category.parentId), [props.categories]);
+  const categoryNameById = useMemo(
+    () => new Map(props.categories.map((category) => [category.id, category.name])),
+    [props.categories]
+  );
+  const editingHasChildren = Boolean(editing && props.categories.some((category) => category.parentId === editing.id));
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     const payload = {
       name: formText(data, "name"),
-      icon: formNullable(data, "icon"),
-      parentId: formNullable(data, "parentId"),
-      sortOrder: formNumber(data, "sortOrder")
+      parentId: formNullable(data, "parentId")
     };
     props.onRun(() => (editing ? api.adminUpdateCategory(editing.id, payload) : api.adminCreateCategory(payload)));
     setEditing(null);
@@ -772,21 +804,11 @@ function AdminCategoryPanel(props: { categories: AdminCategory[]; pending: boole
           Tên danh mục
           <input name="name" required minLength={2} defaultValue={editing?.name ?? ""} placeholder="Ví dụ: Thiết bị điện tử" />
         </label>
-        <div className="form-grid">
-          <label>
-            Icon
-            <input name="icon" defaultValue={editing?.icon ?? ""} placeholder="camera, id-card..." />
-          </label>
-          <label>
-            Thứ tự
-            <input name="sortOrder" min={0} type="number" defaultValue={editing?.sortOrder ?? 0} />
-          </label>
-        </div>
         <label>
-          Danh mục cha
-          <select name="parentId" defaultValue={editing?.parentId ?? ""}>
-            <option value="">Không có</option>
-            {props.categories
+          Nhóm hiển thị
+          <select name="parentId" defaultValue={editing?.parentId ?? ""} disabled={editingHasChildren}>
+            <option value="">Nhóm chính</option>
+            {parentCategories
               .filter((category) => category.id !== editing?.id)
               .map((category) => (
                 <option key={category.id} value={category.id}>
@@ -794,6 +816,11 @@ function AdminCategoryPanel(props: { categories: AdminCategory[]; pending: boole
                 </option>
               ))}
           </select>
+          <small className="form-hint">
+            {editingHasChildren
+              ? "Nhóm này đang có danh mục bên trong nên không thể chuyển sang nhóm khác."
+              : "Để trống nếu đây là nhóm chính; chọn một nhóm nếu đây là danh mục cụ thể bên trong nhóm đó."}
+          </small>
         </label>
         <div className="admin-form-actions">
           {editing && (
@@ -816,11 +843,33 @@ function AdminCategoryPanel(props: { categories: AdminCategory[]; pending: boole
           <span>{props.categories.length}</span>
         </div>
         <div className="admin-resource-list">
-          {props.categories.map((category) => (
+          <strong className="admin-resource-group-title">Nhóm chính</strong>
+          {parentCategories.map((category) => (
             <div className="admin-resource-row" key={category.id}>
               <div>
                 <strong>{category.name}</strong>
-                <span>{category.icon || "Chưa có icon"} · sort {category.sortOrder}</span>
+                <span>{props.categories.filter((child) => child.parentId === category.id).length} danh mục</span>
+              </div>
+              <AdminActiveBadge active={category.isActive} />
+              <button className="secondary-button" type="button" onClick={() => setEditing(category)}>
+                Sửa
+              </button>
+              <button
+                className="secondary-button"
+                disabled={props.pending}
+                type="button"
+                onClick={() => props.onRun(() => api.adminSetCategoryActive(category.id, !category.isActive))}
+              >
+                {category.isActive ? "Ẩn" : "Kích hoạt"}
+              </button>
+            </div>
+          ))}
+          <strong className="admin-resource-group-title">Danh mục cụ thể</strong>
+          {childCategories.map((category) => (
+            <div className="admin-resource-row" key={category.id}>
+              <div>
+                <strong>{category.name}</strong>
+                <span>Trong nhóm {categoryNameById.get(category.parentId ?? "") ?? "đã ẩn/xóa"}</span>
               </div>
               <AdminActiveBadge active={category.isActive} />
               <button className="secondary-button" type="button" onClick={() => setEditing(category)}>
@@ -857,8 +906,7 @@ function AdminLocationPanel(props: {
     const data = new FormData(event.currentTarget);
     const payload = {
       name: formText(data, "name"),
-      description: formNullable(data, "description"),
-      sortOrder: formNumber(data, "sortOrder")
+      description: formNullable(data, "description")
     };
     props.onRun(() => (areaEdit ? api.adminUpdateArea(areaEdit.id, payload) : api.adminCreateArea(payload)));
     setAreaEdit(null);
@@ -870,8 +918,7 @@ function AdminLocationPanel(props: {
     const data = new FormData(event.currentTarget);
     const payload = {
       areaId: formText(data, "areaId"),
-      name: formText(data, "name"),
-      sortOrder: formNumber(data, "sortOrder")
+      name: formText(data, "name")
     };
     props.onRun(() => (buildingEdit ? api.adminUpdateBuilding(buildingEdit.id, payload) : api.adminCreateBuilding(payload)));
     setBuildingEdit(null);
@@ -896,10 +943,6 @@ function AdminLocationPanel(props: {
           <label>
             Mô tả
             <input name="description" defaultValue={areaEdit?.description ?? ""} placeholder="Mô tả ngắn" />
-          </label>
-          <label>
-            Thứ tự
-            <input name="sortOrder" min={0} type="number" defaultValue={areaEdit?.sortOrder ?? 0} />
           </label>
           <div className="admin-form-actions">
             {areaEdit && <button className="secondary-button" type="button" onClick={() => setAreaEdit(null)}>Hủy sửa</button>}
@@ -942,10 +985,6 @@ function AdminLocationPanel(props: {
           <label>
             Tên địa điểm cụ thể
             <input name="name" required defaultValue={buildingEdit?.name ?? ""} placeholder="Ví dụ: Tòa Alpha, Cổng chính" />
-          </label>
-          <label>
-            Thứ tự
-            <input name="sortOrder" min={0} type="number" defaultValue={buildingEdit?.sortOrder ?? 0} />
           </label>
           <div className="admin-form-actions">
             {buildingEdit && <button className="secondary-button" type="button" onClick={() => setBuildingEdit(null)}>Hủy sửa</button>}
@@ -1645,11 +1684,14 @@ function Metric({ label, value, icon }: { label: string; value: number; icon: Re
 function PostCard({ post, onSelect, onClaim }: { post: BoardPost; onSelect: (id: string) => void; onClaim: (post: BoardPost) => void }) {
   return (
     <article className="post-card">
-      <div className={`post-media-surface ${post.type.toLowerCase()}`}>
+      <div className={`post-media-surface ${post.type.toLowerCase()} ${post.coverImageUrl ? "has-cover" : ""}`}>
+        {post.coverImageUrl && <img className="post-cover-image" src={post.coverImageUrl} alt="" loading="lazy" />}
         <span className={`type-pill ${post.type.toLowerCase()}`}>{typeLabels[post.type]}</span>
-        <div className="post-media-icon">
-          {post.type === "FOUND" ? <CheckCircle2 size={34} /> : <Search size={34} />}
-        </div>
+        {!post.coverImageUrl && (
+          <div className="post-media-icon">
+            {post.type === "FOUND" ? <CheckCircle2 size={34} /> : <Search size={34} />}
+          </div>
+        )}
         <small>{post.category?.name ?? "Chưa phân loại"}</small>
       </div>
       <div className="post-card-head">
@@ -1784,11 +1826,11 @@ function CreatePostView(props: {
     event.preventDefault();
     setMessage(null);
     if (!selectedParentCategoryId) {
-      setMessage("Vui lòng chọn danh mục lớn.");
+      setMessage("Vui lòng chọn nhóm danh mục.");
       return;
     }
     if (childCategories.length > 0 && !selectedChildCategoryId) {
-      setMessage("Vui lòng chọn loại đồ cụ thể.");
+      setMessage("Vui lòng chọn danh mục cụ thể.");
       return;
     }
     const validationErrors = validateImageFiles(files, props.imageRules, props.imageRules.maxImages);
@@ -1878,7 +1920,7 @@ function CreatePostView(props: {
       </label>
       <div className="form-grid">
         <label>
-          Danh mục lớn
+          Nhóm danh mục
           <select
             required
             value={selectedParentCategoryId}
@@ -1896,7 +1938,7 @@ function CreatePostView(props: {
           </select>
         </label>
         <label>
-          Loại đồ cụ thể
+          Danh mục cụ thể
           <select
             required={childCategories.length > 0}
             disabled={!selectedParentCategoryId || childCategories.length === 0}
@@ -1905,10 +1947,10 @@ function CreatePostView(props: {
           >
             <option value="">
               {!selectedParentCategoryId
-                ? "Chọn danh mục lớn trước"
+                ? "Chọn nhóm trước"
                 : childCategories.length === 0
-                  ? "Danh mục này chưa có loại con"
-                  : "Chọn loại đồ"}
+                  ? "Nhóm này chưa có danh mục cụ thể"
+                  : "Chọn danh mục cụ thể"}
             </option>
             {childCategories.map((category) => (
               <option key={category.id} value={category.id}>
@@ -1997,20 +2039,20 @@ function CreatePostView(props: {
         </label>
       ) : (
         <label>
-          Mô tả chi tiết về vật bị mất
+          Mô tả chi tiết và dấu hiệu chứng minh quyền sở hữu
           <textarea
             name="secretVerification"
             required
             minLength={3}
             rows={3}
-            placeholder="Màu sắc, dấu hiệu riêng, nội dung bên trong hoặc chi tiết chỉ chủ sở hữu biết"
+            placeholder="Nêu dấu hiệu riêng, mã/serial, vết trầy, vật bên trong, nội dung hóa đơn hoặc chi tiết chỉ chủ sở hữu biết"
           />
         </label>
       )}
       <label className="upload-dropzone">
         <Upload size={22} />
         <strong>Thêm ảnh đồ vật</strong>
-        <span>Chọn một hoặc nhiều ảnh rõ mặt trước, mặt sau, dấu hiệu nhận diện.</span>
+        <span>Ảnh đầu tiên sẽ làm ảnh bìa trên cộng đồng. Các ảnh sau nên là bằng chứng như hóa đơn, khung hình từ video, ảnh từng cầm nắm/sử dụng hoặc dấu hiệu nhận diện.</span>
         <input
           type="file"
           accept={acceptAttribute(props.imageRules)}

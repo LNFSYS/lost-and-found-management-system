@@ -30,6 +30,7 @@ interface PostRow extends RowDataPacket {
   created_at: string;
   updated_at: string;
   owner_name: string;
+  cover_image_url: string | null;
 }
 
 interface MediaRow extends RowDataPacket {
@@ -171,6 +172,7 @@ function mapPost(row: PostRow) {
       id: row.user_id,
       fullName: row.owner_name
     },
+    coverImageUrl: row.cover_image_url,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -187,7 +189,14 @@ function basePostSelect() {
       p.custom_location, p.contact_info, p.lost_found_at,
       p.handover_point_id, hp.name AS handover_point_name,
       p.resolved_at, p.view_count, p.created_at, p.updated_at,
-      u.full_name AS owner_name
+      u.full_name AS owner_name,
+      (
+        SELECT pm.secure_url
+        FROM post_media pm
+        WHERE pm.post_id = p.id
+        ORDER BY pm.sort_order ASC, pm.created_at ASC, pm.id ASC
+        LIMIT 1
+      ) AS cover_image_url
     FROM posts p
     INNER JOIN users u ON u.id = p.user_id
     LEFT JOIN item_categories c ON c.id = p.category_id

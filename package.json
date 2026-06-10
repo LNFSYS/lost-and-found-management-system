@@ -6,6 +6,7 @@
   "scripts": {
     "dev:web": "npm --workspace apps/web run dev",
     "dev:api": "npm --workspace apps/api-node run dev",
+    "check:db": "npm --workspace apps/api-node run check:db",
     "migrate:api": "npm --workspace apps/api-node run migrate",
     "build:web": "npm --workspace apps/web run build",
     "build:api": "npm --workspace apps/api-node run build",

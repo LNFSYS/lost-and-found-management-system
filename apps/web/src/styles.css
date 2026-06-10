@@ -1246,6 +1246,13 @@ label {
   gap: 10px;
 }
 
+.admin-resource-group-title {
+  margin-top: 6px;
+  color: var(--fpt-blue);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+}
+
 .admin-resource-row,
 .admin-user-row,
 .admin-report-row {
@@ -1808,6 +1815,25 @@ label {
   color: white;
 }
 
+.post-media-surface.has-cover {
+  background: #172033;
+}
+
+.post-media-surface.has-cover::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(180deg, rgba(16, 24, 39, 0.18), rgba(16, 24, 39, 0.62));
+}
+
+.post-cover-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .post-media-surface.lost {
   background:
     linear-gradient(135deg, rgba(243, 113, 36, 0.92), rgba(255, 178, 103, 0.78)),
@@ -1824,6 +1850,7 @@ label {
   position: absolute;
   top: 14px;
   left: 14px;
+  z-index: 1;
   background: rgba(255, 255, 255, 0.18);
   color: white;
   backdrop-filter: blur(12px);
@@ -1833,6 +1860,7 @@ label {
   position: absolute;
   right: 14px;
   bottom: 12px;
+  z-index: 1;
   color: rgba(255, 255, 255, 0.86);
   font-weight: 900;
 }

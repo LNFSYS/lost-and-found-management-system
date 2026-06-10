@@ -148,6 +148,7 @@ export interface BoardPost {
   resolvedAt: string | null;
   viewCount: number;
   owner: { id: string; fullName: string };
+  coverImageUrl: string | null;
   createdAt: string;
   updatedAt: string;
 }

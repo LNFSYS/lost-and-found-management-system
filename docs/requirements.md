@@ -111,6 +111,7 @@ Tài liệu này mô tả Functional Requirements (FR) và Non-Functional Requir
 | FR-BOARD-05 | User có thể sắp xếp theo mới nhất hoặc điểm match cao nhất. | P1 | Implemented |
 | FR-BOARD-06 | User có thể mở chi tiết bài, xem mô tả, vị trí, ảnh, AI tags và match. | P0 | Implemented |
 | FR-BOARD-07 | User có thể copy/share link bài đăng. | P1 | Implemented |
+| FR-BOARD-08 | Card trong community feed hiển thị ảnh upload đầu tiên làm ảnh bìa; nếu bài chưa có ảnh thì dùng trạng thái minh họa mặc định. | P1 | Implemented |
 
 ### Non-Functional Requirements
 
@@ -128,6 +129,7 @@ Tài liệu này mô tả Functional Requirements (FR) và Non-Functional Requir
 | FR-BOARD-01 | Given chưa đăng nhập, when mở public board, then user vẫn thấy danh sách bài public và bộ lọc cơ bản. |
 | FR-BOARD-03/04 | Given keyword/filter hợp lệ, when user áp dụng tìm kiếm/lọc, then danh sách chỉ trả bài phù hợp và vẫn phân trang. |
 | FR-BOARD-02 | Given user role sinh viên/giảng viên, when vào giao diện chính, then UI là feed/card, không phải bảng CRUD của admin. |
+| FR-BOARD-08 | Given bài đăng có nhiều ảnh, when bài xuất hiện ở feed, then ảnh upload đầu tiên được dùng làm ảnh bìa của card. |
 
 ## 4. POST - Lost/Found Post Module
 
@@ -141,7 +143,7 @@ Tài liệu này mô tả Functional Requirements (FR) và Non-Functional Requir
 | FR-POST-04 | Thời gian mất/nhặt không được nằm trong tương lai. | P0 | Implemented |
 | FR-POST-05 | Địa điểm cụ thể phải thuộc khu vực lớn; phòng/lầu/góc chi tiết được nhập dạng text tự do trong bài đăng. | P0 | Implemented |
 | FR-POST-06 | Bài `FOUND` phải có nơi đang giữ đồ: handover point active hoặc khu vực lớn/địa điểm cụ thể/vị trí text người nhặt đang tạm giữ. | P0 | Implemented |
-| FR-POST-07 | Bài `LOST` phải có secret verification. | P0 | Implemented |
+| FR-POST-07 | Bài `LOST` phải có mô tả xác minh quyền sở hữu, ví dụ dấu hiệu riêng, serial, vết trầy, vật bên trong hoặc thông tin hóa đơn. | P0 | Implemented |
 | FR-POST-08 | Owner hoặc admin có thể cập nhật bài. | P0 | Implemented |
 | FR-POST-09 | Owner hoặc admin có thể cập nhật trạng thái bài. | P0 | Implemented |
 | FR-POST-10 | Owner hoặc admin có thể xóa mềm bài. | P0 | Implemented |
@@ -179,6 +181,7 @@ Tài liệu này mô tả Functional Requirements (FR) và Non-Functional Requir
 | FR-MEDIA-04 | Khi upload avatar mới, asset cũ có thể bị xóa khỏi Cloudinary. | P1 | Implemented |
 | FR-MEDIA-05 | Owner/admin có thể xóa media của bài. | P1 | Implemented |
 | FR-MEDIA-06 | User có thể upload ảnh trong chat. | P2 | Planned |
+| FR-MEDIA-07 | Ảnh đầu tiên của `post_media` được dùng làm ảnh bìa trong danh sách bài cộng đồng. | P1 | Implemented |
 
 ### Non-Functional Requirements
 
@@ -302,15 +305,15 @@ Tài liệu này mô tả Functional Requirements (FR) và Non-Functional Requir
 | --- | --- | --- | --- |
 | FR-ADMIN-01 | Admin UI có sidebar gồm Dashboard, Kiểm duyệt, Danh mục, Khu vực, Bàn giao, Người dùng, Báo cáo. | P0 | Implemented |
 | FR-ADMIN-02 | Admin dashboard hiển thị metric tổng quan. | P0 | Implemented |
-| FR-ADMIN-03 | Admin có thể tạo, sửa, ẩn/kích hoạt danh mục. | P0 | Implemented |
-| FR-ADMIN-04 | Admin có thể tạo, sửa, ẩn/kích hoạt khu vực. | P0 | Implemented |
-| FR-ADMIN-05 | Admin có thể tạo, sửa, ẩn/kích hoạt địa điểm cụ thể thuộc khu vực lớn. | P0 | Implemented |
+| FR-ADMIN-03 | Admin có thể tạo, sửa, ẩn/kích hoạt danh mục theo hai cấp dễ hiểu: nhóm chính và danh mục cụ thể. | P0 | Implemented |
+| FR-ADMIN-04 | Admin có thể tạo, sửa, ẩn/kích hoạt khu vực; form UI không yêu cầu nhập thứ tự hiển thị. | P0 | Implemented |
+| FR-ADMIN-05 | Admin có thể tạo, sửa, ẩn/kích hoạt địa điểm cụ thể thuộc khu vực lớn; form UI không yêu cầu nhập thứ tự hiển thị. | P0 | Implemented |
 | FR-ADMIN-06 | Admin không quản lý phòng bằng CRUD riêng; phòng được nhập text khi user đăng tin. | P0 | Implemented |
 | FR-ADMIN-07 | Admin có thể tạo, sửa, ẩn/kích hoạt điểm bàn giao. | P0 | Implemented |
 | FR-ADMIN-08 | Admin có thể tạo user, đổi status và đổi role. | P0 | Implemented |
 | FR-ADMIN-09 | Admin có thể xem report queue. | P0 | Implemented |
 | FR-ADMIN-10 | Admin có thể xử lý report bằng warn/hide/delete/ban/unban. | P0 | Implemented |
-| FR-ADMIN-11 | Admin có tab kiểm duyệt bài đăng với filter theo loại, trạng thái, từ khóa và các action hoàn thành/đóng/mở lại/ẩn/xóa mềm. | P1 | Implemented |
+| FR-ADMIN-11 | Admin có tab kiểm duyệt bài đăng với filter theo loại, trạng thái, từ khóa, xem chi tiết bài và các action hoàn thành/đóng/mở lại/ẩn/xóa mềm. | P1 | Implemented |
 | FR-ADMIN-12 | Admin có thể export thống kê PDF/CSV. | P2 | Planned |
 
 ### Non-Functional Requirements
@@ -328,10 +331,12 @@ Tài liệu này mô tả Functional Requirements (FR) và Non-Functional Requir
 | --- | --- |
 | FR-ADMIN-01 | Given admin đăng nhập, when mở `/admin`, then sidebar hiển thị đủ Dashboard, Kiểm duyệt, Danh mục, Khu vực, Bàn giao, Người dùng, Báo cáo. |
 | FR-ADMIN-03/04/05/07 | Given payload hợp lệ, when admin tạo/sửa/ẩn/kích hoạt master data, then API lưu DB và UI refresh danh sách. |
+| FR-ADMIN-03 | Given admin tạo hoặc sửa danh mục, when chọn nhóm hiển thị, then hệ thống chỉ cho phép nhóm chính hoặc danh mục cụ thể nằm trực tiếp trong nhóm chính, không cho lồng nhiều tầng. |
 | FR-ADMIN-06 | Given admin mở tab Khu vực, when xem form quản trị, then không có form CRUD phòng; user nhập phòng/lầu/góc chi tiết trong form đăng tin. |
 | FR-ADMIN-08 | Given admin đổi role/status user, when action thành công, then user_roles hoặc account status được cập nhật đúng. |
 | FR-ADMIN-10 | Given admin xử lý report với action, when submit, then report chuyển trạng thái reviewed và moderation action được ghi. |
 | FR-ADMIN-11 | Given admin mở tab Kiểm duyệt, when lọc và chọn action trên bài đăng, then hệ thống cập nhật trạng thái hoặc xóa mềm bài và refresh danh sách. |
+| FR-ADMIN-11 | Given admin cần xem đủ ngữ cảnh bài viết, when bấm xem chi tiết ở dòng kiểm duyệt, then drawer chi tiết bài hiển thị mô tả, ảnh, liên hệ, AI tags và matching. |
 
 ## 10. REPORT - Report and Moderation Module
 

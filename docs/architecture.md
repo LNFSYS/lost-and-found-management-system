@@ -62,7 +62,7 @@ Current Auth endpoints:
 | `GET` | `/api/auth/activity` | Return user activity history |
 | `GET` | `/api/auth/reputation` | Return reputation score and recent reputation logs |
 | `POST` | `/api/posts` | Create LOST/FOUND post |
-| `GET` | `/api/posts` | Public board with pagination, search, filters and latest sort |
+| `GET` | `/api/posts` | Public board with pagination, search, filters, latest sort and first-media `coverImageUrl` for feed cards |
 | `GET` | `/api/posts/my` | Current user's posts with filters |
 | `GET` | `/api/posts/:id` | Post detail with media, AI tags and matches |
 | `PUT` | `/api/posts/:id` | Update owned/admin post |
@@ -114,6 +114,12 @@ Run migrations with:
 npm run migrate:api
 ```
 
+Check database connectivity before migrations or server startup with:
+
+```bash
+npm run check:db
+```
+
 The migration runner creates the configured database if needed and records applied files in `schema_migrations`.
 
 Security and integrity notes:
@@ -122,6 +128,8 @@ Security and integrity notes:
 - Password reset revokes all active refresh tokens for that user.
 - A user can submit only one claim per post, enforced by both service validation and a database unique key.
 - Sensitive admin management endpoints require `ADMIN`; `STAFF` can access only the overview-style admin surface.
+- Category administration is limited to two levels: main groups and concrete categories. The API rejects nested child categories and rejects moving a group that already has children under another group.
+- The Node API verifies the configured MySQL connection before listening so DB configuration failures fail fast.
 
 ## AI And Matching
 
@@ -166,7 +174,7 @@ The matching engine runs asynchronously after post create/update and after post 
 
 ## Frontend Foundation
 
-`apps/web` now starts as an operational web app, not a marketing page. The first screen is the public Lost & Found board with API-backed search, filters, sorting, post detail, claim flow and account actions.
+`apps/web` now starts as an operational web app, not a marketing page. The first screen is the public Lost & Found board with API-backed search, filters, sorting, first-image feed covers, post detail, claim flow and account actions.
 
 | Route | Purpose |
 | --- | --- |

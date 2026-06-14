@@ -41,10 +41,14 @@ import {
   type AdminRole,
   type AdminUser,
   type AdminUserStatus,
+  type AdminWarehouseItem,
+  type AdminWarehouseStatus,
   type BoardPost,
   type Building,
   type HandoverPoint,
   type ListPostsParams,
+  type NotificationItem,
+  type PostMatchSuggestion,
   type PostStatus,
   type PostType,
   type PublicConfigEntry,
@@ -55,7 +59,7 @@ type View = "board" | "my-posts" | "create" | "handover" | "account";
 type AuthMode = "login" | "register" | "forgot" | "reset";
 type AuthEntryMode = Extract<AuthMode, "login" | "register">;
 type AudienceRole = "STUDENT" | "LECTURER";
-type AdminTab = "overview" | "moderation" | "categories" | "locations" | "handover" | "users" | "reports";
+type AdminTab = "overview" | "moderation" | "categories" | "locations" | "handover" | "warehouse" | "users" | "reports";
 
 interface ImageUploadRules {
   allowedFormats: string[];
@@ -77,6 +81,16 @@ const typeLabels: Record<PostType, string> = {
   FOUND: "Đồ nhặt được"
 };
 
+const warehouseStatuses: AdminWarehouseStatus[] = ["RECEIVED", "STORED", "CLAIMED", "RETURNED", "DISPOSED"];
+
+const warehouseStatusLabels: Record<AdminWarehouseStatus, string> = {
+  RECEIVED: "Đã nhận",
+  STORED: "Đang lưu kho",
+  CLAIMED: "Đang claim",
+  RETURNED: "Đã trả",
+  DISPOSED: "Đã xử lý"
+};
+
 export function App() {
   const queryClient = useQueryClient();
   const [view, setView] = useState<View>("board");
@@ -90,6 +104,7 @@ export function App() {
   const [authEntryKey, setAuthEntryKey] = useState(0);
   const [adminMode, setAdminMode] = useState(false);
   const [adminTab, setAdminTab] = useState<AdminTab>("overview");
+  const [matchSuggestions, setMatchSuggestions] = useState<PostMatchSuggestion[] | null>(null);
 
   const categoriesQuery = useQuery({ queryKey: ["categories"], queryFn: () => api.categories() });
   const areasQuery = useQuery({ queryKey: ["areas"], queryFn: () => api.areas() });
@@ -105,6 +120,12 @@ export function App() {
     queryKey: ["me", authVersion],
     queryFn: () => api.me(),
     enabled: hasAccessToken()
+  });
+  const notificationsQuery = useQuery({
+    queryKey: ["notifications", authVersion],
+    queryFn: () => api.notifications(),
+    enabled: hasAccessToken(),
+    refetchInterval: 30000
   });
   const userRoles = meQuery.data?.user.roles ?? [];
   const isAdmin = userRoles.includes("ADMIN");
@@ -147,6 +168,11 @@ export function App() {
   const adminHandoverQuery = useQuery({
     queryKey: ["admin-handover", adminMode],
     queryFn: () => api.adminHandoverPoints(),
+    enabled: adminMode && isAdmin
+  });
+  const adminWarehouseQuery = useQuery({
+    queryKey: ["admin-warehouse", adminMode],
+    queryFn: () => api.adminWarehouseItems(),
     enabled: adminMode && isAdmin
   });
   const adminReportsQuery = useQuery({
@@ -229,6 +255,47 @@ export function App() {
     setView("account");
   }
 
+  const logoutMutation = useMutation({
+    mutationFn: async () => {
+      const refreshToken = getStoredRefreshToken();
+      if (refreshToken) {
+        await api.logout(refreshToken);
+      }
+    },
+    onSettled: () => {
+      clearTokens();
+      setAdminMode(false);
+      setView("board");
+      afterAuthChange();
+      void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    }
+  });
+
+  const markNotificationReadMutation = useMutation({
+    mutationFn: (notificationId: string) => api.markNotificationRead(notificationId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    }
+  });
+
+  const markAllNotificationsReadMutation = useMutation({
+    mutationFn: () => api.markAllNotificationsRead(),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    }
+  });
+
+  function openNotification(notification: NotificationItem) {
+    if (!notification.isRead) {
+      markNotificationReadMutation.mutate(notification.id);
+    }
+    if (notification.entityType === "POST" && notification.entityId) {
+      setAdminMode(false);
+      setView("board");
+      openPost(notification.entityId);
+    }
+  }
+
   const stats = useMemo(() => {
     const items = activeList?.items ?? [];
     return {
@@ -273,6 +340,9 @@ export function App() {
                   <button className={adminTab === "handover" ? "active" : ""} type="button" onClick={() => setAdminTab("handover")}>
                     <Handshake size={18} /> Bàn giao
                   </button>
+                  <button className={adminTab === "warehouse" ? "active" : ""} type="button" onClick={() => setAdminTab("warehouse")}>
+                    <Boxes size={18} /> Nhà kho
+                  </button>
                   <button className={adminTab === "users" ? "active" : ""} type="button" onClick={() => setAdminTab("users")}>
                     <Users size={18} /> Người dùng
                   </button>
@@ -298,14 +368,29 @@ export function App() {
               <button className={view === "handover" ? "active" : ""} type="button" onClick={() => setView("handover")}>
                 <Handshake size={18} /> Bàn giao
               </button>
-              {isSignedIn && (
-              <button className={view === "account" ? "active" : ""} type="button" onClick={() => setView("account")}>
-                <UserCircle size={18} /> Tài khoản
-              </button>
-              )}
             </>
           )}
         </nav>
+
+        {!adminMode && isSignedIn && meQuery.data?.user && (
+          <UserMenu
+            user={meQuery.data.user}
+            notifications={notificationsQuery.data?.items ?? []}
+            unreadCount={notificationsQuery.data?.unreadCount ?? 0}
+            canUseAdmin={canUseAdmin}
+            adminMode={adminMode}
+            logoutPending={logoutMutation.isPending}
+            markAllPending={markAllNotificationsReadMutation.isPending}
+            onProfile={() => {
+              setAdminMode(false);
+              setView("account");
+            }}
+            onToggleAdmin={() => setAdminMode(true)}
+            onNotification={openNotification}
+            onMarkAllRead={() => markAllNotificationsReadMutation.mutate()}
+            onLogout={() => logoutMutation.mutate()}
+          />
+        )}
 
         {!adminMode && !isSignedIn && (
           <div className="guest-auth-actions" aria-label="Guest authentication actions">
@@ -318,7 +403,7 @@ export function App() {
           </div>
         )}
 
-        {canUseAdmin && (
+        {adminMode && canUseAdmin && (
           <button className="mode-switch" type="button" onClick={() => setAdminMode((value) => !value)}>
             {adminMode ? "Chuyển sang cộng đồng" : "Mở Admin Dashboard"}
           </button>
@@ -342,10 +427,29 @@ export function App() {
             <h1>{adminMode ? "Admin Dashboard" : title}</h1>
           </div>
           <div className="topbar-actions">
-            <span className="user-chip">
-              <UserCircle size={18} />
-              {meQuery.data?.user.fullName ?? "Khách"}
-            </span>
+            {isSignedIn && meQuery.data?.user ? (
+              <UserMenu
+                user={meQuery.data.user}
+                notifications={notificationsQuery.data?.items ?? []}
+                unreadCount={notificationsQuery.data?.unreadCount ?? 0}
+                canUseAdmin={canUseAdmin}
+                adminMode={adminMode}
+                logoutPending={logoutMutation.isPending}
+                markAllPending={markAllNotificationsReadMutation.isPending}
+                onProfile={() => {
+                  setAdminMode(false);
+                  setView("account");
+                }}
+                onToggleAdmin={() => setAdminMode((value) => !value)}
+                onNotification={openNotification}
+                onMarkAllRead={() => markAllNotificationsReadMutation.mutate()}
+                onLogout={() => logoutMutation.mutate()}
+              />
+            ) : (
+              <button className="avatar-menu-trigger guest-avatar-trigger" type="button" onClick={() => openAuth("login")} aria-label="Đăng nhập">
+                <UserCircle size={24} />
+              </button>
+            )}
             {!adminMode && (
               <button className="primary-button" type="button" onClick={() => setView("create")}>
                 <Camera size={18} /> Đăng tin
@@ -365,6 +469,7 @@ export function App() {
             areas={adminAreasQuery.data?.areas ?? []}
             buildings={adminBuildingsQuery.data?.buildings ?? []}
             handoverPoints={adminHandoverQuery.data?.handoverPoints ?? []}
+            warehouseItems={adminWarehouseQuery.data?.warehouseItems ?? []}
             reports={adminReportsQuery.data?.reports ?? []}
             totalPosts={adminPostsQuery.data?.total ?? 0}
             onSelectPost={openPost}
@@ -422,10 +527,15 @@ export function App() {
             areas={areasQuery.data?.areas ?? []}
             handoverPoints={handoverQuery.data?.handoverPoints ?? []}
             imageRules={imageRules}
-            onCreated={async (postId) => {
-              openPost(postId);
+            onCreated={async (postId, suggestions) => {
               setView("board");
               await refreshBoard();
+              await queryClient.invalidateQueries({ queryKey: ["notifications"] });
+              if (suggestions.length > 0) {
+                setMatchSuggestions(suggestions);
+                return;
+              }
+              openPost(postId);
             }}
           />
         )}
@@ -480,7 +590,7 @@ export function App() {
           {isSignedIn ? (
           <button className={view === "account" ? "active" : ""} type="button" onClick={() => setView("account")}>
             <UserCircle size={18} />
-            <span>Tài khoản</span>
+            <span>Hồ sơ</span>
           </button>
           ) : (
           <button className={view === "account" ? "active" : ""} type="button" onClick={() => openAuth("login")}>
@@ -512,7 +622,128 @@ export function App() {
           }}
         />
       )}
+
+      {matchSuggestions && (
+        <MatchSuggestionsDialog
+          suggestions={matchSuggestions}
+          onClose={() => setMatchSuggestions(null)}
+          onSelect={(postId) => {
+            setMatchSuggestions(null);
+            openPost(postId);
+          }}
+        />
+      )}
     </main>
+  );
+}
+
+function UserMenu(props: {
+  user: PublicUser;
+  notifications: NotificationItem[];
+  unreadCount: number;
+  canUseAdmin: boolean;
+  adminMode: boolean;
+  logoutPending: boolean;
+  markAllPending: boolean;
+  onProfile: () => void;
+  onToggleAdmin: () => void;
+  onNotification: (notification: NotificationItem) => void;
+  onMarkAllRead: () => void;
+  onLogout: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const unreadLabel = props.unreadCount > 9 ? "9+" : String(props.unreadCount);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open]);
+
+  return (
+    <div className="avatar-menu">
+      <button
+        className="avatar-menu-trigger"
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-label="Mở menu tài khoản"
+        aria-expanded={open}
+      >
+        {props.user.avatarUrl ? <img src={props.user.avatarUrl} alt="" /> : <span>{avatarInitials(props.user.fullName)}</span>}
+        {props.unreadCount > 0 && <em>{unreadLabel}</em>}
+      </button>
+
+      {open && (
+        <div className="avatar-dropdown">
+          <div className="avatar-dropdown-profile">
+            {props.user.avatarUrl ? <img src={props.user.avatarUrl} alt="" /> : <span>{avatarInitials(props.user.fullName)}</span>}
+            <div>
+              <strong>{props.user.fullName}</strong>
+              <small>{props.user.email}</small>
+            </div>
+          </div>
+
+          <button type="button" onClick={() => {
+            setOpen(false);
+            props.onProfile();
+          }}>
+            <UserCircle size={17} /> Hồ sơ
+          </button>
+
+          {props.canUseAdmin && (
+            <button type="button" onClick={() => {
+              setOpen(false);
+              props.onToggleAdmin();
+            }}>
+              <LayoutDashboard size={17} /> {props.adminMode ? "Về cộng đồng" : "Mở Admin Dashboard"}
+            </button>
+          )}
+
+          <div className="notification-menu">
+            <div className="notification-menu-heading">
+              <span><Bell size={16} /> Thông báo</span>
+              {props.unreadCount > 0 && (
+                <button disabled={props.markAllPending} type="button" onClick={props.onMarkAllRead}>
+                  Đọc hết
+                </button>
+              )}
+            </div>
+            <div className="notification-list">
+              {props.notifications.slice(0, 5).map((notification) => (
+                <button
+                  className={notification.isRead ? "" : "unread"}
+                  key={notification.id}
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    props.onNotification(notification);
+                  }}
+                >
+                  <strong>{notification.title}</strong>
+                  {notification.body && <span>{notification.body}</span>}
+                  <small>{formatDate(notification.createdAt)}</small>
+                </button>
+              ))}
+              {props.notifications.length === 0 && <small className="notification-empty">Chưa có thông báo.</small>}
+            </div>
+          </div>
+
+          <button className="logout-menu-button" disabled={props.logoutPending} type="button" onClick={() => {
+            setOpen(false);
+            props.onLogout();
+          }}>
+            <LogOut size={17} /> {props.logoutPending ? "Đang đăng xuất..." : "Đăng xuất"}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -528,6 +759,7 @@ function AdminDashboardView(props: {
   areas: AdminArea[];
   buildings: AdminBuilding[];
   handoverPoints: AdminHandoverPoint[];
+  warehouseItems: AdminWarehouseItem[];
   reports: AdminReport[];
   totalPosts: number;
   onSelectPost: (postId: string) => void;
@@ -549,6 +781,7 @@ function AdminDashboardView(props: {
         queryClient.invalidateQueries({ queryKey: ["admin-areas"] }),
         queryClient.invalidateQueries({ queryKey: ["admin-buildings"] }),
         queryClient.invalidateQueries({ queryKey: ["admin-handover"] }),
+        queryClient.invalidateQueries({ queryKey: ["admin-warehouse"] }),
         queryClient.invalidateQueries({ queryKey: ["admin-reports"] }),
         queryClient.invalidateQueries({ queryKey: ["categories"] }),
         queryClient.invalidateQueries({ queryKey: ["areas"] }),
@@ -601,6 +834,19 @@ function AdminDashboardView(props: {
           handoverPoints={props.handoverPoints}
           pending={adminMutation.isPending}
           onRun={runAdminAction}
+        />
+      )}
+      {props.activeTab === "warehouse" && (
+        <AdminWarehousePanel
+          posts={props.posts}
+          categories={props.categories}
+          areas={props.areas}
+          buildings={props.buildings}
+          handoverPoints={props.handoverPoints}
+          warehouseItems={props.warehouseItems}
+          pending={adminMutation.isPending}
+          onRun={runAdminAction}
+          onSelectPost={props.onSelectPost}
         />
       )}
       {props.activeTab === "users" && (
@@ -1021,6 +1267,19 @@ function AdminHandoverPanel(props: {
   onRun: AdminActionRunner;
 }) {
   const [editing, setEditing] = useState<AdminHandoverPoint | null>(null);
+  const [selectedAreaId, setSelectedAreaId] = useState<string>(editing?.areaId ?? "");
+  const [selectedBuildingId, setSelectedBuildingId] = useState<string>(editing?.buildingId ?? "");
+
+  const buildingsQuery = useQuery({
+    queryKey: ["admin-handover-buildings", selectedAreaId],
+    queryFn: () => api.buildings(selectedAreaId),
+    enabled: Boolean(selectedAreaId)
+  });
+
+  useEffect(() => {
+    setSelectedAreaId(editing?.areaId ?? "");
+    setSelectedBuildingId(editing?.buildingId ?? "");
+  }, [editing]);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1028,14 +1287,16 @@ function AdminHandoverPanel(props: {
     const payload = {
       name: formText(data, "name"),
       address: formText(data, "address"),
-      areaId: formNullable(data, "areaId"),
-      buildingId: formNullable(data, "buildingId"),
+      areaId: selectedAreaId || null,
+      buildingId: selectedBuildingId || null,
       openingHours: formNullable(data, "openingHours"),
       contactInfo: formNullable(data, "contactInfo")
     };
     props.onRun(() => (editing ? api.adminUpdateHandoverPoint(editing.id, payload) : api.adminCreateHandoverPoint(payload)));
     setEditing(null);
     event.currentTarget.reset();
+    setSelectedAreaId("");
+    setSelectedBuildingId("");
   }
 
   return (
@@ -1059,7 +1320,14 @@ function AdminHandoverPanel(props: {
         <div className="form-grid">
           <label>
             Khu vực
-            <select name="areaId" defaultValue={editing?.areaId ?? ""}>
+            <select
+              name="areaId"
+              value={selectedAreaId}
+              onChange={(event) => {
+                setSelectedAreaId(event.target.value);
+                setSelectedBuildingId("");
+              }}
+            >
               <option value="">Không gắn</option>
               {props.areas.map((area) => (
                 <option key={area.id} value={area.id}>{area.name}</option>
@@ -1068,9 +1336,14 @@ function AdminHandoverPanel(props: {
           </label>
           <label>
             Địa điểm cụ thể
-            <select name="buildingId" defaultValue={editing?.buildingId ?? ""}>
+            <select
+              name="buildingId"
+              value={selectedBuildingId}
+              onChange={(event) => setSelectedBuildingId(event.target.value)}
+              disabled={!selectedAreaId}
+            >
               <option value="">Không gắn</option>
-              {props.buildings.map((building) => (
+              {(buildingsQuery.data?.buildings ?? []).map((building) => (
                 <option key={building.id} value={building.id}>{building.name}</option>
               ))}
             </select>
@@ -1105,6 +1378,262 @@ function AdminHandoverPanel(props: {
         pending={props.pending}
       />
     </section>
+  );
+}
+
+function AdminWarehousePanel(props: {
+  posts: BoardPost[];
+  categories: AdminCategory[];
+  areas: AdminArea[];
+  buildings: AdminBuilding[];
+  handoverPoints: AdminHandoverPoint[];
+  warehouseItems: AdminWarehouseItem[];
+  pending: boolean;
+  onRun: AdminActionRunner;
+  onSelectPost: (postId: string) => void;
+}) {
+  const [editing, setEditing] = useState<AdminWarehouseItem | null>(null);
+  const [selectedAreaId, setSelectedAreaId] = useState("");
+  const [selectedBuildingId, setSelectedBuildingId] = useState("");
+  const foundPosts = useMemo(() => props.posts.filter((post) => post.type === "FOUND"), [props.posts]);
+  const categoryOptions = useMemo(() => categorySelectOptions(props.categories), [props.categories]);
+  const buildingOptions = useMemo(
+    () => props.buildings.filter((building) => !selectedAreaId || building.areaId === selectedAreaId),
+    [props.buildings, selectedAreaId]
+  );
+
+  useEffect(() => {
+    setSelectedAreaId(editing?.location.areaId ?? "");
+    setSelectedBuildingId(editing?.location.buildingId ?? "");
+  }, [editing]);
+
+  function clearForm(form?: HTMLFormElement) {
+    setEditing(null);
+    setSelectedAreaId("");
+    setSelectedBuildingId("");
+    form?.reset();
+  }
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const payload = {
+      postId: formNullable(data, "postId"),
+      handoverPointId: formNullable(data, "handoverPointId"),
+      itemName: formText(data, "itemName"),
+      description: formNullable(data, "description"),
+      categoryId: formNullable(data, "categoryId"),
+      areaId: selectedAreaId || null,
+      buildingId: selectedBuildingId || null,
+      roomText: formNullable(data, "roomText"),
+      finderName: formNullable(data, "finderName"),
+      finderContact: formNullable(data, "finderContact"),
+      status: formText(data, "status") as AdminWarehouseStatus,
+      conditionNotes: formNullable(data, "conditionNotes"),
+      storageCode: formNullable(data, "storageCode"),
+      receivedAt: toDateTimeIso(data.get("receivedAt")),
+      returnedAt: toDateTimeIso(data.get("returnedAt"))
+    };
+    props.onRun(() => (editing ? api.adminUpdateWarehouseItem(editing.id, payload) : api.adminCreateWarehouseItem(payload)));
+    clearForm(event.currentTarget);
+  }
+
+  return (
+    <section className="admin-management-grid warehouse-management-grid">
+      <form className="admin-panel admin-form" key={editing?.id ?? "new-warehouse"} onSubmit={submit}>
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">Warehouse</span>
+            <h2>{editing ? "Sửa vật trong kho" : "Nhập vật vào kho"}</h2>
+          </div>
+          <Boxes size={18} />
+        </div>
+        <label>
+          Tên vật
+          <input name="itemName" required minLength={2} defaultValue={editing?.itemName ?? ""} placeholder="Ví dụ: Ví da màu nâu" />
+        </label>
+        <label>
+          Bài FOUND liên quan
+          <select name="postId" defaultValue={editing?.post?.id ?? ""}>
+            <option value="">Không gắn bài đăng</option>
+            {foundPosts.map((post) => (
+              <option key={post.id} value={post.id}>{post.title}</option>
+            ))}
+          </select>
+        </label>
+        <div className="form-grid">
+          <label>
+            Danh mục
+            <select name="categoryId" defaultValue={editing?.category?.id ?? ""}>
+              <option value="">Chưa phân loại</option>
+              {categoryOptions.map((category) => (
+                <option key={category.id} value={category.id}>{category.label}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Trạng thái
+            <select name="status" defaultValue={editing?.status ?? "RECEIVED"}>
+              {warehouseStatuses.map((status) => (
+                <option key={status} value={status}>{warehouseStatusLabel(status)}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="form-grid">
+          <label>
+            Điểm bàn giao/kho
+            <select name="handoverPointId" defaultValue={editing?.handoverPoint?.id ?? ""}>
+              <option value="">Chưa gắn điểm</option>
+              {props.handoverPoints.map((point) => (
+                <option key={point.id} value={point.id}>{point.name}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Mã kệ/ngăn
+            <input name="storageCode" defaultValue={editing?.storageCode ?? ""} placeholder="VD: KHO-A1-03" />
+          </label>
+        </div>
+        <div className="form-grid">
+          <label>
+            Khu vực
+            <select
+              name="areaId"
+              value={selectedAreaId}
+              onChange={(event) => {
+                setSelectedAreaId(event.target.value);
+                setSelectedBuildingId("");
+              }}
+            >
+              <option value="">Không gắn</option>
+              {props.areas.map((area) => (
+                <option key={area.id} value={area.id}>{area.name}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Địa điểm cụ thể
+            <select
+              name="buildingId"
+              value={selectedBuildingId}
+              onChange={(event) => setSelectedBuildingId(event.target.value)}
+              disabled={!selectedAreaId}
+            >
+              <option value="">Không gắn</option>
+              {buildingOptions.map((building) => (
+                <option key={building.id} value={building.id}>{building.name}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <label>
+          Phòng/vị trí chi tiết
+          <input name="roomText" defaultValue={editing?.location.roomText ?? ""} placeholder="VD: quầy CTSV, kệ số 2" />
+        </label>
+        <div className="form-grid">
+          <label>
+            Người gửi/nhặt được
+            <input name="finderName" defaultValue={editing?.finder.name ?? editing?.finder.fullName ?? ""} placeholder="Tên sinh viên gửi kho" />
+          </label>
+          <label>
+            Liên hệ người gửi
+            <input name="finderContact" defaultValue={editing?.finder.contact ?? ""} placeholder="SĐT/email/Zalo" />
+          </label>
+        </div>
+        <div className="form-grid">
+          <label>
+            Ngày nhận vào kho
+            <input name="receivedAt" type="datetime-local" defaultValue={dateTimeLocalInputValue(editing?.receivedAt)} />
+          </label>
+          <label>
+            Ngày hoàn trả/xử lý
+            <input name="returnedAt" type="datetime-local" defaultValue={dateTimeLocalInputValue(editing?.returnedAt ?? undefined)} />
+          </label>
+        </div>
+        <label>
+          Mô tả
+          <textarea name="description" rows={3} defaultValue={editing?.description ?? ""} placeholder="Mô tả vật, màu sắc, nhãn hiệu..." />
+        </label>
+        <label>
+          Ghi chú tình trạng
+          <textarea name="conditionNotes" rows={3} defaultValue={editing?.conditionNotes ?? ""} placeholder="Tình trạng khi nhận, bao bì, phụ kiện đi kèm..." />
+        </label>
+        <div className="admin-form-actions">
+          {editing && <button className="secondary-button" type="button" onClick={() => clearForm()}>Hủy sửa</button>}
+          <button className="primary-button" disabled={props.pending} type="submit">{editing ? "Lưu vật trong kho" : "Nhập kho"}</button>
+        </div>
+      </form>
+
+      <article className="admin-panel">
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">CRUD</span>
+            <h2>Danh sách nhà kho</h2>
+          </div>
+          <span>{props.warehouseItems.length}</span>
+        </div>
+        <div className="warehouse-item-list">
+          {props.warehouseItems.map((item) => (
+            <AdminWarehouseRow
+              key={item.id}
+              item={item}
+              pending={props.pending}
+              onEdit={() => setEditing(item)}
+              onRun={props.onRun}
+              onSelectPost={props.onSelectPost}
+            />
+          ))}
+          {props.warehouseItems.length === 0 && <small>Chưa có vật nào trong kho.</small>}
+        </div>
+      </article>
+    </section>
+  );
+}
+
+function AdminWarehouseRow(props: {
+  item: AdminWarehouseItem;
+  pending: boolean;
+  onEdit: () => void;
+  onRun: AdminActionRunner;
+  onSelectPost: (postId: string) => void;
+}) {
+  function deleteItem() {
+    const confirmed = window.confirm(`Xóa vật "${props.item.itemName}" khỏi danh sách nhà kho?`);
+    if (confirmed) {
+      props.onRun(() => api.adminDeleteWarehouseItem(props.item.id));
+    }
+  }
+
+  return (
+    <div className="warehouse-item-row">
+      <div className="warehouse-item-main">
+        <span className={`warehouse-status status-${props.item.status.toLowerCase()}`}>{warehouseStatusLabel(props.item.status)}</span>
+        <strong>{props.item.itemName}</strong>
+        <span>{props.item.storageCode || props.item.handoverPoint?.name || "Chưa có mã/kho cụ thể"}</span>
+        <small>
+          {warehouseLocationText(props.item)} · Nhận: {formatDate(props.item.receivedAt)}
+        </small>
+      </div>
+      <select
+        value={props.item.status}
+        disabled={props.pending}
+        onChange={(event) => props.onRun(() => api.adminUpdateWarehouseItemStatus(props.item.id, event.target.value as AdminWarehouseStatus))}
+      >
+        {warehouseStatuses.map((status) => (
+          <option key={status} value={status}>{warehouseStatusLabel(status)}</option>
+        ))}
+      </select>
+      <div className="admin-inline-actions">
+        {props.item.post && (
+          <button className="secondary-button" type="button" onClick={() => props.onSelectPost(props.item.post!.id)}>
+            <Eye size={16} /> Xem bài
+          </button>
+        )}
+        <button className="secondary-button" type="button" onClick={props.onEdit}>Sửa</button>
+        <button className="danger-button" disabled={props.pending} type="button" onClick={deleteItem}>Xóa</button>
+      </div>
+    </div>
   );
 }
 
@@ -1765,15 +2294,17 @@ function CreatePostView(props: {
   areas: Array<{ id: string; name: string }>;
   handoverPoints: Array<{ id: string; name: string }>;
   imageRules: ImageUploadRules;
-  onCreated: (postId: string) => Promise<void>;
+  onCreated: (postId: string, suggestions: PostMatchSuggestion[]) => Promise<void>;
 }) {
   const [type, setType] = useState<PostType>("LOST");
   const [selectedParentCategoryId, setSelectedParentCategoryId] = useState("");
   const [selectedChildCategoryId, setSelectedChildCategoryId] = useState("");
   const [selectedAreaId, setSelectedAreaId] = useState("");
   const [selectedBuildingId, setSelectedBuildingId] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
-  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [itemFiles, setItemFiles] = useState<File[]>([]);
+  const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
+  const [itemImagePreviews, setItemImagePreviews] = useState<string[]>([]);
+  const [evidenceImagePreviews, setEvidenceImagePreviews] = useState<string[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const buildingsQuery = useQuery({
     queryKey: ["create-buildings", selectedAreaId],
@@ -1786,16 +2317,23 @@ function CreatePostView(props: {
     [props.categories, selectedParentCategoryId]
   );
   const selectedCategoryId = childCategories.length > 0 ? selectedChildCategoryId : selectedParentCategoryId;
+  const totalSelectedFiles = itemFiles.length + evidenceFiles.length;
 
   useEffect(() => {
-    const urls = files.map((file) => URL.createObjectURL(file));
-    setImagePreviews(urls);
+    const urls = itemFiles.map((file) => URL.createObjectURL(file));
+    setItemImagePreviews(urls);
     return () => urls.forEach((url) => URL.revokeObjectURL(url));
-  }, [files]);
+  }, [itemFiles]);
+
+  useEffect(() => {
+    const urls = evidenceFiles.map((file) => URL.createObjectURL(file));
+    setEvidenceImagePreviews(urls);
+    return () => urls.forEach((url) => URL.revokeObjectURL(url));
+  }, [evidenceFiles]);
 
   const createMutation = useMutation({
     mutationFn: async (formData: FormData) => {
-      const post = await api.createPost({
+      const result = await api.createPost({
         type,
         title: String(formData.get("title")),
         description: String(formData.get("description")),
@@ -1810,15 +2348,23 @@ function CreatePostView(props: {
         secretVerification: type === "LOST" ? String(formData.get("secretVerification")) : null
       });
 
-      if (files.length > 0) {
-        await api.uploadPostImages(post.post.id, files);
+      let matchSuggestions = result.matchSuggestions ?? [];
+      if (totalSelectedFiles > 0) {
+        const mediaResult = await api.uploadPostImages(result.post.id, itemFiles, evidenceFiles);
+        if (mediaResult.matchSuggestions.length > 0) {
+          matchSuggestions = mediaResult.matchSuggestions;
+        }
       }
 
-      return post.post;
+      return { post: result.post, matchSuggestions };
     },
-    onSuccess: async (post) => {
-      setMessage("Đã tạo bài. Nếu ảnh có kèm theo, AI/matching sẽ chạy ở nền.");
-      await props.onCreated(post.id);
+    onSuccess: async (result) => {
+      setMessage(
+        result.matchSuggestions.length > 0
+          ? `Đã tạo bài và tìm thấy ${result.matchSuggestions.length} gợi ý giống trên 80%.`
+          : "Đã tạo bài. Hệ thống đã kiểm tra matching tự động."
+      );
+      await props.onCreated(result.post.id, result.matchSuggestions);
     }
   });
 
@@ -1833,7 +2379,7 @@ function CreatePostView(props: {
       setMessage("Vui lòng chọn danh mục cụ thể.");
       return;
     }
-    const validationErrors = validateImageFiles(files, props.imageRules, props.imageRules.maxImages);
+    const validationErrors = validateImageFiles([...itemFiles, ...evidenceFiles], props.imageRules, props.imageRules.maxImages);
     if (validationErrors.length > 0) {
       setMessage(validationErrors[0]);
       return;
@@ -1841,9 +2387,11 @@ function CreatePostView(props: {
     createMutation.mutate(new FormData(event.currentTarget));
   }
 
-  function selectFiles(fileList: FileList | null) {
+  function selectFiles(fileList: FileList | null, kind: "ITEM" | "EVIDENCE") {
     const incomingFiles = Array.from(fileList ?? []);
-    const nextFiles = [...files];
+    const targetFiles = kind === "ITEM" ? itemFiles : evidenceFiles;
+    const otherFiles = kind === "ITEM" ? evidenceFiles : itemFiles;
+    const nextFiles = [...targetFiles];
     const existingKeys = new Set(nextFiles.map(fileKey));
 
     for (const file of incomingFiles) {
@@ -1854,20 +2402,27 @@ function CreatePostView(props: {
       }
     }
 
-    const validationErrors = validateImageFiles(nextFiles, props.imageRules, props.imageRules.maxImages);
+    const validationErrors = validateImageFiles([...otherFiles, ...nextFiles], props.imageRules, props.imageRules.maxImages);
     if (validationErrors.length > 0) {
       setMessage(validationErrors[0]);
       return;
     }
 
-    setFiles(nextFiles);
-    setMessage(nextFiles.length > 0 ? `${nextFiles.length} ảnh đã sẵn sàng upload.` : null);
+    if (kind === "ITEM") {
+      setItemFiles(nextFiles);
+    } else {
+      setEvidenceFiles(nextFiles);
+    }
+    setMessage(`${otherFiles.length + nextFiles.length} ảnh đã sẵn sàng upload.`);
   }
 
-  function removeFile(index: number) {
-    setFiles((current) => {
+  function removeFile(index: number, kind: "ITEM" | "EVIDENCE") {
+    const setter = kind === "ITEM" ? setItemFiles : setEvidenceFiles;
+    setter((current) => {
       const nextFiles = current.filter((_, fileIndex) => fileIndex !== index);
-      setMessage(nextFiles.length > 0 ? `${nextFiles.length} ảnh đã sẵn sàng upload.` : null);
+      const otherCount = kind === "ITEM" ? evidenceFiles.length : itemFiles.length;
+      const total = otherCount + nextFiles.length;
+      setMessage(total > 0 ? `${total} ảnh đã sẵn sàng upload.` : null);
       return nextFiles;
     });
   }
@@ -2049,34 +2604,76 @@ function CreatePostView(props: {
           />
         </label>
       )}
-      <label className="upload-dropzone">
-        <Upload size={22} />
-        <strong>Thêm ảnh đồ vật</strong>
-        <span>Ảnh đầu tiên sẽ làm ảnh bìa trên cộng đồng. Các ảnh sau nên là bằng chứng như hóa đơn, khung hình từ video, ảnh từng cầm nắm/sử dụng hoặc dấu hiệu nhận diện.</span>
-        <input
-          type="file"
-          accept={acceptAttribute(props.imageRules)}
-          multiple
-          onChange={(event) => {
-            selectFiles(event.target.files);
-            event.currentTarget.value = "";
-          }}
-        />
-      </label>
-      {imagePreviews.length > 0 && (
-        <div className="preview-grid">
-          {imagePreviews.map((previewUrl, index) => (
-            <div className="preview-item" key={previewUrl}>
-              <img src={previewUrl} alt={`Ảnh ${index + 1}`} />
-              <button type="button" onClick={() => removeFile(index)} aria-label={`Xóa ảnh ${index + 1}`}>
-                Xóa
-              </button>
-            </div>
-          ))}
+      <div className="upload-guide-panel">
+        <strong>Gợi ý chụp ảnh đồ vật</strong>
+        <div className="upload-guide-grid">
+          <span>Chụp mặt trước, mặt sau và hai cạnh để hệ thống nhìn vật theo nhiều góc.</span>
+          <span>Thêm ảnh cận cảnh logo, vết trầy, serial, phụ kiện hoặc dấu hiệu riêng.</span>
+          <span>Nếu có thể, xoay quanh vật như chụp 3D: trên, dưới, trái, phải. Không bắt buộc.</span>
         </div>
+      </div>
+      <div className="upload-split-grid">
+        <label className="upload-dropzone">
+          <Upload size={22} />
+          <strong>Ảnh đồ vật</strong>
+          <span>Ưu tiên ảnh rõ vật, nền sáng, không che khuất. Ảnh đầu tiên sẽ làm ảnh bìa.</span>
+          <input
+            type="file"
+            accept={acceptAttribute(props.imageRules)}
+            multiple
+            onChange={(event) => {
+              selectFiles(event.target.files, "ITEM");
+              event.currentTarget.value = "";
+            }}
+          />
+        </label>
+        <label className="upload-dropzone evidence-dropzone">
+          <Upload size={22} />
+          <strong>Bằng chứng kèm theo</strong>
+          <span>Không bắt buộc. Có thể thêm bill, hóa đơn, ảnh từng sử dụng, khung hình camera hoặc giấy tờ liên quan.</span>
+          <input
+            type="file"
+            accept={acceptAttribute(props.imageRules)}
+            multiple
+            onChange={(event) => {
+              selectFiles(event.target.files, "EVIDENCE");
+              event.currentTarget.value = "";
+            }}
+          />
+        </label>
+      </div>
+      {itemImagePreviews.length > 0 && (
+        <>
+          <strong className="preview-section-title">Ảnh đồ vật</strong>
+          <div className="preview-grid">
+            {itemImagePreviews.map((previewUrl, index) => (
+              <div className="preview-item" key={previewUrl}>
+                <img src={previewUrl} alt={`Ảnh đồ vật ${index + 1}`} />
+                <button type="button" onClick={() => removeFile(index, "ITEM")} aria-label={`Xóa ảnh đồ vật ${index + 1}`}>
+                  Xóa
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      {evidenceImagePreviews.length > 0 && (
+        <>
+          <strong className="preview-section-title">Ảnh bằng chứng</strong>
+          <div className="preview-grid">
+            {evidenceImagePreviews.map((previewUrl, index) => (
+              <div className="preview-item" key={previewUrl}>
+                <img src={previewUrl} alt={`Ảnh bằng chứng ${index + 1}`} />
+                <button type="button" onClick={() => removeFile(index, "EVIDENCE")} aria-label={`Xóa ảnh bằng chứng ${index + 1}`}>
+                  Xóa
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
       )}
       <small className="form-hint">
-        Tối đa {props.imageRules.maxImages} ảnh, mỗi ảnh {props.imageRules.maxImageSizeMb}MB, định dạng{" "}
+        Tối đa {props.imageRules.maxImages} ảnh cho cả ảnh đồ vật và bằng chứng, mỗi ảnh {props.imageRules.maxImageSizeMb}MB, định dạng{" "}
         {props.imageRules.allowedFormats.join(", ").toUpperCase()}.
       </small>
       {createMutation.error instanceof Error && <div className="notice error">{createMutation.error.message}</div>}
@@ -2596,6 +3193,7 @@ function PostDrawer(props: {
               {props.detail.matches.map((match) => (
                 <span key={match.id}>
                   {Math.round(match.totalScore * 100)}% · text {Math.round(match.textScore * 100)}%
+                  {match.totalScore >= 0.8 ? " · đã thông báo" : ""}
                 </span>
               ))}
               {props.detail.matches.length === 0 && <span>Chưa có match vượt ngưỡng</span>}
@@ -2608,6 +3206,56 @@ function PostDrawer(props: {
           </>
         )}
       </aside>
+    </div>
+  );
+}
+
+function MatchSuggestionsDialog(props: {
+  suggestions: PostMatchSuggestion[];
+  onClose: () => void;
+  onSelect: (postId: string) => void;
+}) {
+  return (
+    <div className="drawer-backdrop" onClick={props.onClose}>
+      <section className="dialog match-suggestions-dialog" onClick={(event) => event.stopPropagation()}>
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">Matching tự động</span>
+            <h2>Có vật nhặt được giống bài của bạn</h2>
+          </div>
+          <Bell size={18} />
+        </div>
+        <p>
+          Hệ thống tìm thấy {props.suggestions.length} bài FOUND có độ giống trên 80%. Bạn có thể mở từng bài để xem ảnh, vị trí và gửi claim nếu đúng vật của mình.
+        </p>
+        <div className="match-suggestion-list">
+          {props.suggestions.map((suggestion) => (
+            <article className="match-suggestion-card" key={suggestion.match.id}>
+              {suggestion.post.coverImageUrl ? (
+                <img src={suggestion.post.coverImageUrl} alt="" />
+              ) : (
+                <div className="match-suggestion-placeholder">
+                  <Camera size={22} />
+                </div>
+              )}
+              <div>
+                <span className="status-pill">{Math.round(suggestion.match.totalScore * 100)}% giống nhau</span>
+                <strong>{suggestion.post.title}</strong>
+                <small>{locationText(suggestion.post)} · {formatDate(suggestion.post.createdAt)}</small>
+                <span className="match-breakdown">
+                  text {Math.round(suggestion.match.textScore * 100)}% · danh mục {Math.round(suggestion.match.categoryScore * 100)}% · vị trí {Math.round(suggestion.match.locationScore * 100)}%
+                </span>
+              </div>
+              <button className="primary-button" type="button" onClick={() => props.onSelect(suggestion.post.id)}>
+                Xem bài
+              </button>
+            </article>
+          ))}
+        </div>
+        <div className="dialog-actions">
+          <button className="secondary-button" type="button" onClick={props.onClose}>Đóng</button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -2813,6 +3461,37 @@ function formatDate(value: string) {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(new Date(value));
+}
+
+function avatarInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const initials = parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : parts[0]?.slice(0, 2);
+  return (initials || "U").toUpperCase();
+}
+
+function warehouseStatusLabel(status: AdminWarehouseStatus) {
+  return warehouseStatusLabels[status] ?? status;
+}
+
+function warehouseLocationText(item: AdminWarehouseItem) {
+  return (
+    item.location.roomText ||
+    [item.location.areaName, item.location.buildingName].filter(Boolean).join(", ") ||
+    item.handoverPoint?.name ||
+    "Chưa rõ vị trí kho"
+  );
+}
+
+function dateTimeLocalInputValue(value: string | undefined) {
+  if (!value) {
+    return "";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 16);
 }
 
 function emptyToNull(value: FormDataEntryValue | null) {

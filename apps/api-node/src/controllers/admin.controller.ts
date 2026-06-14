@@ -47,6 +47,29 @@ const handoverSchema = z.object({
   openingHours: z.string().trim().max(255).nullable().optional(),
   contactInfo: z.string().trim().max(255).nullable().optional()
 });
+const warehouseStatusSchema = z.enum(["RECEIVED", "STORED", "CLAIMED", "RETURNED", "DISPOSED"]);
+const optionalDateTimeSchema = z.string().datetime().nullable().optional();
+const warehouseSchema = z.object({
+  postId: z.string().uuid().nullable().optional(),
+  handoverPointId: z.string().uuid().nullable().optional(),
+  itemName: z.string().trim().min(2).max(255),
+  description: z.string().trim().max(2000).nullable().optional(),
+  categoryId: z.string().uuid().nullable().optional(),
+  areaId: z.string().uuid().nullable().optional(),
+  buildingId: z.string().uuid().nullable().optional(),
+  roomText: z.string().trim().max(100).nullable().optional(),
+  finderUserId: z.string().uuid().nullable().optional(),
+  finderName: z.string().trim().max(150).nullable().optional(),
+  finderContact: z.string().trim().max(255).nullable().optional(),
+  status: warehouseStatusSchema.default("RECEIVED"),
+  conditionNotes: z.string().trim().max(2000).nullable().optional(),
+  storageCode: z.string().trim().max(60).nullable().optional(),
+  receivedAt: optionalDateTimeSchema,
+  returnedAt: optionalDateTimeSchema
+});
+const warehouseStatusUpdateSchema = z.object({
+  status: warehouseStatusSchema
+});
 const reportHandleSchema = z.object({
   status: z.enum(["REVIEWED", "DISMISSED"]),
   note: z.string().trim().max(500).nullable().optional(),
@@ -163,6 +186,35 @@ export const adminController = {
 
   async setHandoverPointActive(request: Request, response: Response) {
     response.json(ok(await adminRepository.setHandoverPointActive(idParam(request), activeSchema.parse(request.body).isActive)));
+  },
+
+  async warehouseItems(_request: Request, response: Response) {
+    response.json(ok({ warehouseItems: await adminRepository.warehouseItems() }));
+  },
+
+  async createWarehouseItem(request: Request, response: Response) {
+    response
+      .status(201)
+      .json(ok(await adminRepository.createWarehouseItem(warehouseSchema.parse(request.body), request.auth!.sub)));
+  },
+
+  async updateWarehouseItem(request: Request, response: Response) {
+    response.json(ok(await adminRepository.updateWarehouseItem(idParam(request), warehouseSchema.parse(request.body))));
+  },
+
+  async updateWarehouseItemStatus(request: Request, response: Response) {
+    response.json(
+      ok(
+        await adminRepository.updateWarehouseItemStatus(
+          idParam(request),
+          warehouseStatusUpdateSchema.parse(request.body).status
+        )
+      )
+    );
+  },
+
+  async deleteWarehouseItem(request: Request, response: Response) {
+    response.json(ok(await adminRepository.deleteWarehouseItem(idParam(request))));
   },
 
   async reports(_request: Request, response: Response) {

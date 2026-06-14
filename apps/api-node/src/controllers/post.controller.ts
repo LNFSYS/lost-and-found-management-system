@@ -21,8 +21,8 @@ function requireStringParam(value: string | string[] | undefined, name: string) 
 export const postController = {
   async create(request: Request, response: Response) {
     const input = createPostSchema.parse(request.body);
-    const post = await postService.createPost(request.auth!, input);
-    response.status(201).json(created({ post }, "Post created"));
+    const result = await postService.createPost(request.auth!, input);
+    response.status(201).json(created(result, "Post created"));
   },
 
   async list(request: Request, response: Response) {

@@ -56,6 +56,7 @@ export interface AdminOverview {
   categories: number;
   areas: number;
   handoverPoints: number;
+  warehouseItems: number;
   postsByStatus: Array<{ status: string; total: number }>;
   postsByType: Array<{ type: string; total: number }>;
 }
@@ -102,6 +103,37 @@ export interface AdminHandoverPoint extends AdminNamedResource {
   buildingId: string | null;
   openingHours: string | null;
   contactInfo: string | null;
+}
+
+export type AdminWarehouseStatus = "RECEIVED" | "STORED" | "CLAIMED" | "RETURNED" | "DISPOSED";
+
+export interface AdminWarehouseItem {
+  id: string;
+  post: { id: string; title: string | null } | null;
+  handoverPoint: { id: string; name: string | null } | null;
+  itemName: string;
+  description: string | null;
+  category: { id: string; name: string | null } | null;
+  location: {
+    areaId: string | null;
+    areaName: string | null;
+    buildingId: string | null;
+    buildingName: string | null;
+    roomText: string | null;
+  };
+  finder: {
+    userId: string | null;
+    fullName: string | null;
+    name: string | null;
+    contact: string | null;
+  };
+  status: AdminWarehouseStatus;
+  conditionNotes: string | null;
+  storageCode: string | null;
+  receivedAt: string;
+  returnedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface AdminReport {
@@ -162,12 +194,18 @@ export interface MatchResult {
   categoryScore: number;
   locationScore: number;
   timeScore: number;
+  isNotified?: boolean;
   createdAt: string;
+}
+
+export interface PostMatchSuggestion {
+  match: MatchResult;
+  post: BoardPost;
 }
 
 export interface PostDetail {
   post: BoardPost;
-  media: Array<{ id: string; secureUrl: string; publicId: string; createdAt: string }>;
+  media: Array<{ id: string; secureUrl: string; publicId: string; mediaKind?: "ITEM" | "EVIDENCE"; createdAt: string }>;
   tags: Array<{ id: string; tag: string; confidence: number; source: string; createdAt: string }>;
   matches: MatchResult[];
 }
@@ -185,6 +223,19 @@ export interface ClaimDetail {
     createdAt: string;
   };
   evidence: Array<{ id: string; secureUrl: string; evidenceType: string; description: string | null }>;
+}
+
+export interface NotificationItem {
+  id: string;
+  userId: string;
+  type: string;
+  title: string;
+  body: string | null;
+  entityType: string | null;
+  entityId: string | null;
+  isRead: boolean;
+  readAt: string | null;
+  createdAt: string;
 }
 
 interface ApiEnvelope<T> {
@@ -286,7 +337,7 @@ export const api = {
     return request<{ matches: MatchResult[] }>(`/posts/${id}/matches`);
   },
   createPost(input: Record<string, unknown>) {
-    return request<{ post: BoardPost }>("/posts", {
+    return request<{ post: BoardPost; matchSuggestions: PostMatchSuggestion[] }>("/posts", {
       method: "POST",
       body: JSON.stringify(input)
     });
@@ -302,10 +353,11 @@ export const api = {
       method: "DELETE"
     });
   },
-  uploadPostImages(id: string, files: FileList | File[]) {
+  uploadPostImages(id: string, files: FileList | File[], evidenceFiles: FileList | File[] = []) {
     const data = new FormData();
     Array.from(files).forEach((file) => data.append("images", file));
-    return request<{ media: unknown[]; ai: unknown[] }>(`/posts/${id}/media`, {
+    Array.from(evidenceFiles).forEach((file) => data.append("evidenceImages", file));
+    return request<{ media: unknown[]; ai: unknown[]; matchSuggestions: PostMatchSuggestion[] }>(`/posts/${id}/media`, {
       method: "POST",
       body: data
     });
@@ -395,6 +447,19 @@ export const api = {
   },
   reputation() {
     return request<{ reputation: { totalPoints: number; level: string } }>("/auth/reputation");
+  },
+  notifications() {
+    return request<{ items: NotificationItem[]; unreadCount: number }>("/auth/notifications");
+  },
+  markNotificationRead(id: string) {
+    return request<{ updated: boolean }>(`/auth/notifications/${id}/read`, {
+      method: "PATCH"
+    });
+  },
+  markAllNotificationsRead() {
+    return request<{ updated: boolean }>("/auth/notifications/read-all", {
+      method: "PATCH"
+    });
   },
   categories() {
     return request<{ categories: Category[] }>("/categories");
@@ -517,6 +582,32 @@ export const api = {
     return request<{ updated: boolean }>(`/admin/handover-points/${id}/active`, {
       method: "PATCH",
       body: JSON.stringify({ isActive })
+    });
+  },
+  adminWarehouseItems() {
+    return request<{ warehouseItems: AdminWarehouseItem[] }>("/admin/warehouse-items");
+  },
+  adminCreateWarehouseItem(input: Record<string, unknown>) {
+    return request<{ id: string }>("/admin/warehouse-items", {
+      method: "POST",
+      body: JSON.stringify(input)
+    });
+  },
+  adminUpdateWarehouseItem(id: string, input: Record<string, unknown>) {
+    return request<{ updated: boolean }>(`/admin/warehouse-items/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(input)
+    });
+  },
+  adminUpdateWarehouseItemStatus(id: string, status: AdminWarehouseStatus) {
+    return request<{ updated: boolean }>(`/admin/warehouse-items/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status })
+    });
+  },
+  adminDeleteWarehouseItem(id: string) {
+    return request<{ deleted: boolean }>(`/admin/warehouse-items/${id}`, {
+      method: "DELETE"
     });
   },
   adminReports() {

@@ -2,6 +2,7 @@ import type { RowDataPacket } from "mysql2/promise";
 import { randomUUID } from "node:crypto";
 import { dbPool } from "../config/db.js";
 import type { UserRole } from "../models/user.model.js";
+import { postRepository } from "./post.repository.js";
 import { HttpError } from "../utils/http-error.js";
 import { normalizeText } from "../utils/normalize-text.js";
 
@@ -77,6 +78,55 @@ interface HandoverAdminRow extends RowDataPacket {
   opening_hours: string | null;
   contact_info: string | null;
   is_active: number;
+}
+
+type WarehouseStatus = "RECEIVED" | "STORED" | "CLAIMED" | "RETURNED" | "DISPOSED";
+
+interface WarehouseAdminRow extends RowDataPacket {
+  id: string;
+  post_id: string | null;
+  post_title: string | null;
+  handover_point_id: string | null;
+  handover_point_name: string | null;
+  item_name: string;
+  description: string | null;
+  category_id: string | null;
+  category_name: string | null;
+  area_id: string | null;
+  area_name: string | null;
+  building_id: string | null;
+  building_name: string | null;
+  room_text: string | null;
+  finder_user_id: string | null;
+  finder_full_name: string | null;
+  finder_name: string | null;
+  finder_contact: string | null;
+  status: WarehouseStatus;
+  condition_notes: string | null;
+  storage_code: string | null;
+  received_at: string;
+  returned_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface WarehouseInput {
+  postId?: string | null;
+  handoverPointId?: string | null;
+  itemName: string;
+  description?: string | null;
+  categoryId?: string | null;
+  areaId?: string | null;
+  buildingId?: string | null;
+  roomText?: string | null;
+  finderUserId?: string | null;
+  finderName?: string | null;
+  finderContact?: string | null;
+  status?: WarehouseStatus;
+  conditionNotes?: string | null;
+  storageCode?: string | null;
+  receivedAt?: string | null;
+  returnedAt?: string | null;
 }
 
 interface ReportAdminRow extends RowDataPacket {
@@ -155,6 +205,82 @@ function reportTargetText(row: ReportAdminRow) {
   return row.target_title ?? row.target_name ?? row.entity_id;
 }
 
+function optionalDate(value: string | null | undefined) {
+  return value ? new Date(value) : null;
+}
+
+async function userExists(userId: string) {
+  const [rows] = await dbPool.query<CountRow[]>(
+    "SELECT COUNT(*) AS total FROM users WHERE id = ? AND deleted_at IS NULL",
+    [userId]
+  );
+  return (rows[0]?.total ?? 0) > 0;
+}
+
+async function validateWarehouseInput(input: WarehouseInput) {
+  if (input.postId) {
+    const post = await postRepository.findOwnerAndStatus(input.postId);
+    if (!post) {
+      throw new HttpError(422, "Post does not exist");
+    }
+    if (post.type !== "FOUND") {
+      throw new HttpError(422, "Warehouse items can only link to FOUND posts");
+    }
+  }
+
+  if (input.categoryId && !(await postRepository.activeRecordExists("item_categories", input.categoryId))) {
+    throw new HttpError(422, "Category does not exist or is inactive");
+  }
+  if (input.areaId && !(await postRepository.activeRecordExists("campus_areas", input.areaId))) {
+    throw new HttpError(422, "Campus area does not exist or is inactive");
+  }
+  if (input.buildingId) {
+    if (!(await postRepository.activeRecordExists("campus_buildings", input.buildingId))) {
+      throw new HttpError(422, "Campus building does not exist or is inactive");
+    }
+    if (input.areaId && !(await postRepository.buildingBelongsToArea(input.buildingId, input.areaId))) {
+      throw new HttpError(422, "Campus building does not belong to the selected area");
+    }
+  }
+  if (input.handoverPointId && !(await postRepository.activeRecordExists("handover_points", input.handoverPointId))) {
+    throw new HttpError(422, "Handover point does not exist or is inactive");
+  }
+  if (input.finderUserId && !(await userExists(input.finderUserId))) {
+    throw new HttpError(422, "Finder user does not exist");
+  }
+}
+
+function mapWarehouseItem(row: WarehouseAdminRow) {
+  return {
+    id: row.id,
+    post: row.post_id ? { id: row.post_id, title: row.post_title } : null,
+    handoverPoint: row.handover_point_id ? { id: row.handover_point_id, name: row.handover_point_name } : null,
+    itemName: row.item_name,
+    description: row.description,
+    category: row.category_id ? { id: row.category_id, name: row.category_name } : null,
+    location: {
+      areaId: row.area_id,
+      areaName: row.area_name,
+      buildingId: row.building_id,
+      buildingName: row.building_name,
+      roomText: row.room_text
+    },
+    finder: {
+      userId: row.finder_user_id,
+      fullName: row.finder_full_name,
+      name: row.finder_name,
+      contact: row.finder_contact
+    },
+    status: row.status,
+    conditionNotes: row.condition_notes,
+    storageCode: row.storage_code,
+    receivedAt: row.received_at,
+    returnedAt: row.returned_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
 export const adminRepository = {
   async overview() {
     const [statusRows] = await dbPool.query<Array<RowDataPacket & { status: string; total: number }>>(
@@ -172,6 +298,7 @@ export const adminRepository = {
       categories: await count("item_categories", "is_active = TRUE"),
       areas: await count("campus_areas", "is_active = TRUE"),
       handoverPoints: await count("handover_points", "is_active = TRUE"),
+      warehouseItems: await count("warehouse_items", "deleted_at IS NULL"),
       postsByStatus: statusRows,
       postsByType: typeRows
     };
@@ -464,6 +591,29 @@ export const adminRepository = {
     },
     actorId: string
   ) {
+    // Validate areaId exists
+    if (input.areaId) {
+      const exists = await postRepository.activeRecordExists("campus_areas", input.areaId);
+      if (!exists) {
+        throw new Error(`Area with id ${input.areaId} not found`);
+      }
+    }
+
+    // Validate buildingId exists and belongs to areaId if provided
+    if (input.buildingId) {
+      const exists = await postRepository.activeRecordExists("campus_buildings", input.buildingId);
+      if (!exists) {
+        throw new Error(`Building with id ${input.buildingId} not found`);
+      }
+
+      if (input.areaId) {
+        const belongs = await postRepository.buildingBelongsToArea(input.buildingId, input.areaId);
+        if (!belongs) {
+          throw new Error(`Building ${input.buildingId} does not belong to area ${input.areaId}`);
+        }
+      }
+    }
+
     const id = randomUUID();
     await dbPool.execute(
       `
@@ -494,6 +644,29 @@ export const adminRepository = {
     openingHours?: string | null;
     contactInfo?: string | null;
   }) {
+    // Validate areaId exists
+    if (input.areaId) {
+      const exists = await postRepository.activeRecordExists("campus_areas", input.areaId);
+      if (!exists) {
+        throw new Error(`Area with id ${input.areaId} not found`);
+      }
+    }
+
+    // Validate buildingId exists and belongs to areaId if provided
+    if (input.buildingId) {
+      const exists = await postRepository.activeRecordExists("campus_buildings", input.buildingId);
+      if (!exists) {
+        throw new Error(`Building with id ${input.buildingId} not found`);
+      }
+
+      if (input.areaId) {
+        const belongs = await postRepository.buildingBelongsToArea(input.buildingId, input.areaId);
+        if (!belongs) {
+          throw new Error(`Building ${input.buildingId} does not belong to area ${input.areaId}`);
+        }
+      }
+    }
+
     await dbPool.execute(
       `
         UPDATE handover_points
@@ -516,6 +689,141 @@ export const adminRepository = {
   async setHandoverPointActive(id: string, isActive: boolean) {
     await dbPool.execute("UPDATE handover_points SET is_active = ? WHERE id = ?", [isActive, id]);
     return { updated: true };
+  },
+
+  async warehouseItems() {
+    const [rows] = await dbPool.query<WarehouseAdminRow[]>(
+      `
+        SELECT
+          wi.id, wi.post_id, p.title AS post_title,
+          wi.handover_point_id, hp.name AS handover_point_name,
+          wi.item_name, wi.description,
+          wi.category_id, c.name AS category_name,
+          wi.area_id, a.name AS area_name,
+          wi.building_id, b.name AS building_name,
+          wi.room_text,
+          wi.finder_user_id, finder.full_name AS finder_full_name,
+          wi.finder_name, wi.finder_contact,
+          wi.status, wi.condition_notes, wi.storage_code,
+          wi.received_at, wi.returned_at, wi.created_at, wi.updated_at
+        FROM warehouse_items wi
+        LEFT JOIN posts p ON p.id = wi.post_id
+        LEFT JOIN handover_points hp ON hp.id = wi.handover_point_id
+        LEFT JOIN item_categories c ON c.id = wi.category_id
+        LEFT JOIN campus_areas a ON a.id = wi.area_id
+        LEFT JOIN campus_buildings b ON b.id = wi.building_id
+        LEFT JOIN users finder ON finder.id = wi.finder_user_id
+        WHERE wi.deleted_at IS NULL
+        ORDER BY wi.received_at DESC, wi.created_at DESC
+        LIMIT 200
+      `
+    );
+
+    return rows.map(mapWarehouseItem);
+  },
+
+  async createWarehouseItem(input: WarehouseInput, actorId: string) {
+    await validateWarehouseInput(input);
+    const id = randomUUID();
+    await dbPool.execute(
+      `
+        INSERT INTO warehouse_items (
+          id, post_id, handover_point_id, item_name, description,
+          category_id, area_id, building_id, room_text,
+          finder_user_id, finder_name, finder_contact,
+          status, condition_notes, storage_code, received_at, returned_at, created_by
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        id,
+        input.postId ?? null,
+        input.handoverPointId ?? null,
+        input.itemName.trim(),
+        input.description ?? null,
+        input.categoryId ?? null,
+        input.areaId ?? null,
+        input.buildingId ?? null,
+        input.roomText?.trim() || null,
+        input.finderUserId ?? null,
+        input.finderName?.trim() || null,
+        input.finderContact?.trim() || null,
+        input.status ?? "RECEIVED",
+        input.conditionNotes ?? null,
+        input.storageCode?.trim() || null,
+        optionalDate(input.receivedAt) ?? new Date(),
+        optionalDate(input.returnedAt),
+        actorId
+      ]
+    );
+    return { id };
+  },
+
+  async updateWarehouseItem(id: string, input: WarehouseInput) {
+    await validateWarehouseInput(input);
+    await dbPool.execute(
+      `
+        UPDATE warehouse_items
+        SET post_id = ?,
+            handover_point_id = ?,
+            item_name = ?,
+            description = ?,
+            category_id = ?,
+            area_id = ?,
+            building_id = ?,
+            room_text = ?,
+            finder_user_id = ?,
+            finder_name = ?,
+            finder_contact = ?,
+            status = ?,
+            condition_notes = ?,
+            storage_code = ?,
+            received_at = ?,
+            returned_at = ?
+        WHERE id = ? AND deleted_at IS NULL
+      `,
+      [
+        input.postId ?? null,
+        input.handoverPointId ?? null,
+        input.itemName.trim(),
+        input.description ?? null,
+        input.categoryId ?? null,
+        input.areaId ?? null,
+        input.buildingId ?? null,
+        input.roomText?.trim() || null,
+        input.finderUserId ?? null,
+        input.finderName?.trim() || null,
+        input.finderContact?.trim() || null,
+        input.status ?? "RECEIVED",
+        input.conditionNotes ?? null,
+        input.storageCode?.trim() || null,
+        optionalDate(input.receivedAt) ?? new Date(),
+        optionalDate(input.returnedAt),
+        id
+      ]
+    );
+    return { updated: true };
+  },
+
+  async updateWarehouseItemStatus(id: string, status: WarehouseStatus) {
+    await dbPool.execute(
+      `
+        UPDATE warehouse_items
+        SET status = ?,
+            returned_at = CASE WHEN ? IN ('RETURNED', 'DISPOSED') THEN COALESCE(returned_at, UTC_TIMESTAMP()) ELSE returned_at END
+        WHERE id = ? AND deleted_at IS NULL
+      `,
+      [status, status, id]
+    );
+    return { updated: true };
+  },
+
+  async deleteWarehouseItem(id: string) {
+    await dbPool.execute(
+      "UPDATE warehouse_items SET deleted_at = UTC_TIMESTAMP(), updated_at = UTC_TIMESTAMP() WHERE id = ? AND deleted_at IS NULL",
+      [id]
+    );
+    return { deleted: true };
   },
 
   async reports() {

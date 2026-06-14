@@ -40,9 +40,17 @@ postRoutes.patch("/:id/status", requireAuth, (request, response, next) => {
   postController.updateStatus(request, response).catch(next);
 });
 
-postRoutes.post("/:id/media", requireAuth, memoryUpload.array("images", 5), (request, response, next) => {
+postRoutes.post(
+  "/:id/media",
+  requireAuth,
+  memoryUpload.fields([
+    { name: "images", maxCount: 5 },
+    { name: "evidenceImages", maxCount: 5 }
+  ]),
+  (request, response, next) => {
   mediaController.postMedia(request, response).catch(next);
-});
+  }
+);
 
 postRoutes.delete("/:id/media/:mediaId", requireAuth, (request, response, next) => {
   mediaController.deletePostMedia(request, response).catch(next);

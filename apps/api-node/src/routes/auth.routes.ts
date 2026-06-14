@@ -61,3 +61,15 @@ authRoutes.get("/activity", requireAuth, (request, response, next) => {
 authRoutes.get("/reputation", requireAuth, (request, response, next) => {
   authController.reputation(request, response).catch(next);
 });
+
+authRoutes.get("/notifications", requireAuth, (request, response, next) => {
+  authController.notifications(request, response).catch(next);
+});
+
+authRoutes.patch("/notifications/read-all", requireAuth, (request, response, next) => {
+  authController.markAllNotificationsRead(request, response).catch(next);
+});
+
+authRoutes.patch("/notifications/:id/read", requireAuth, (request, response, next) => {
+  authController.markNotificationRead(request, response).catch(next);
+});

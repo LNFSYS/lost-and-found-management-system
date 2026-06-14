@@ -60,6 +60,11 @@ function requireFile(file: Express.Multer.File | undefined, fieldName: string) {
   return file;
 }
 
+export interface PostMediaUpload {
+  file: Express.Multer.File;
+  mediaKind: "ITEM" | "EVIDENCE";
+}
+
 export const mediaService = {
   async uploadAvatar(auth: AccessTokenPayload, file: Express.Multer.File | undefined) {
     const image = requireFile(file, "avatar");
@@ -90,8 +95,8 @@ export const mediaService = {
     return { user: toPublicUser(user) };
   },
 
-  async uploadPostMedia(auth: AccessTokenPayload, postId: string, files: Express.Multer.File[]) {
-    if (files.length === 0) {
+  async uploadPostMedia(auth: AccessTokenPayload, postId: string, uploads: PostMediaUpload[]) {
+    if (uploads.length === 0) {
       throw new HttpError(400, "Missing uploaded image files");
     }
 
@@ -103,13 +108,14 @@ export const mediaService = {
 
     const maxImages = await postRepository.getConfigNumber("post.max_images", 5);
     const existingCount = await postRepository.countMedia(postId);
-    if (existingCount + files.length > maxImages) {
+    if (existingCount + uploads.length > maxImages) {
       throw new HttpError(422, `A post can have at most ${maxImages} images`);
     }
 
     const uploadedMedia = [];
     const ai = [];
-    for (const [index, file] of files.entries()) {
+    for (const [index, upload] of uploads.entries()) {
+      const file = upload.file;
       await assertImageFile(file);
       const uploaded = await cloudinaryService.uploadImage(file.buffer, `lnfs/posts/${postId}`);
       const mediaId = randomUUID();
@@ -119,26 +125,29 @@ export const mediaService = {
         secureUrl: uploaded.secureUrl,
         publicId: uploaded.publicId,
         resourceType: uploaded.resourceType,
+        mediaKind: upload.mediaKind,
         format: uploaded.format,
         width: uploaded.width,
         height: uploaded.height,
         bytes: uploaded.bytes,
         sortOrder: existingCount + index
       });
-      uploadedMedia.push({ id: mediaId, ...uploaded });
+      uploadedMedia.push({ id: mediaId, mediaKind: upload.mediaKind, ...uploaded });
 
-      const vision = await visionService.analyzeImageUrl(uploaded.secureUrl);
-      if (vision.tags.length > 0) {
-        await postRepository.createAiTags(postId, vision.tags);
+      if (upload.mediaKind === "ITEM") {
+        const vision = await visionService.analyzeImageUrl(uploaded.secureUrl);
+        if (vision.tags.length > 0) {
+          await postRepository.createAiTags(postId, vision.tags);
+        }
+        const suggestedCategories = await postRepository.suggestCategoriesFromTags(vision.tags.map((tag) => tag.tag));
+        ai.push({
+          mediaId,
+          tags: vision.tags,
+          ocrText: vision.ocrText,
+          safeSearch: vision.safeSearch,
+          suggestedCategories
+        });
       }
-      const suggestedCategories = await postRepository.suggestCategoriesFromTags(vision.tags.map((tag) => tag.tag));
-      ai.push({
-        mediaId,
-        tags: vision.tags,
-        ocrText: vision.ocrText,
-        safeSearch: vision.safeSearch,
-        suggestedCategories
-      });
     }
 
     await userRepository.createActivityLog({
@@ -146,14 +155,21 @@ export const mediaService = {
       action: "POST_MEDIA_UPLOADED",
       entityType: "POST",
       entityId: postId,
-      metadata: { count: uploadedMedia.length }
+      metadata: {
+        count: uploadedMedia.length,
+        itemImages: uploads.filter((upload) => upload.mediaKind === "ITEM").length,
+        evidenceImages: uploads.filter((upload) => upload.mediaKind === "EVIDENCE").length
+      }
     });
 
-    void matchingService.runForPost(postId).catch((error: unknown) => {
+    try {
+      const matches = await matchingService.runForPost(postId);
+      const matchSuggestions = post.type === "LOST" ? await matchingService.buildSuggestions(postId, matches) : [];
+      return { media: uploadedMedia, ai, matchSuggestions };
+    } catch (error: unknown) {
       console.warn(`Post matching failed after media upload: ${error instanceof Error ? error.message : "unknown error"}`);
-    });
-
-    return { media: uploadedMedia, ai };
+      return { media: uploadedMedia, ai, matchSuggestions: [] };
+    }
   },
 
   async deletePostMedia(auth: AccessTokenPayload, postId: string, mediaId: string) {

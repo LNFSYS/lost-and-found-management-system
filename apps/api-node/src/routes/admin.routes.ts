@@ -79,6 +79,22 @@ adminRoutes.patch("/handover-points/:id/active", requireAdmin, (request, respons
   adminController.setHandoverPointActive(request, response).catch(next);
 });
 
+adminRoutes.get("/warehouse-items", requireAdmin, (request, response, next) => {
+  adminController.warehouseItems(request, response).catch(next);
+});
+adminRoutes.post("/warehouse-items", requireAdmin, (request, response, next) => {
+  adminController.createWarehouseItem(request, response).catch(next);
+});
+adminRoutes.put("/warehouse-items/:id", requireAdmin, (request, response, next) => {
+  adminController.updateWarehouseItem(request, response).catch(next);
+});
+adminRoutes.patch("/warehouse-items/:id/status", requireAdmin, (request, response, next) => {
+  adminController.updateWarehouseItemStatus(request, response).catch(next);
+});
+adminRoutes.delete("/warehouse-items/:id", requireAdmin, (request, response, next) => {
+  adminController.deleteWarehouseItem(request, response).catch(next);
+});
+
 adminRoutes.get("/reports", requireAdmin, (request, response, next) => {
   adminController.reports(request, response).catch(next);
 });

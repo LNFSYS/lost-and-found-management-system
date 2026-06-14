@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { mediaService } from "../services/media.service.js";
+import { mediaService, type PostMediaUpload } from "../services/media.service.js";
 import { created, ok } from "../utils/api-response.js";
 import { HttpError } from "../utils/http-error.js";
 import { claimEvidenceBodySchema } from "../validators/media.validator.js";
@@ -12,16 +12,21 @@ function requireStringParam(value: string | string[] | undefined, name: string) 
   return value;
 }
 
-function getUploadedFiles(request: Request) {
+function getPostMediaUploads(request: Request): PostMediaUpload[] {
   if (!request.files) {
     return [];
   }
 
   if (Array.isArray(request.files)) {
-    return request.files;
+    return request.files.map((file) => ({ file, mediaKind: "ITEM" }));
   }
 
-  return Object.values(request.files).flat();
+  return Object.entries(request.files).flatMap(([fieldName, files]) =>
+    files.map((file) => ({
+      file,
+      mediaKind: fieldName === "evidenceImages" ? "EVIDENCE" : "ITEM"
+    }))
+  );
 }
 
 export const mediaController = {
@@ -32,7 +37,7 @@ export const mediaController = {
 
   async postMedia(request: Request, response: Response) {
     const postId = requireStringParam(request.params.id, "id");
-    const result = await mediaService.uploadPostMedia(request.auth!, postId, getUploadedFiles(request));
+    const result = await mediaService.uploadPostMedia(request.auth!, postId, getPostMediaUploads(request));
     response.status(201).json(created(result, "Post media uploaded"));
   },
 

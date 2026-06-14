@@ -38,6 +38,7 @@ interface MediaRow extends RowDataPacket {
   secure_url: string;
   public_id: string;
   resource_type: string;
+  media_kind: "ITEM" | "EVIDENCE";
   format: string | null;
   width: number | null;
   height: number | null;
@@ -63,12 +64,15 @@ interface MatchRow extends RowDataPacket {
   category_score: number;
   location_score: number;
   time_score: number;
+  is_notified: number;
   created_at: string;
 }
 
 interface MatchPostRow extends RowDataPacket {
   id: string;
+  user_id: string;
   type: PostType;
+  title: string;
   title_normalized: string;
   description_normalized: string;
   ai_tag_text: string | null;
@@ -103,7 +107,9 @@ interface ConfigNumberRow extends RowDataPacket {
 
 export interface MatchCandidatePost {
   id: string;
+  userId: string;
   type: PostType;
+  title: string;
   text: string;
   categoryId: string | null;
   parentCategoryId: string | null;
@@ -256,7 +262,9 @@ function buildListWhere(query: ListPostsQuery, userId?: string) {
 function mapMatchPost(row: MatchPostRow): MatchCandidatePost {
   return {
     id: row.id,
+    userId: row.user_id,
     type: row.type,
+    title: row.title,
     text: `${row.title_normalized} ${row.description_normalized} ${row.room_text ?? ""} ${row.ai_tag_text ?? ""}`.trim(),
     categoryId: row.category_id,
     parentCategoryId: row.parent_category_id,
@@ -264,6 +272,21 @@ function mapMatchPost(row: MatchPostRow): MatchCandidatePost {
     buildingId: row.building_id,
     roomText: row.room_text,
     lostFoundAt: row.lost_found_at
+  };
+}
+
+function mapMatch(row: MatchRow) {
+  return {
+    id: row.id,
+    lostPostId: row.lost_post_id,
+    foundPostId: row.found_post_id,
+    totalScore: row.total_score,
+    textScore: row.text_score,
+    categoryScore: row.category_score,
+    locationScore: row.location_score,
+    timeScore: row.time_score,
+    isNotified: row.is_notified === 1,
+    createdAt: row.created_at
   };
 }
 
@@ -367,7 +390,7 @@ export const postRepository = {
 
     const [mediaRows] = await dbPool.query<MediaRow[]>(
       `
-        SELECT id, secure_url, public_id, resource_type, format, width, height, bytes, sort_order, created_at
+        SELECT id, secure_url, public_id, resource_type, media_kind, format, width, height, bytes, sort_order, created_at
         FROM post_media
         WHERE post_id = ?
         ORDER BY sort_order, created_at
@@ -386,7 +409,7 @@ export const postRepository = {
     const [matchRows] = await dbPool.query<MatchRow[]>(
       `
         SELECT id, lost_post_id, found_post_id, total_score, text_score, category_score,
-               location_score, time_score, created_at
+               location_score, time_score, is_notified, created_at
         FROM match_results
         WHERE lost_post_id = ? OR found_post_id = ?
         ORDER BY total_score DESC
@@ -401,6 +424,7 @@ export const postRepository = {
         secureUrl: row.secure_url,
         publicId: row.public_id,
         resourceType: row.resource_type,
+        mediaKind: row.media_kind,
         format: row.format,
         width: row.width,
         height: row.height,
@@ -415,17 +439,7 @@ export const postRepository = {
         source: row.source,
         createdAt: row.created_at
       })),
-      matches: matchRows.map((row) => ({
-        id: row.id,
-        lostPostId: row.lost_post_id,
-        foundPostId: row.found_post_id,
-        totalScore: row.total_score,
-        textScore: row.text_score,
-        categoryScore: row.category_score,
-        locationScore: row.location_score,
-        timeScore: row.time_score,
-        createdAt: row.created_at
-      }))
+      matches: matchRows.map(mapMatch)
     };
   },
 
@@ -442,6 +456,7 @@ export const postRepository = {
     secureUrl: string;
     publicId: string;
     resourceType: string;
+    mediaKind?: "ITEM" | "EVIDENCE";
     format?: string;
     width?: number;
     height?: number;
@@ -451,9 +466,9 @@ export const postRepository = {
     await dbPool.execute(
       `
         INSERT INTO post_media (
-          id, post_id, secure_url, public_id, resource_type, format, width, height, bytes, sort_order
+          id, post_id, secure_url, public_id, resource_type, media_kind, format, width, height, bytes, sort_order
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         input.id,
@@ -461,6 +476,7 @@ export const postRepository = {
         input.secureUrl,
         input.publicId,
         input.resourceType,
+        input.mediaKind ?? "ITEM",
         input.format ?? null,
         input.width ?? null,
         input.height ?? null,
@@ -548,7 +564,7 @@ export const postRepository = {
     const [rows] = await dbPool.query<MatchPostRow[]>(
       `
         SELECT
-          p.id, p.type, p.title_normalized, p.description_normalized, tags.ai_tag_text,
+          p.id, p.user_id, p.type, p.title, p.title_normalized, p.description_normalized, tags.ai_tag_text,
           p.category_id, c.parent_id AS parent_category_id,
           p.area_id, p.building_id, p.room_text, p.lost_found_at
         FROM posts p
@@ -575,7 +591,7 @@ export const postRepository = {
     const [rows] = await dbPool.query<MatchPostRow[]>(
       `
         SELECT
-          p.id, p.type, p.title_normalized, p.description_normalized, tags.ai_tag_text,
+          p.id, p.user_id, p.type, p.title, p.title_normalized, p.description_normalized, tags.ai_tag_text,
           p.category_id, c.parent_id AS parent_category_id,
           p.area_id, p.building_id, p.room_text, p.lost_found_at
         FROM posts p
@@ -630,13 +646,65 @@ export const postRepository = {
         input.timeScore
       ]
     );
+
+    const [rows] = await dbPool.query<MatchRow[]>(
+      `
+        SELECT id, lost_post_id, found_post_id, total_score, text_score, category_score,
+               location_score, time_score, is_notified, created_at
+        FROM match_results
+        WHERE lost_post_id = ? AND found_post_id = ?
+        LIMIT 1
+      `,
+      [input.lostPostId, input.foundPostId]
+    );
+
+    const row = rows[0];
+    if (!row) {
+      throw new Error("Unable to load saved match result");
+    }
+
+    return mapMatch(row);
+  },
+
+  async markMatchNotified(matchId: string) {
+    await dbPool.execute("UPDATE match_results SET is_notified = TRUE WHERE id = ?", [matchId]);
+  },
+
+  async markPairMatched(lostPostId: string, foundPostId: string) {
+    await dbPool.execute(
+      `
+        UPDATE posts
+        SET status = 'MATCHED',
+            updated_at = UTC_TIMESTAMP()
+        WHERE id IN (?, ?)
+          AND status = 'OPEN'
+          AND deleted_at IS NULL
+      `,
+      [lostPostId, foundPostId]
+    );
+  },
+
+  async findByIds(ids: string[]) {
+    const uniqueIds = Array.from(new Set(ids)).filter(Boolean);
+    if (uniqueIds.length === 0) {
+      return [];
+    }
+
+    const placeholders = uniqueIds.map(() => "?").join(", ");
+    const [rows] = await dbPool.query<PostRow[]>(
+      `${basePostSelect()} WHERE p.id IN (${placeholders}) AND p.deleted_at IS NULL`,
+      uniqueIds
+    );
+
+    const order = new Map(uniqueIds.map((id, index) => [id, index]));
+    return rows.map(mapPost).sort((left, right) => (order.get(left.id) ?? 0) - (order.get(right.id) ?? 0));
   },
 
   async listMatchesForPost(postId: string) {
     const [rows] = await dbPool.query<MatchRow[]>(
       `
         SELECT id, lost_post_id, found_post_id, total_score, text_score, category_score,
-               location_score, time_score, created_at
+               location_score, time_score, is_notified, created_at
         FROM match_results
         WHERE lost_post_id = ? OR found_post_id = ?
         ORDER BY total_score DESC, created_at DESC
@@ -644,17 +712,7 @@ export const postRepository = {
       [postId, postId]
     );
 
-    return rows.map((row) => ({
-      id: row.id,
-      lostPostId: row.lost_post_id,
-      foundPostId: row.found_post_id,
-      totalScore: row.total_score,
-      textScore: row.text_score,
-      categoryScore: row.category_score,
-      locationScore: row.location_score,
-      timeScore: row.time_score,
-      createdAt: row.created_at
-    }));
+    return rows.map(mapMatch);
   },
 
   async list(query: ListPostsQuery, userId?: string) {

@@ -109,11 +109,14 @@ export const postService = {
       throw new HttpError(500, "Unable to create post");
     }
 
-    void matchingService.runForPost(post.id).catch((error: unknown) => {
+    try {
+      const matches = await matchingService.runForPost(post.id);
+      const matchSuggestions = input.type === "LOST" ? await matchingService.buildSuggestions(post.id, matches) : [];
+      return { post, matchSuggestions };
+    } catch (error: unknown) {
       console.warn(`Post matching failed after create: ${error instanceof Error ? error.message : "unknown error"}`);
-    });
-
-    return post;
+      return { post, matchSuggestions: [] };
+    }
   },
 
   async listPublicPosts(query: ListPostsQuery) {

@@ -1,4 +1,5 @@
 import { postRepository, type MatchCandidatePost } from "../repositories/post.repository.js";
+import { notificationRepository } from "../repositories/notification.repository.js";
 import { normalizeText } from "../utils/normalize-text.js";
 
 interface WeightedScores {
@@ -7,6 +8,14 @@ interface WeightedScores {
   locationScore: number;
   timeScore: number;
   totalScore: number;
+}
+
+export interface MatchRunResult extends WeightedScores {
+  id: string;
+  lostPostId: string;
+  foundPostId: string;
+  isNotified: boolean;
+  createdAt: string;
 }
 
 function tokenize(text: string) {
@@ -127,8 +136,9 @@ function normalizeScore(value: number) {
 }
 
 async function loadWeights() {
-  const [threshold, weightText, weightCategory, weightLocation, weightTime] = await Promise.all([
+  const [threshold, notificationThreshold, weightText, weightCategory, weightLocation, weightTime] = await Promise.all([
     postRepository.getConfigNumber("matching.threshold", 0.4),
+    postRepository.getConfigNumber("matching.notification_threshold", 0.8),
     postRepository.getConfigNumber("matching.weight_text", 0.4),
     postRepository.getConfigNumber("matching.weight_category", 0.3),
     postRepository.getConfigNumber("matching.weight_location", 0.2),
@@ -137,6 +147,7 @@ async function loadWeights() {
 
   return {
     threshold,
+    notificationThreshold,
     weightText,
     weightCategory,
     weightLocation,
@@ -148,6 +159,74 @@ function pairIds(left: MatchCandidatePost, right: MatchCandidatePost) {
   return left.type === "LOST"
     ? { lostPostId: left.id, foundPostId: right.id }
     : { lostPostId: right.id, foundPostId: left.id };
+}
+
+function percent(value: number) {
+  return `${Math.round(value * 100)}%`;
+}
+
+async function notifyHighConfidenceMatch(
+  post: MatchCandidatePost,
+  candidate: MatchCandidatePost,
+  match: MatchRunResult
+) {
+  if (match.isNotified) {
+    return;
+  }
+
+  await postRepository.markPairMatched(match.lostPostId, match.foundPostId);
+
+  const lostPost = post.type === "LOST" ? post : candidate;
+  const foundPost = post.type === "FOUND" ? post : candidate;
+  const scoreText = percent(match.totalScore);
+
+  await notificationRepository.createMany([
+    {
+      userId: lostPost.userId,
+      type: "MATCH_FOUND",
+      title: "Có vật nhặt được giống bài mất đồ của bạn",
+      body: `"${foundPost.title}" giống ${scoreText} với bài "${lostPost.title}".`,
+      entityType: "POST",
+      entityId: foundPost.id
+    },
+    {
+      userId: foundPost.userId,
+      type: "MATCH_FOUND",
+      title: "Có bài mất đồ mới giống vật bạn đã đăng",
+      body: `"${lostPost.title}" giống ${scoreText} với bài "${foundPost.title}".`,
+      entityType: "POST",
+      entityId: lostPost.id
+    }
+  ]);
+
+  await postRepository.markMatchNotified(match.id);
+  match.isNotified = true;
+}
+
+async function buildMatchSuggestions(postId: string, matches: MatchRunResult[], minimumScore: number) {
+  const sourcePost = await postRepository.findById(postId);
+  if (!sourcePost) {
+    return [];
+  }
+
+  const relevantMatches = matches
+    .filter((match) => match.totalScore >= minimumScore)
+    .sort((left, right) => right.totalScore - left.totalScore);
+  const counterpartIds = relevantMatches.map((match) =>
+    sourcePost.type === "LOST" ? match.foundPostId : match.lostPostId
+  );
+  const posts = await postRepository.findByIds(counterpartIds);
+  const postById = new Map(posts.map((post) => [post.id, post]));
+
+  return relevantMatches
+    .map((match) => {
+      const counterpartId = sourcePost.type === "LOST" ? match.foundPostId : match.lostPostId;
+      const post = postById.get(counterpartId);
+      return post ? { match, post } : null;
+    })
+    .filter((suggestion): suggestion is { match: MatchRunResult; post: NonNullable<typeof posts[number]> } =>
+      Boolean(suggestion)
+    );
 }
 
 export const matchingService = {
@@ -165,7 +244,7 @@ export const matchingService = {
     const weights = await loadWeights();
     const vectors = buildTfidfVectors([post.text, ...candidates.map((candidate) => candidate.text)]);
     const postVector = vectors[0];
-    const results: Array<WeightedScores & { lostPostId: string; foundPostId: string }> = [];
+    const results: MatchRunResult[] = [];
 
     for (const [index, candidate] of candidates.entries()) {
       const textScore = normalizeScore(cosineSimilarity(postVector, vectors[index + 1]));
@@ -184,7 +263,7 @@ export const matchingService = {
       }
 
       const ids = pairIds(post, candidate);
-      await postRepository.upsertMatchResult({
+      const match = await postRepository.upsertMatchResult({
         ...ids,
         totalScore,
         textScore,
@@ -192,17 +271,18 @@ export const matchingService = {
         locationScore: locScore,
         timeScore: temporalScore
       });
-      results.push({
-        ...ids,
-        totalScore,
-        textScore,
-        categoryScore: catScore,
-        locationScore: locScore,
-        timeScore: temporalScore
-      });
+      results.push(match);
+
+      if (totalScore >= weights.notificationThreshold) {
+        await notifyHighConfidenceMatch(post, candidate, match);
+      }
     }
 
     return results;
+  },
+
+  async buildSuggestions(postId: string, matches: MatchRunResult[], minimumScore = 0.8) {
+    return buildMatchSuggestions(postId, matches, minimumScore);
   },
 
   async listMatches(postId: string) {

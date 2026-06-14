@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { authService } from "../services/auth.service.js";
+import { notificationRepository } from "../repositories/notification.repository.js";
 import { created, ok } from "../utils/api-response.js";
 import {
   forgotPasswordSchema,
@@ -99,5 +100,21 @@ export const authController = {
     const userId = request.auth!.sub;
     const reputation = await authService.getReputation(userId);
     response.json(ok({ reputation }));
+  },
+
+  async notifications(request: Request, response: Response) {
+    const userId = request.auth!.sub;
+    const limit = Math.min(Number(request.query.limit ?? 20), 100);
+    response.json(ok(await notificationRepository.listForUser(userId, limit)));
+  },
+
+  async markNotificationRead(request: Request, response: Response) {
+    const userId = request.auth!.sub;
+    response.json(ok(await notificationRepository.markRead(userId, String(request.params.id))));
+  },
+
+  async markAllNotificationsRead(request: Request, response: Response) {
+    const userId = request.auth!.sub;
+    response.json(ok(await notificationRepository.markAllRead(userId)));
   }
 };

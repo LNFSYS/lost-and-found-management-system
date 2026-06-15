@@ -9,7 +9,7 @@ Bạn là một senior full-stack engineer được giao nhiệm vụ **hoàn th
 
 1. Viết code thực tế, chạy được — không viết placeholder hay TODO trống.
 2. Tạo và migrate database schema đầy đủ.
-3. Sau mỗi task hoàn thành, **cập nhật ngay** vào file `dev-owned-usecase-checklist.md` bằng cách đổi `[ ]` thành `[x]` cho đúng UC và đúng dev-owner.
+3. Sau mỗi task hoàn thành, **cập nhật ngay** vào file `master-dev-checklist.md` bằng cách đổi `[ ]` thành `[x]` cho đúng UC và đúng dev-owner.
 4. Nếu một bước cần **API key / secret** (Cloudinary, Google Cloud Vision, email SMTP, JWT secret...), hãy **dừng lại**, ghi rõ tên biến môi trường cần thiết vào `.env.example`, không hardcode, không giả mạo giá trị, và tiếp tục các bước không phụ thuộc key đó trước.
 5. Luôn giữ code trong monorepo structure đã định nghĩa.
 
@@ -99,7 +99,7 @@ Border:                  crisp, 1px, neutral gray
 ├── docs/
 │   ├── architecture.md
 │   ├── db-auth-design.md
-│   ├── dev-owned-usecase-checklist.md
+│   ├── master-dev-checklist.md
 │   └── lost-found-system-overview.md
 ├── .env.example                    ← Template biến môi trường, KHÔNG có giá trị thật
 └── docker-compose.yml              ← MySQL + Redis (optional)
@@ -276,6 +276,7 @@ CREATE TABLE post_media (
   secure_url VARCHAR(500) NOT NULL,
   public_id VARCHAR(255) NOT NULL,
   resource_type VARCHAR(20) NOT NULL DEFAULT 'image',
+  media_kind ENUM('ITEM', 'EVIDENCE') NOT NULL DEFAULT 'ITEM',
   format VARCHAR(10) NULL,
   width INT NULL,
   height INT NULL,
@@ -407,7 +408,45 @@ CREATE TABLE storage_logs (
   CONSTRAINT fk_storage_logs_actor FOREIGN KEY (actor_id) REFERENCES users(id),
   KEY idx_storage_logs_post (post_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE warehouse_items (
+  id CHAR(36) PRIMARY KEY,
+  post_id CHAR(36) NULL,
+  handover_point_id CHAR(36) NULL,
+  category_id CHAR(36) NULL,
+  area_id CHAR(36) NULL,
+  building_id CHAR(36) NULL,
+  finder_id CHAR(36) NULL,
+  item_name VARCHAR(180) NOT NULL,
+  description TEXT NULL,
+  condition_notes TEXT NULL,
+  storage_code VARCHAR(80) NULL,
+  status ENUM('RECEIVED', 'STORED', 'CLAIMED', 'RETURNED', 'DISPOSED') NOT NULL DEFAULT 'RECEIVED',
+  received_at DATETIME NULL,
+  stored_at DATETIME NULL,
+  returned_at DATETIME NULL,
+  created_by CHAR(36) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at DATETIME NULL,
+  CONSTRAINT fk_warehouse_post FOREIGN KEY (post_id) REFERENCES posts(id),
+  CONSTRAINT fk_warehouse_hp FOREIGN KEY (handover_point_id) REFERENCES handover_points(id),
+  CONSTRAINT fk_warehouse_category FOREIGN KEY (category_id) REFERENCES item_categories(id),
+  CONSTRAINT fk_warehouse_area FOREIGN KEY (area_id) REFERENCES campus_areas(id),
+  CONSTRAINT fk_warehouse_building FOREIGN KEY (building_id) REFERENCES campus_buildings(id),
+  CONSTRAINT fk_warehouse_finder FOREIGN KEY (finder_id) REFERENCES users(id),
+  CONSTRAINT fk_warehouse_created_by FOREIGN KEY (created_by) REFERENCES users(id),
+  KEY idx_warehouse_status (status),
+  KEY idx_warehouse_post (post_id),
+  KEY idx_warehouse_handover_point (handover_point_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
+
+Planned warehouse lifecycle extension:
+- Retention policy by item type/value: normal items 30-60 days, high-value items 90 days, personal documents/student cards transferred to CTSV/security when needed.
+- Lifecycle statuses for the full warehouse module: `PENDING_APPROVAL`, `STORED`, `CLAIMED`, `RETURNED`, `EXPIRED`, `DISPOSED`, `DONATED`, `TRANSFERRED`.
+- Expired item processing must record reason, actor, processed date, resulting status, notes and optional proof image.
+- Warehouse capacity must support max capacity, 80% warning and 100% full-state prevention/suggestion.
 
 ### 5.6 Bảng cần tạo thêm — Appointments
 
@@ -581,6 +620,7 @@ INSERT INTO config_entries (id, config_key, config_value, value_type, descriptio
   (UUID(), 'post.max_image_size_mb',    '10',         'INTEGER', 'Dung lượng ảnh tối đa (MB)',                        TRUE),
   (UUID(), 'post.allowed_image_formats','jpg,png,webp','STRING',  'Định dạng ảnh cho phép (CSV)',                      TRUE),
   (UUID(), 'matching.threshold',        '0.4',        'FLOAT',  'Ngưỡng điểm matching để hiển thị gợi ý',            TRUE),
+  (UUID(), 'matching.notification_threshold','0.8',    'FLOAT',  'Ngưỡng điểm matching để gửi notification',          TRUE),
   (UUID(), 'matching.weight_text',      '0.4',        'FLOAT',  'Trọng số text similarity',                          FALSE),
   (UUID(), 'matching.weight_category',  '0.3',        'FLOAT',  'Trọng số category match',                           FALSE),
   (UUID(), 'matching.weight_location',  '0.2',        'FLOAT',  'Trọng số location match',                           FALSE),
@@ -598,9 +638,13 @@ Implement các route sau. Mỗi route cần: controller, service, repository, va
 
 | Method | Path | Auth | UC |
 |---|---|---|---|
+| POST | `/api/auth/register/request-otp` | Public | UC-003 |
 | POST | `/api/auth/register` | Public | UC-001, UC-003 |
 | POST | `/api/auth/verify-otp` | Public | UC-004 |
+| POST | `/api/auth/resend-otp` | Public | UC-003 |
 | POST | `/api/auth/login` | Public | UC-005 |
+| POST | `/api/auth/forgot-password` | Public | UC-174 |
+| POST | `/api/auth/reset-password` | Public | UC-174 |
 | GET  | `/api/auth/google` | Public | UC-006 |
 | GET  | `/api/auth/google/callback` | Public | UC-006 |
 | POST | `/api/auth/logout` | Bearer | UC-007 |
@@ -610,6 +654,9 @@ Implement các route sau. Mỗi route cần: controller, service, repository, va
 | POST | `/api/auth/avatar` | Bearer | UC-013 |
 | GET  | `/api/auth/activity` | Bearer | UC-014 |
 | GET  | `/api/auth/reputation` | Bearer | UC-015 |
+| GET  | `/api/auth/notifications` | Bearer | UC-134 |
+| PATCH | `/api/auth/notifications/:id/read` | Bearer | UC-134 |
+| PATCH | `/api/auth/notifications/read-all` | Bearer | UC-134 |
 
 ### Posts
 
@@ -622,7 +669,7 @@ Implement các route sau. Mỗi route cần: controller, service, repository, va
 | PUT  | `/api/posts/:id` | Bearer | UC-022 |
 | PATCH| `/api/posts/:id/status` | Bearer | UC-023, UC-029 |
 | DELETE | `/api/posts/:id` | Bearer/Admin | UC-024 |
-| POST | `/api/posts/:id/media` | Bearer | UC-035–UC-042 |
+| POST | `/api/posts/:id/media` | Bearer | UC-035–UC-042, UC-080 |
 | DELETE | `/api/posts/:id/media/:mediaId` | Bearer | UC-045 |
 
 ### Search
@@ -661,6 +708,16 @@ Implement các route sau. Mỗi route cần: controller, service, repository, va
 | GET | `/api/locations/areas` | Public | - |
 | GET | `/api/locations/areas/:id/buildings` | Public | - |
 | GET | `/api/categories` | Public | - |
+
+### Admin Node API
+
+| Method | Path | Auth | UC |
+|---|---|---|---|
+| GET | `/api/admin/warehouse-items` | ADMIN | UC-110 |
+| POST | `/api/admin/warehouse-items` | ADMIN | UC-110 |
+| PUT | `/api/admin/warehouse-items/:id` | ADMIN | UC-110 |
+| PATCH | `/api/admin/warehouse-items/:id/status` | ADMIN | UC-110 |
+| DELETE | `/api/admin/warehouse-items/:id` | ADMIN | UC-110 |
 
 ### Swagger
 
@@ -783,10 +840,11 @@ Authenticate Socket.IO connection bằng JWT trong handshake query hoặc `auth`
 > Nếu chưa có, để hàm trả về `{ tags: [], ocr_text: '' }` và tiếp tục.
 
 Flow khi upload ảnh cho post:
-1. Upload lên Cloudinary → nhận `secure_url`.
-2. Gửi `secure_url` đến Google Vision API (LABEL_DETECTION + OCR_TEXT + OBJECT_LOCALIZATION).
-3. Lưu kết quả vào bảng `ai_tags`.
-4. Gợi ý category dựa trên label → trả về frontend để user confirm.
+1. Upload `images` và `evidenceImages` lên Cloudinary → nhận `secure_url`.
+2. Lưu `post_media.media_kind`: `ITEM` cho `images`, `EVIDENCE` cho `evidenceImages`.
+3. Chỉ gửi ảnh `ITEM` đến Google Vision API (LABEL_DETECTION + OCR_TEXT + OBJECT_LOCALIZATION).
+4. Lưu kết quả vào bảng `ai_tags`.
+5. Gợi ý category và match phù hợp → trả về frontend để user confirm/xem nhanh.
 
 ### 9.2 Matching Engine
 
@@ -794,10 +852,11 @@ Flow khi tạo/cập nhật post:
 1. Lấy tất cả bài đăng loại ngược lại (LOST↔FOUND) còn `OPEN`.
 2. Tính `text_score` bằng TF-IDF + Cosine Similarity trên `title_normalized + description_normalized`.
 3. Tính `category_score`: 1.0 nếu cùng category, 0.5 nếu cùng parent, 0 nếu khác.
-4. Tính `location_score`: 1.0 cùng room, 0.7 cùng building, 0.4 cùng area, 0 khác.
+4. Tính `location_score`: 1.0 cùng địa điểm cụ thể, 0.7 cùng building, 0.4 cùng area, 0 khác.
 5. Tính `time_score`: 1.0 nếu trong 24h, giảm dần theo công thức `1/(1 + days_diff/7)`.
 6. `total_score = w_text*text + w_cat*cat + w_loc*loc + w_time*time` (weights từ `config_entries`).
-7. Nếu `total_score >= matching.threshold` → upsert `match_results` → emit `match:new` qua Socket.IO nếu chưa notify.
+7. Nếu `total_score >= matching.threshold` → upsert `match_results`.
+8. Nếu `total_score >= matching.notification_threshold` và chưa notify → tạo `MATCH_FOUND` notification cho hai user, chuyển cặp bài còn `OPEN` sang `MATCHED`, đánh dấu `is_notified`.
 
 ---
 
@@ -805,7 +864,7 @@ Flow khi tạo/cập nhật post:
 
 ### 10.1 Sau mỗi UC hoàn thành
 
-Mở file `docs/dev-owned-usecase-checklist.md`, tìm đúng dòng UC đó của đúng dev-owner, đổi `[ ]` thành `[x]`. Ví dụ:
+Mở file `docs/master-dev-checklist.md`, tìm đúng dòng UC đó của đúng dev-owner, đổi `[ ]` thành `[x]`. Ví dụ:
 
 ```markdown
 -- TRƯỚC
@@ -866,7 +925,7 @@ Sprint 10: Testing, Swagger docs, Docker, deploy
 ```
 [ ] Migration file tạo đủ tất cả bảng mới
 [ ] .env.example có đủ biến, không có giá trị thật
-[ ] UC trong dev-owned-usecase-checklist.md đã được tick [x]
+[ ] UC trong master-dev-checklist.md đã được tick [x]
 [ ] API trả đúng cấu trúc { success, data, error }
 [ ] Swagger annotation đầy đủ cho endpoint mới
 [ ] Không có console.log debug trong production code
@@ -882,7 +941,7 @@ Sprint 10: Testing, Swagger docs, Docker, deploy
 
 | File | Cập nhật khi nào |
 |---|---|
-| `docs/dev-owned-usecase-checklist.md` | Sau mỗi UC hoàn thành |
+| `docs/master-dev-checklist.md` | Sau mỗi UC hoàn thành |
 | `.env.example` | Khi phát hiện cần thêm biến môi trường mới |
 | `docs/architecture.md` | Khi thêm route mới, module mới, hoặc thay đổi kiến trúc |
 | `apps/api-node/swagger.yaml` (hoặc inline JSDoc) | Khi thêm/sửa endpoint |
@@ -890,5 +949,5 @@ Sprint 10: Testing, Swagger docs, Docker, deploy
 
 ---
 
-*Prompt này được tạo dựa trên: `lost-found-system-overview.md`, `dev-owned-usecase-checklist.md`, `db-auth-design.md`, `architecture.md`.*  
+*Prompt này được tạo dựa trên: `lost-found-system-overview.md`, `master-dev-checklist.md`, `db-auth-design.md`, `architecture.md`.*
 *Cập nhật lần cuối: 05/06/2026*

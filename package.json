@@ -4,10 +4,17 @@
   "version": "0.1.0",
   "description": "AI-powered Lost & Found Management System for FPT University campus.",
   "scripts": {
+    "dev": "concurrently -n API,WEB -c blue,green \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:all": "concurrently -n API,WEB,JAVA -c blue,green,yellow \"npm run dev:api\" \"npm run dev:web\" \"npm run dev:java\"",
     "dev:web": "npm --workspace apps/web run dev",
     "dev:api": "npm --workspace apps/api-node run dev",
+    "dev:java": "mvn -f apps/java-admin-service/pom.xml spring-boot:run",
     "check:db": "npm --workspace apps/api-node run check:db",
     "migrate:api": "npm --workspace apps/api-node run migrate",
+    "build": "npm run build:api && npm run build:web",
+    "build:all": "npm run build:api && npm run build:web && npm run build:java",
+    "check": "npm run build",
+    "check:all": "npm run build:all",
     "build:web": "npm --workspace apps/web run build",
     "build:api": "npm --workspace apps/api-node run build",
     "build:java": "mvn -f apps/java-admin-service/pom.xml package -DskipTests",
@@ -16,5 +23,8 @@
   "workspaces": [
     "apps/*",
     "shared"
-  ]
+  ],
+  "devDependencies": {
+    "concurrently": "^10.0.3"
+  }
 }

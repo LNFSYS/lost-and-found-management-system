@@ -24,13 +24,14 @@ Tài liệu này mô tả Functional Requirements (FR) và Non-Functional Requir
 | MEDIA | Upload ảnh bài đăng, evidence, avatar. |
 | AI/MATCH | Google Vision, OCR, matching lost/found. |
 | CLAIM | Claim đồ, evidence, state transition. |
-| HANDOVER | Điểm bàn giao, lưu giữ, trả đồ, storage log. |
+| HANDOVER | Điểm bàn giao, kho đồ, lưu giữ, trả đồ, storage log. |
 | ADMIN | Dashboard, kiểm duyệt bài đăng và CRUD quản trị. |
 | REPORT | Report vi phạm và moderation action. |
 | CONFIG | Public/admin config và lịch sử thay đổi. |
 | APPT | Return appointment sau claim accepted. |
-| CHAT/NOTI | Chat realtime và notification. |
+| CHAT/NOTI | Chat realtime, notification in-app và trạng thái đã đọc. |
 | MOBILE | Mobile application flows. |
+| AI-TRAINING | Dataset, labeling, model training, evaluation, deployment và feedback loop cho AI riêng. |
 
 ## 1. AUTH - Authentication and Account Module
 
@@ -182,6 +183,7 @@ Tài liệu này mô tả Functional Requirements (FR) và Non-Functional Requir
 | FR-MEDIA-05 | Owner/admin có thể xóa media của bài. | P1 | Implemented |
 | FR-MEDIA-06 | User có thể upload ảnh trong chat. | P2 | Planned |
 | FR-MEDIA-07 | Ảnh đầu tiên của `post_media` được dùng làm ảnh bìa trong danh sách bài cộng đồng. | P1 | Implemented |
+| FR-MEDIA-08 | Ảnh bài đăng phải phân loại `ITEM` và `EVIDENCE`; AI chỉ phân tích ảnh `ITEM`. | P1 | Implemented |
 
 ### Non-Functional Requirements
 
@@ -191,6 +193,7 @@ Tài liệu này mô tả Functional Requirements (FR) và Non-Functional Requir
 | NFR-MEDIA-02 | File upload phải đúng giới hạn dung lượng được cấu hình. | P0 | Implemented |
 | NFR-MEDIA-03 | Nếu Cloudinary chưa cấu hình, API phải trả lỗi có cấu trúc thay vì crash. | P1 | Implemented |
 | NFR-MEDIA-04 | Claim evidence phải lưu private và chỉ trả URL cho user có quyền. | P0 | Implemented |
+| NFR-MEDIA-05 | Upload ảnh vật phẩm và ảnh bằng chứng trong cùng request phải giữ đúng `media_kind`. | P1 | Implemented |
 
 ### Core Acceptance Criteria
 
@@ -199,6 +202,7 @@ Tài liệu này mô tả Functional Requirements (FR) và Non-Functional Requir
 | FR-MEDIA-01/02 | Given file đúng format/size, when upload, then hệ thống lưu secure URL/public id và gắn đúng post hoặc claim. |
 | FR-MEDIA-01/02 | Given file sai format hoặc quá size, when upload, then API trả validation error và không lưu media. |
 | FR-MEDIA-02 | Given user không liên quan claim, when request evidence URL, then API từ chối truy cập. |
+| FR-MEDIA-08 | Given user upload `images` và `evidenceImages`, when upload thành công, then `post_media.media_kind` lưu lần lượt `ITEM` và `EVIDENCE`; Google Vision chỉ chạy với ảnh `ITEM`. |
 
 ## 6. AI/MATCH - AI Recognition and Matching Module
 
@@ -212,23 +216,26 @@ Tài liệu này mô tả Functional Requirements (FR) và Non-Functional Requir
 | FR-MATCH-02 | Hệ thống chạy lại matching sau khi cập nhật bài. | P0 | Implemented |
 | FR-MATCH-03 | Hệ thống tính text, category, location, time và total score. | P0 | Implemented |
 | FR-MATCH-04 | Kết quả đạt threshold phải được lưu. | P0 | Implemented |
-| FR-MATCH-05 | Hệ thống gửi notification khi có match tốt. | P1 | Planned |
+| FR-MATCH-05 | Hệ thống gửi notification khi có match tốt. | P1 | Implemented |
+| FR-MATCH-06 | Sau khi tạo bài hoặc upload ảnh, hệ thống trả danh sách gợi ý match cho bài `LOST` nếu có. | P1 | Implemented |
 
 ### Non-Functional Requirements
 
 | ID | Requirement | Priority | Status |
 | --- | --- | --- | --- |
 | NFR-AI-01 | Nếu Google Vision lỗi hoặc thiếu API key, upload ảnh vẫn tiếp tục. | P1 | Implemented |
-| NFR-MATCH-01 | Matching không được block request tạo/cập nhật bài. | P0 | Implemented |
-| NFR-MATCH-02 | Threshold và weights phải đọc từ config. | P0 | Implemented |
+| NFR-MATCH-01 | Lỗi matching không được làm fail request tạo/cập nhật bài đã lưu thành công. | P0 | Implemented |
+| NFR-MATCH-02 | Threshold lưu kết quả, threshold gửi notification và weights phải đọc từ config. | P0 | Implemented |
 | NFR-MATCH-03 | Matching nên chuyển sang background queue khi dữ liệu lớn. | P1 | Planned |
 
 ### Core Acceptance Criteria
 
 | FR | Acceptance Criteria |
 | --- | --- |
-| FR-MATCH-01/02 | Given bài được tạo/cập nhật, when request hoàn tất, then matching được enqueue/chạy bất đồng bộ và không làm request bị chậm theo toàn bộ dataset. |
+| FR-MATCH-01/02 | Given bài được tạo/cập nhật, when matching service lỗi, then request vẫn trả bài đã lưu và log lỗi để xử lý sau. |
 | FR-MATCH-03/04 | Given cặp LOST/FOUND đủ ngưỡng, when matching chạy, then `match_results` lưu score thành phần và total score. |
+| FR-MATCH-05 | Given cặp LOST/FOUND có `total_score >= matching.notification_threshold`, when matching chạy, then hệ thống tạo notification cho cả hai chủ bài, đánh dấu match đã notify và chuyển hai bài còn `OPEN` sang `MATCHED`. |
+| FR-MATCH-06 | Given user tạo bài `LOST` hoặc upload ảnh vật phẩm, when có match phù hợp, then response trả `matchSuggestions` để UI mở dialog gợi ý. |
 
 ## 7. CLAIM - Claim and Evidence Module
 
@@ -257,6 +264,7 @@ Tài liệu này mô tả Functional Requirements (FR) và Non-Functional Requir
 | NFR-CLAIM-03 | Java claim transition phải lock row khi ghi. | P0 | Implemented |
 | NFR-CLAIM-04 | Claim `NEED_MORE_INFO` chỉ được accept khi có evidence mới. | P0 | Implemented |
 | NFR-CLAIM-05 | Evidence không được lộ cho user không liên quan. | P0 | Implemented |
+| NFR-CLAIM-06 | Sau khi claim được tạo ở Node API, mọi cập nhật `claims.status` phải thuộc Java Admin Service; Node chỉ được tạo claim, đọc claim và thêm evidence. | P0 | Implemented |
 
 ### Core Acceptance Criteria
 
@@ -265,6 +273,7 @@ Tài liệu này mô tả Functional Requirements (FR) và Non-Functional Requir
 | FR-CLAIM-01/04 | Given user đã claim post A, when claim lại cùng post, then API trả lỗi duplicate và DB unique key bảo vệ dữ liệu. |
 | FR-CLAIM-07/08 | Given claim `NEED_MORE_INFO`, when admin accept mà claimant chưa upload evidence mới, then API từ chối transition. |
 | FR-CLAIM-08/09 | Given hai request admin xử lý cùng claim, when ghi trạng thái, then Java service lock row và chỉ một transition hợp lệ được commit. |
+| FR-CLAIM-08/09/10 | Given cần đổi trạng thái claim sau khi tạo, when gọi API, then chỉ Java Admin Service được ghi `claims.status`; Node API không có endpoint transition claim status. |
 | FR-CLAIM-10 | Given claim không còn `PENDING`, when claimant cancel, then API từ chối. |
 
 ## 8. HANDOVER - Handover Point and Storage Module
@@ -280,7 +289,15 @@ Tài liệu này mô tả Functional Requirements (FR) và Non-Functional Requir
 | FR-HANDOVER-05 | Staff/admin có thể xác nhận đã nhận đồ tại điểm bàn giao. | P0 | Implemented |
 | FR-HANDOVER-06 | Staff/admin có thể cập nhật trạng thái lưu giữ đồ. | P1 | Partial |
 | FR-HANDOVER-07 | Staff/admin có thể xác nhận đã trả đồ. | P0 | Implemented |
-| FR-HANDOVER-08 | Admin/staff có thể xem danh sách đồ đang lưu giữ/chưa nhận. | P1 | Planned |
+| FR-HANDOVER-08 | Admin có thể xem danh sách đồ đang lưu giữ/chưa nhận trong kho. | P1 | Implemented |
+| FR-HANDOVER-09 | Admin có thể tạo, cập nhật, đổi trạng thái và xóa mềm đồ trong kho. | P1 | Implemented |
+| FR-HANDOVER-10 | Hệ thống hỗ trợ cấu hình thời hạn lưu giữ theo loại đồ/mức độ giá trị, ví dụ đồ thường 30-60 ngày, đồ giá trị cao 90 ngày, giấy tờ cá nhân ưu tiên chuyển bộ phận trường. | P1 | Planned |
+| FR-HANDOVER-11 | Hệ thống tự động cảnh báo admin khi item sắp quá hạn lưu giữ, mặc định còn 7 ngày, và đánh dấu item quá hạn khi hết hạn. | P1 | Planned |
+| FR-HANDOVER-12 | Admin có thể quản lý vòng đời item lưu kho với các trạng thái `PENDING_APPROVAL`, `STORED`, `CLAIMED`, `RETURNED`, `EXPIRED`, `DISPOSED`, `DONATED`, `TRANSFERRED`. | P1 | Partial |
+| FR-HANDOVER-13 | Admin có thể xử lý item quá hạn bằng cách hủy/thanh lý, quyên góp, chuyển bộ phận trường hoặc gia hạn lưu giữ theo loại đồ. | P1 | Planned |
+| FR-HANDOVER-14 | Admin phải lập biên bản xử lý item quá hạn gồm lý do, người xử lý, ngày xử lý, trạng thái sau xử lý, ghi chú và ảnh minh chứng nếu cần. | P1 | Planned |
+| FR-HANDOVER-15 | Admin có thể cấu hình sức chứa kho/điểm lưu giữ và nhận cảnh báo khi kho đạt ngưỡng 80% hoặc đầy 100%. | P1 | Planned |
+| FR-HANDOVER-16 | Khi kho đã đầy 100%, hệ thống không cho chọn kho đó để nhận thêm item hoặc đề xuất kho khác còn sức chứa. | P1 | Planned |
 
 ### Non-Functional Requirements
 
@@ -289,6 +306,9 @@ Tài liệu này mô tả Functional Requirements (FR) và Non-Functional Requir
 | NFR-HANDOVER-01 | Handover point liên kết location phải dùng id hợp lệ. | P0 | Implemented |
 | NFR-HANDOVER-02 | Mỗi thao tác nhận/lưu/trả đồ phải có storage log. | P0 | Implemented |
 | NFR-HANDOVER-03 | CRUD điểm bàn giao trên Node Admin API chỉ dành cho `ADMIN`. | P0 | Implemented |
+| NFR-HANDOVER-04 | CRUD kho đồ trên Node Admin API chỉ dành cho `ADMIN` và chỉ được liên kết với bài `FOUND` khi có `post_id`. | P0 | Implemented |
+| NFR-HANDOVER-05 | Mọi xử lý quá hạn phải audit được và không được xóa mất lịch sử vòng đời item. | P0 | Planned |
+| NFR-HANDOVER-06 | Kiểm tra sức chứa kho phải nhất quán khi nhiều admin/staff cùng tiếp nhận item. | P1 | Planned |
 
 ### Core Acceptance Criteria
 
@@ -296,6 +316,10 @@ Tài liệu này mô tả Functional Requirements (FR) và Non-Functional Requir
 | --- | --- |
 | FR-HANDOVER-02/03/04 | Given user role `ADMIN`, when tạo/sửa/bật tắt handover point với dữ liệu hợp lệ, then dữ liệu được lưu và phản ánh ở public config/list active. |
 | FR-HANDOVER-05/07 | Given staff/admin xác nhận nhận hoặc trả đồ, when action thành công, then hệ thống ghi storage log với actor, thời gian và trạng thái. |
+| FR-HANDOVER-08/09 | Given admin mở tab Kho đồ, when tạo/sửa/đổi trạng thái/xóa mềm item hợp lệ, then `warehouse_items` được cập nhật và danh sách refresh theo trạng thái mới. |
+| FR-HANDOVER-10/11 | Given item có hạn lưu giữ, when còn 7 ngày tới hạn hoặc đã quá hạn, then hệ thống tạo cảnh báo cho admin và cập nhật trạng thái phù hợp. |
+| FR-HANDOVER-12/13/14 | Given item đã `EXPIRED`, when admin xử lý, then hệ thống chỉ cho phép trạng thái xử lý hợp lệ và lưu biên bản gồm lý do, actor, ngày xử lý, ghi chú và ảnh minh chứng nếu có. |
+| FR-HANDOVER-15/16 | Given kho đạt 80% sức chứa, when admin xem dashboard/kho, then có cảnh báo; given kho đạt 100%, when chọn kho để nhận item mới, then hệ thống từ chối hoặc đề xuất kho khác. |
 
 ## 9. ADMIN - Admin Dashboard and CRUD Module
 
@@ -303,7 +327,7 @@ Tài liệu này mô tả Functional Requirements (FR) và Non-Functional Requir
 
 | ID | Requirement | Priority | Status |
 | --- | --- | --- | --- |
-| FR-ADMIN-01 | Admin UI có sidebar gồm Dashboard, Kiểm duyệt, Danh mục, Khu vực, Bàn giao, Người dùng, Báo cáo. | P0 | Implemented |
+| FR-ADMIN-01 | Admin UI có sidebar gồm Dashboard, Kiểm duyệt, Danh mục, Khu vực, Bàn giao, Kho đồ, Người dùng, Báo cáo. | P0 | Implemented |
 | FR-ADMIN-02 | Admin dashboard hiển thị metric tổng quan. | P0 | Implemented |
 | FR-ADMIN-03 | Admin có thể tạo, sửa, ẩn/kích hoạt danh mục theo hai cấp dễ hiểu: nhóm chính và danh mục cụ thể. | P0 | Implemented |
 | FR-ADMIN-04 | Admin có thể tạo, sửa, ẩn/kích hoạt khu vực; form UI không yêu cầu nhập thứ tự hiển thị. | P0 | Implemented |
@@ -315,6 +339,7 @@ Tài liệu này mô tả Functional Requirements (FR) và Non-Functional Requir
 | FR-ADMIN-10 | Admin có thể xử lý report bằng warn/hide/delete/ban/unban. | P0 | Implemented |
 | FR-ADMIN-11 | Admin có tab kiểm duyệt bài đăng với filter theo loại, trạng thái, từ khóa, xem chi tiết bài và các action hoàn thành/đóng/mở lại/ẩn/xóa mềm. | P1 | Implemented |
 | FR-ADMIN-12 | Admin có thể export thống kê PDF/CSV. | P2 | Planned |
+| FR-ADMIN-13 | Admin có tab Kho đồ để quản lý item trong `warehouse_items` theo trạng thái nhận/lưu/claim/trả/hủy. | P1 | Implemented |
 
 ### Non-Functional Requirements
 
@@ -329,7 +354,7 @@ Tài liệu này mô tả Functional Requirements (FR) và Non-Functional Requir
 
 | FR | Acceptance Criteria |
 | --- | --- |
-| FR-ADMIN-01 | Given admin đăng nhập, when mở `/admin`, then sidebar hiển thị đủ Dashboard, Kiểm duyệt, Danh mục, Khu vực, Bàn giao, Người dùng, Báo cáo. |
+| FR-ADMIN-01 | Given admin đăng nhập, when mở `/admin`, then sidebar hiển thị đủ Dashboard, Kiểm duyệt, Danh mục, Khu vực, Bàn giao, Kho đồ, Người dùng, Báo cáo. |
 | FR-ADMIN-03/04/05/07 | Given payload hợp lệ, when admin tạo/sửa/ẩn/kích hoạt master data, then API lưu DB và UI refresh danh sách. |
 | FR-ADMIN-03 | Given admin tạo hoặc sửa danh mục, when chọn nhóm hiển thị, then hệ thống chỉ cho phép nhóm chính hoặc danh mục cụ thể nằm trực tiếp trong nhóm chính, không cho lồng nhiều tầng. |
 | FR-ADMIN-06 | Given admin mở tab Khu vực, when xem form quản trị, then không có form CRUD phòng; user nhập phòng/lầu/góc chi tiết trong form đăng tin. |
@@ -337,6 +362,7 @@ Tài liệu này mô tả Functional Requirements (FR) và Non-Functional Requir
 | FR-ADMIN-10 | Given admin xử lý report với action, when submit, then report chuyển trạng thái reviewed và moderation action được ghi. |
 | FR-ADMIN-11 | Given admin mở tab Kiểm duyệt, when lọc và chọn action trên bài đăng, then hệ thống cập nhật trạng thái hoặc xóa mềm bài và refresh danh sách. |
 | FR-ADMIN-11 | Given admin cần xem đủ ngữ cảnh bài viết, when bấm xem chi tiết ở dòng kiểm duyệt, then drawer chi tiết bài hiển thị mô tả, ảnh, liên hệ, AI tags và matching. |
+| FR-ADMIN-13 | Given admin mở tab Kho đồ, when thao tác CRUD hoặc đổi trạng thái item, then API chỉ cho phép `ADMIN` và UI cập nhật danh sách kho. |
 
 ## 10. REPORT - Report and Moderation Module
 
@@ -442,7 +468,8 @@ Appointment status enum thống nhất: `PENDING`, `ACCEPTED`, `REJECTED`, `CANC
 | FR-CHAT-05 | Hệ thống hiển thị trạng thái đã xem. | P2 | Planned |
 | FR-NOTI-01 | Chủ bài nhận thông báo khi có claim mới. | P1 | Planned |
 | FR-NOTI-02 | Claimant nhận thông báo khi claim accepted/rejected. | P1 | Planned |
-| FR-NOTI-03 | User nhận thông báo khi có match tốt. | P1 | Planned |
+| FR-NOTI-03 | User nhận thông báo in-app khi có match tốt. | P1 | Implemented |
+| FR-NOTI-04 | User có thể xem danh sách notification, đánh dấu từng notification hoặc toàn bộ là đã đọc. | P1 | Implemented |
 
 ### Non-Functional Requirements
 
@@ -451,6 +478,14 @@ Appointment status enum thống nhất: `PENDING`, `ACCEPTED`, `REJECTED`, `CANC
 | NFR-CHAT-01 | Chat nên dùng Socket.IO hoặc cơ chế realtime tương đương. | P1 | Planned |
 | NFR-CHAT-02 | Chỉ user liên quan đến claim mới được join chat room. | P1 | Planned |
 | NFR-NOTI-01 | Notification quan trọng nên có fallback qua email nếu realtime không online. | P2 | Planned |
+| NFR-NOTI-02 | Notification in-app phải lưu bền trong database và chỉ owner mới được đánh dấu đã đọc. | P1 | Implemented |
+
+### Core Acceptance Criteria
+
+| FR | Acceptance Criteria |
+| --- | --- |
+| FR-NOTI-03 | Given match đạt ngưỡng thông báo, when matching service xử lý, then hai user liên quan nhận notification loại `MATCH_FOUND`. |
+| FR-NOTI-04 | Given user đã đăng nhập, when mở menu thông báo hoặc bấm đánh dấu đã đọc, then API chỉ trả/cập nhật notification của chính user đó. |
 
 ## 14. MOBILE - Mobile App Module
 
@@ -471,3 +506,49 @@ Appointment status enum thống nhất: `PENDING`, `ACCEPTED`, `REJECTED`, `CANC
 | NFR-MOBILE-01 | Mobile app phải tối ưu thao tác chạm, camera/gallery và điều hướng tab. | P2 | Planned |
 | NFR-MOBILE-02 | Mobile app nên xử lý mất mạng và retry request phù hợp. | P2 | Planned |
 | NFR-MOBILE-03 | Mobile token phải lưu trong secure storage, không lưu plain trong AsyncStorage nếu có lựa chọn tốt hơn. | P2 | Planned |
+
+## 15. AI-TRAINING - AI Model Training and MLOps Module
+
+Phần này mô tả scope train model AI riêng cho hệ thống. Hiện tại hệ thống mới dùng Google Vision/OCR và matching theo rule/score; các yêu cầu dưới đây là planned cho giai đoạn nâng cấp.
+
+### Functional Requirements
+
+| ID | Requirement | Priority | Status |
+| --- | --- | --- | --- |
+| FR-AITRAIN-01 | Hệ thống có thể thu thập mẫu dữ liệu đã gắn nhãn từ bài đăng, ảnh vật phẩm, AI tags, kết quả matching và feedback của user/admin. | P2 | Planned |
+| FR-AITRAIN-02 | Admin hoặc staff được phân quyền có thể gắn nhãn/sửa nhãn category, object tag và cặp LOST/FOUND đúng-sai để tạo dataset chất lượng. | P2 | Planned |
+| FR-AITRAIN-03 | Hệ thống có pipeline xuất, làm sạch, chuẩn hóa và ẩn danh dataset trước khi dùng để train model. | P2 | Planned |
+| FR-AITRAIN-04 | Hệ thống có thể train model phân loại ảnh/category vật phẩm từ dataset đã duyệt. | P2 | Planned |
+| FR-AITRAIN-05 | Hệ thống có thể train hoặc fine-tune model embedding/semantic matching để cải thiện gợi ý LOST/FOUND. | P2 | Planned |
+| FR-AITRAIN-06 | Mỗi model phải được đánh giá bằng metrics như precision, recall, F1, top-k accuracy và false positive rate trước khi đưa vào sử dụng. | P2 | Planned |
+| FR-AITRAIN-07 | Hệ thống có model registry để lưu version model, dataset snapshot, tham số training, metrics và trạng thái triển khai. | P2 | Planned |
+| FR-AITRAIN-08 | Hệ thống có inference endpoint cho model riêng và fallback về Google Vision/rule matching khi model riêng lỗi hoặc chưa được bật. | P2 | Planned |
+| FR-AITRAIN-09 | Admin có dashboard theo dõi dataset, nhãn, training job, model version, metrics và trạng thái deploy. | P2 | Planned |
+| FR-AITRAIN-10 | Hệ thống có thể ghi nhận feedback sau khi user/admin xác nhận match đúng/sai để đưa vào vòng retraining. | P2 | Planned |
+| FR-AITRAIN-11 | Hệ thống hỗ trợ mô hình xác minh 3 tầng: tầng 1 rule-based score, tầng 2 trained AI model score, tầng 3 human verification trước khi trả đồ. | P1 | Partial |
+| FR-AITRAIN-12 | Tầng 2 có thể so sánh ảnh vật phẩm giữa bài `LOST` và `FOUND`, trích xuất item name, description, OCR/text, brand/logo và trả về image similarity/model probability. | P2 | Planned |
+| FR-AITRAIN-13 | Sau khi tầng 2 trả metadata AI, hệ thống lưu metadata đó và chạy lại tầng 1 để double-check bằng rule-based matching đã được enrich. | P1 | Planned |
+
+### Non-Functional Requirements
+
+| ID | Requirement | Priority | Status |
+| --- | --- | --- | --- |
+| NFR-AITRAIN-01 | Dataset training phải loại bỏ hoặc ẩn danh email, số điện thoại, thông tin liên hệ, mô tả quá nhạy cảm và metadata không cần thiết. | P0 | Planned |
+| NFR-AITRAIN-02 | Pipeline training phải có khả năng tái lập bằng cách lưu dataset version, code/config version và tham số training. | P2 | Planned |
+| NFR-AITRAIN-03 | Model mới không được tự động thay thế model đang chạy nếu chưa đạt ngưỡng metrics tối thiểu và chưa được admin approve. | P1 | Planned |
+| NFR-AITRAIN-04 | Inference phải có timeout, logging và fallback để không làm hỏng luồng đăng bài/upload ảnh. | P1 | Planned |
+| NFR-AITRAIN-05 | Feedback của user chỉ được dùng làm tín hiệu huấn luyện sau khi qua bước làm sạch/chống spam, không được tự động quyết định claim hoặc trả đồ. | P1 | Planned |
+| NFR-AITRAIN-06 | Điểm từ tầng 1 và tầng 2 chỉ là gợi ý; tầng 3 human verification phải là bước quyết định cuối cùng trước khi accept claim hoặc bàn giao. | P0 | Partial |
+| NFR-AITRAIN-07 | Tầng 2 phải lưu model version, confidence và signal/mismatch reason để audit khi so sánh ảnh hoặc sinh metadata. | P1 | Planned |
+
+### Core Acceptance Criteria
+
+| FR | Acceptance Criteria |
+| --- | --- |
+| FR-AITRAIN-01/02 | Given admin gắn nhãn cho ảnh hoặc cặp match, when lưu nhãn, then sample được đưa vào dataset queue với actor, thời gian và nguồn dữ liệu. |
+| FR-AITRAIN-03 | Given dataset có thông tin cá nhân, when chạy preprocess, then file train không còn email/số điện thoại/raw contact info. |
+| FR-AITRAIN-06/07 | Given training job hoàn tất, when xem registry, then model version hiển thị dataset snapshot, config, metrics và trạng thái `DRAFT`, `APPROVED` hoặc `DEPLOYED`. |
+| FR-AITRAIN-08 | Given model riêng timeout/lỗi, when user upload ảnh hoặc tạo bài, then hệ thống fallback về Google Vision/rule matching và request vẫn thành công nếu phần chính hợp lệ. |
+| FR-AITRAIN-10 | Given user/admin xác nhận match đúng hoặc sai, when lưu feedback, then feedback được lưu như training signal và không tự động thay đổi quyết định trả đồ. |
+| FR-AITRAIN-11 | Given hệ thống có điểm tầng 1 và tầng 2, when xử lý claim, then điểm chỉ hỗ trợ gợi ý; quyết định accept/reject vẫn phải qua human verification tầng 3. |
+| FR-AITRAIN-12/13 | Given tầng 2 phân tích ảnh và trả metadata, when metadata được lưu, then tầng 1 được chạy lại với dữ liệu enrich và hệ thống lưu điểm trước/sau enrich để double-check. |

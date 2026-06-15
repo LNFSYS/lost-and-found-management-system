@@ -8,7 +8,7 @@ Tài liệu này nối Business Rules (BR), Functional/Non-Functional Requiremen
 | --- | --- |
 | BR | Business rule trong [business-rules.md](business-rules.md). |
 | Requirement | FR/NFR trong [requirements.md](requirements.md). |
-| UC | Use case trong [dev-owned-usecase-checklist.md](dev-owned-usecase-checklist.md) hoặc overview. |
+| UC | Use case trong [master-dev-checklist.md](../master-dev-checklist.md) hoặc overview. |
 | Status | Trạng thái tổng hợp theo requirement liên quan. |
 
 ## BR ↔ FR/NFR ↔ UC
@@ -41,6 +41,7 @@ Tài liệu này nối Business Rules (BR), Functional/Non-Functional Requiremen
 | BR-24 | NFR-MEDIA-01 | UC-035 | Implemented |
 | BR-25 | NFR-MEDIA-02, FR-CONFIG-02 | UC-036, UC-162 | Implemented |
 | BR-26 | NFR-MEDIA-02, FR-CONFIG-02 | UC-036, UC-161 | Implemented |
+| BR-26A | FR-MEDIA-07, FR-BOARD-08 | UC-027, UC-035 | Implemented |
 | BR-27 | FR-CLAIM-01, FR-CLAIM-03 | UC-083 | Implemented |
 | BR-28 | FR-CLAIM-02 | UC-083 | Implemented |
 | BR-29 | FR-CLAIM-03 | UC-083 | Implemented |
@@ -71,8 +72,32 @@ Tài liệu này nối Business Rules (BR), Functional/Non-Functional Requiremen
 | BR-54 | FR-CONFIG-05, NFR-CONFIG-02 | UC-170 | Implemented |
 | BR-55 | FR-APPT-01, FR-APPT-02, NFR-APPT-01 | UC-112 | Planned |
 | BR-56 | FR-AUTH-12 | UC-006 | Planned |
-| BR-57 | FR-CHAT-01..05, FR-NOTI-01..03 | UC-080, UC-097, UC-121, UC-128, UC-129 | Planned |
+| BR-57 | FR-CHAT-01..05, FR-NOTI-01, FR-NOTI-02, NFR-NOTI-01 | UC-097, UC-121, UC-128, UC-129, UC-131, UC-132, UC-133 | Planned |
 | BR-58 | FR-ADMIN-12 | UC-157 | Planned |
+| BR-59 | FR-MATCH-05, FR-NOTI-03, NFR-MATCH-02 | UC-080, UC-134 | Implemented |
+| BR-60 | FR-NOTI-04, NFR-NOTI-02 | UC-134 | Implemented |
+| BR-61 | FR-MEDIA-08, NFR-MEDIA-05 | UC-035, UC-036 | Implemented |
+| BR-62 | FR-HANDOVER-08, FR-HANDOVER-09, FR-ADMIN-13 | UC-110 | Implemented |
+| BR-63 | FR-HANDOVER-09, NFR-HANDOVER-04 | UC-110 | Implemented |
+| BR-64 | FR-MATCH-06 | UC-078, UC-079 | Implemented |
+| BR-65 | FR-HANDOVER-10 | UC-178, UC-179 | Planned |
+| BR-66 | FR-HANDOVER-11 | UC-111, UC-180 | Planned |
+| BR-67 | FR-HANDOVER-12 | UC-178 | Partial |
+| BR-68 | FR-HANDOVER-13 | UC-178 | Planned |
+| BR-69 | FR-HANDOVER-14, NFR-HANDOVER-05 | UC-181 | Planned |
+| BR-70 | FR-HANDOVER-15, FR-HANDOVER-16, NFR-HANDOVER-06 | UC-182, UC-183 | Planned |
+| BR-71 | FR-HANDOVER-12, FR-HANDOVER-13 | UC-178, UC-181 | Planned |
+| BR-72 | NFR-CLAIM-02, NFR-CLAIM-03, NFR-CLAIM-06 | UC-096 | Implemented |
+| BR-73 | FR-AITRAIN-01, FR-AITRAIN-02, NFR-AITRAIN-05 | UC-186, UC-187, UC-195 | Planned |
+| BR-74 | FR-AITRAIN-03, NFR-AITRAIN-01 | UC-188 | Planned |
+| BR-75 | FR-AITRAIN-02, FR-AITRAIN-09 | UC-187, UC-194 | Planned |
+| BR-76 | FR-AITRAIN-06, FR-AITRAIN-07, NFR-AITRAIN-02 | UC-191, UC-192 | Planned |
+| BR-77 | FR-AITRAIN-06, FR-AITRAIN-07, NFR-AITRAIN-03 | UC-191, UC-192 | Planned |
+| BR-78 | FR-AITRAIN-08, NFR-AITRAIN-04 | UC-193 | Planned |
+| BR-79 | FR-AITRAIN-10, NFR-AITRAIN-05 | UC-195 | Planned |
+| BR-80 | FR-AI-01, FR-AI-02, FR-MATCH-03, FR-AITRAIN-08 | UC-064, UC-078, UC-193 | Partial |
+| BR-81 | FR-AITRAIN-11, NFR-AITRAIN-06, FR-CLAIM-08, FR-CLAIM-09 | UC-093, UC-094, UC-186..193 | Partial |
+| BR-82 | FR-AITRAIN-12, FR-AITRAIN-13, NFR-AITRAIN-07, FR-MATCH-01, FR-MATCH-02 | UC-069, UC-189, UC-190, UC-193 | Planned |
 
 ## Notes
 

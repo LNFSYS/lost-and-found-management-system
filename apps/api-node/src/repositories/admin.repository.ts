@@ -80,7 +80,16 @@ interface HandoverAdminRow extends RowDataPacket {
   is_active: number;
 }
 
-type WarehouseStatus = "RECEIVED" | "STORED" | "CLAIMED" | "RETURNED" | "DISPOSED";
+type WarehouseStatus =
+  | "PENDING_APPROVAL"
+  | "RECEIVED"
+  | "STORED"
+  | "CLAIMED"
+  | "RETURNED"
+  | "EXPIRED"
+  | "DISPOSED"
+  | "DONATED"
+  | "TRANSFERRED";
 
 interface WarehouseAdminRow extends RowDataPacket {
   id: string;
@@ -207,6 +216,10 @@ function reportTargetText(row: ReportAdminRow) {
 
 function optionalDate(value: string | null | undefined) {
   return value ? new Date(value) : null;
+}
+
+function isTerminalWarehouseStatus(status: WarehouseStatus) {
+  return ["RETURNED", "DISPOSED", "DONATED", "TRANSFERRED"].includes(status);
 }
 
 async function userExists(userId: string) {
@@ -725,6 +738,8 @@ export const adminRepository = {
   async createWarehouseItem(input: WarehouseInput, actorId: string) {
     await validateWarehouseInput(input);
     const id = randomUUID();
+    const status = input.status ?? "RECEIVED";
+    const returnedAt = optionalDate(input.returnedAt);
     await dbPool.execute(
       `
         INSERT INTO warehouse_items (
@@ -748,11 +763,11 @@ export const adminRepository = {
         input.finderUserId ?? null,
         input.finderName?.trim() || null,
         input.finderContact?.trim() || null,
-        input.status ?? "RECEIVED",
+        status,
         input.conditionNotes ?? null,
         input.storageCode?.trim() || null,
         optionalDate(input.receivedAt) ?? new Date(),
-        optionalDate(input.returnedAt),
+        isTerminalWarehouseStatus(status) ? returnedAt ?? new Date() : returnedAt,
         actorId
       ]
     );
@@ -761,6 +776,8 @@ export const adminRepository = {
 
   async updateWarehouseItem(id: string, input: WarehouseInput) {
     await validateWarehouseInput(input);
+    const status = input.status ?? "RECEIVED";
+    const returnedAt = optionalDate(input.returnedAt);
     await dbPool.execute(
       `
         UPDATE warehouse_items
@@ -794,11 +811,11 @@ export const adminRepository = {
         input.finderUserId ?? null,
         input.finderName?.trim() || null,
         input.finderContact?.trim() || null,
-        input.status ?? "RECEIVED",
+        status,
         input.conditionNotes ?? null,
         input.storageCode?.trim() || null,
         optionalDate(input.receivedAt) ?? new Date(),
-        optionalDate(input.returnedAt),
+        isTerminalWarehouseStatus(status) ? returnedAt ?? new Date() : returnedAt,
         id
       ]
     );
@@ -810,7 +827,7 @@ export const adminRepository = {
       `
         UPDATE warehouse_items
         SET status = ?,
-            returned_at = CASE WHEN ? IN ('RETURNED', 'DISPOSED') THEN COALESCE(returned_at, UTC_TIMESTAMP()) ELSE returned_at END
+            returned_at = CASE WHEN ? IN ('RETURNED', 'DISPOSED', 'DONATED', 'TRANSFERRED') THEN COALESCE(returned_at, UTC_TIMESTAMP()) ELSE returned_at END
         WHERE id = ? AND deleted_at IS NULL
       `,
       [status, status, id]

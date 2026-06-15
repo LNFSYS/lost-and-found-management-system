@@ -81,14 +81,28 @@ const typeLabels: Record<PostType, string> = {
   FOUND: "Đồ nhặt được"
 };
 
-const warehouseStatuses: AdminWarehouseStatus[] = ["RECEIVED", "STORED", "CLAIMED", "RETURNED", "DISPOSED"];
+const warehouseStatuses: AdminWarehouseStatus[] = [
+  "PENDING_APPROVAL",
+  "RECEIVED",
+  "STORED",
+  "CLAIMED",
+  "RETURNED",
+  "EXPIRED",
+  "DISPOSED",
+  "DONATED",
+  "TRANSFERRED"
+];
 
 const warehouseStatusLabels: Record<AdminWarehouseStatus, string> = {
+  PENDING_APPROVAL: "Chờ duyệt nhập kho",
   RECEIVED: "Đã nhận",
   STORED: "Đang lưu kho",
   CLAIMED: "Đang claim",
   RETURNED: "Đã trả",
-  DISPOSED: "Đã xử lý"
+  EXPIRED: "Quá hạn",
+  DISPOSED: "Đã hủy/thanh lý",
+  DONATED: "Đã quyên góp",
+  TRANSFERRED: "Đã chuyển giao"
 };
 
 export function App() {

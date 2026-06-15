@@ -44,7 +44,7 @@ src/
   migrations/
 ```
 
-Current Auth endpoints:
+Current Node API endpoints:
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
@@ -61,13 +61,16 @@ Current Auth endpoints:
 | `POST` | `/api/auth/avatar` | Upload avatar to Cloudinary and replace old asset |
 | `GET` | `/api/auth/activity` | Return user activity history |
 | `GET` | `/api/auth/reputation` | Return reputation score and recent reputation logs |
-| `POST` | `/api/posts` | Create LOST/FOUND post |
+| `GET` | `/api/auth/notifications` | Return current user's notifications |
+| `PATCH` | `/api/auth/notifications/:id/read` | Mark one notification as read |
+| `PATCH` | `/api/auth/notifications/read-all` | Mark all current user's notifications as read |
+| `POST` | `/api/posts` | Create LOST/FOUND post and return match suggestions when available |
 | `GET` | `/api/posts` | Public board with pagination, search, filters, latest sort and first-media `coverImageUrl` for feed cards |
 | `GET` | `/api/posts/my` | Current user's posts with filters |
 | `GET` | `/api/posts/:id` | Post detail with media, AI tags and matches |
 | `PUT` | `/api/posts/:id` | Update owned/admin post |
 | `PATCH` | `/api/posts/:id/status` | Update post status |
-| `POST` | `/api/posts/:id/media` | Upload post images to Cloudinary and save metadata |
+| `POST` | `/api/posts/:id/media` | Upload item images/evidence images to Cloudinary, save `media_kind`, run AI for item images and return match suggestions |
 | `DELETE` | `/api/posts/:id/media/:mediaId` | Delete post media asset and metadata |
 | `GET` | `/api/posts/:id/matches` | Return saved matching results for a post |
 | `DELETE` | `/api/posts/:id` | Soft-delete owned/admin post |
@@ -88,8 +91,9 @@ Current Auth endpoints:
 | `PATCH` | `/api/admin/users/:id/status` | Admin-only user status update |
 | `PATCH` | `/api/admin/users/:id/roles` | Admin-only role update |
 | `GET/POST/PUT/PATCH` | `/api/admin/categories...` | Admin-only category CRUD and active toggle |
-| `GET/POST/PUT/PATCH` | `/api/admin/locations/...` | Admin-only area, building and room CRUD |
+| `GET/POST/PUT/PATCH` | `/api/admin/locations/...` | Admin-only area and building CRUD |
 | `GET/POST/PUT/PATCH` | `/api/admin/handover-points...` | Admin-only handover point CRUD |
+| `GET/POST/PUT/PATCH/DELETE` | `/api/admin/warehouse-items...` | Admin-only warehouse item list, create, update, status update and soft delete |
 | `GET` | `/api/admin/reports` | Admin-only report queue |
 | `PATCH` | `/api/admin/reports/:id/handle` | Admin-only report handling and moderation action |
 | `GET` | `/api/health` | API health check |
@@ -107,6 +111,13 @@ All Node API responses use `{ success, data?, error?, message? }`.
 | `003_auth_recovery_schema.sql` | Password reset OTP support |
 | `004_user_audience_roles.sql` | Student/Lecturer audience role backfill |
 | `005_integrity_constraints.sql` | FK for post handover point and unique claim per post/user |
+| `006_appointment_status_accepted.sql` | Normalize appointment enum to `ACCEPTED` |
+| `007_posts_contact_and_room_text.sql` | Add post contact info and free-text room/location detail |
+| `008_seed_item_categories.sql` | Seed two-level item categories |
+| `009_seed_campus_locations.sql` | Seed campus areas and concrete locations |
+| `010_notifications_and_warehouse.sql` | Add match notification threshold config and `warehouse_items` |
+| `011_media_kind_and_match_threshold.sql` | Add `post_media.media_kind` and keep notification threshold at `0.8` |
+| `012_indexes_and_warehouse_lifecycle.sql` | Add feed/matching/notification/log indexes and expand warehouse lifecycle statuses |
 
 Run migrations with:
 
@@ -127,15 +138,16 @@ Security and integrity notes:
 - Password and LOST-post secret verification values are stored with bcrypt; default salt rounds are 12.
 - Password reset revokes all active refresh tokens for that user.
 - A user can submit only one claim per post, enforced by both service validation and a database unique key.
+- After initial claim creation, claim status transitions are owned by the Java Admin Service so row locks and status guards are centralized.
 - Sensitive admin management endpoints require `ADMIN`; `STAFF` can access only the overview-style admin surface.
 - Category administration is limited to two levels: main groups and concrete categories. The API rejects nested child categories and rejects moving a group that already has children under another group.
 - The Node API verifies the configured MySQL connection before listening so DB configuration failures fail fast.
 
 ## AI And Matching
 
-Post image upload sends each Cloudinary `secure_url` through Google Vision when `GOOGLE_VISION_API_KEY` is configured. The Node API stores label/object/OCR tags in `ai_tags`, returns suggested categories in the upload response, and falls back to empty tags/OCR text if Vision is not configured or fails.
+Post item image upload sends each Cloudinary `secure_url` through Google Vision when `GOOGLE_VISION_API_KEY` is configured. Evidence images are stored as `EVIDENCE` media and skipped by AI. The Node API stores label/object/OCR tags in `ai_tags`, returns suggested categories in the upload response, and falls back to empty tags/OCR text if Vision is not configured or fails.
 
-The matching engine runs asynchronously after post create/update and after post image tags are saved. It builds TF-IDF vectors from normalized title, description and AI tags, calculates cosine text score plus category/location/time scores, applies weights from `config_entries`, and upserts rows into `match_results` when the total score passes `matching.threshold`.
+The matching engine runs after post create/update and after post image tags are saved. It builds TF-IDF vectors from normalized title, description and AI tags, calculates cosine text score plus category/location/time scores, applies weights from `config_entries`, and upserts rows into `match_results` when the total score passes `matching.threshold`. When `total_score >= matching.notification_threshold`, it marks the pair as `MATCHED`, persists `MATCH_FOUND` notifications for both users, marks the match as notified, and returns match suggestions to the UI for LOST posts.
 
 ## Java Admin Service Foundation
 
@@ -149,7 +161,7 @@ The matching engine runs asynchronously after post create/update and after post 
 | Posts | LostFoundPost, Category, CampusLocation, PostMedia, SecretVerification |
 | Matching | MatchResult, MatchScoreBreakdown, AiTag, OcrText |
 | Claims | Claim, ClaimEvidence, ClaimDecision, ClaimStateLog |
-| Handover | HandoverPoint, StorageLog, ItemCustodyStatus |
+| Handover | HandoverPoint, WarehouseItem, WarehouseCapacity, ExpiredItemDisposition, StorageLog, ItemCustodyStatus |
 | Appointment | ReturnAppointment, AppointmentParticipant, Reminder |
 | Communication | ChatRoom, ChatMessage, Notification |
 | Governance | Report, ModerationAction, ReputationScore, ConfigEntry, ConfigHistory |
@@ -160,17 +172,18 @@ The matching engine runs asynchronously after post create/update and after post 
 | --- | --- | --- |
 | Project Overview | General thesis/use-case document updated | [lost-found-system-overview.md](lost-found-system-overview.md) |
 | Authentication, Authorization, User Profile | DB design completed | [db-auth-design.md](db-auth-design.md) |
-| Dev-Owned Tasks | Per-dev independent checklist created | [dev-owned-usecase-checklist.md](dev-owned-usecase-checklist.md) |
+| Master Dev Checklist | Per-dev independent checklist created | [master-dev-checklist.md](master-dev-checklist.md) |
 
 ## Integration Flow
 
 1. User creates LOST or FOUND post from web/mobile.
-2. Node API validates input, stores post/media, and emits an event.
-3. AI/matching worker analyzes images/text and saves match results.
-4. Realtime service notifies likely owners/finders when score passes threshold.
+2. Node API validates input, stores post/media, then runs matching for the affected post.
+3. AI/matching service analyzes item images/text and saves match results.
+4. In-app notifications are persisted for likely owners/finders when score passes the notification threshold.
 5. Claimant submits evidence; finder/staff/admin reviews it.
 6. Accepted claim creates chat room and return appointment.
 7. Java service manages handover, appointment state, reputation, admin dashboard, and scheduled expiration.
+8. Planned warehouse lifecycle extension tracks retention deadlines, expiring-item alerts, capacity warnings and expired-item disposition records.
 
 ## Frontend Foundation
 

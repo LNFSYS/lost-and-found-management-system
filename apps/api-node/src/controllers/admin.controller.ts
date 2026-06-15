@@ -47,7 +47,17 @@ const handoverSchema = z.object({
   openingHours: z.string().trim().max(255).nullable().optional(),
   contactInfo: z.string().trim().max(255).nullable().optional()
 });
-const warehouseStatusSchema = z.enum(["RECEIVED", "STORED", "CLAIMED", "RETURNED", "DISPOSED"]);
+const warehouseStatusSchema = z.enum([
+  "PENDING_APPROVAL",
+  "RECEIVED",
+  "STORED",
+  "CLAIMED",
+  "RETURNED",
+  "EXPIRED",
+  "DISPOSED",
+  "DONATED",
+  "TRANSFERRED"
+]);
 const optionalDateTimeSchema = z.string().datetime().nullable().optional();
 const warehouseSchema = z.object({
   postId: z.string().uuid().nullable().optional(),

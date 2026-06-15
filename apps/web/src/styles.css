@@ -1641,6 +1641,11 @@ label {
   color: var(--fpt-blue);
 }
 
+.warehouse-status.status-pending_approval {
+  background: #fff7ed;
+  color: #9a3412;
+}
+
 .warehouse-status.status-stored {
   background: var(--soft-green);
   color: #2f7b29;
@@ -1656,9 +1661,24 @@ label {
   color: #43536b;
 }
 
+.warehouse-status.status-expired {
+  background: #fff1f2;
+  color: #be123c;
+}
+
 .warehouse-status.status-disposed {
   background: #fff0f0;
   color: #b42318;
+}
+
+.warehouse-status.status-donated {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.warehouse-status.status-transferred {
+  background: #eef2ff;
+  color: #4338ca;
 }
 
 .admin-check-grid {

@@ -105,7 +105,16 @@ export interface AdminHandoverPoint extends AdminNamedResource {
   contactInfo: string | null;
 }
 
-export type AdminWarehouseStatus = "RECEIVED" | "STORED" | "CLAIMED" | "RETURNED" | "DISPOSED";
+export type AdminWarehouseStatus =
+  | "PENDING_APPROVAL"
+  | "RECEIVED"
+  | "STORED"
+  | "CLAIMED"
+  | "RETURNED"
+  | "EXPIRED"
+  | "DISPOSED"
+  | "DONATED"
+  | "TRANSFERRED";
 
 export interface AdminWarehouseItem {
   id: string;

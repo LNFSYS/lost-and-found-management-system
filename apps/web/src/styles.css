@@ -1687,6 +1687,85 @@ label {
   gap: 8px;
 }
 
+.admin-map-picker-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.admin-map-upload {
+  min-width: 148px;
+  padding-inline: 12px;
+}
+
+.admin-map-picker {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-map-picker-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.admin-map-picker-heading strong {
+  color: var(--ink);
+}
+
+.admin-map-picker-heading span {
+  color: var(--fpt-blue);
+  font-size: 0.82rem;
+  font-weight: 950;
+}
+
+.admin-map-picker-surface {
+  position: relative;
+  min-height: 260px;
+  overflow: hidden;
+  border: 1px solid rgba(6, 81, 160, 0.16);
+  border-radius: 8px;
+  background: #eef6ff;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.admin-map-picker-surface.empty {
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.admin-map-picker-surface img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 260px;
+  max-height: 380px;
+  object-fit: cover;
+  user-select: none;
+}
+
+.admin-map-location-pin {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 3px solid white;
+  border-radius: 999px;
+  background: var(--fpt-orange);
+  color: white;
+  box-shadow: 0 14px 30px rgba(22, 32, 51, 0.28);
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+}
+
 .admin-check-grid label {
   grid-auto-flow: column;
   grid-template-columns: auto 1fr;
@@ -1852,6 +1931,7 @@ label {
   .admin-post-moderation-row,
   .admin-report-row,
   .warehouse-item-row,
+  .admin-map-picker-field,
   .match-suggestion-card {
     grid-template-columns: 1fr;
   }
@@ -2563,5 +2643,561 @@ label {
   .create-report-form .segmented,
   .create-report-form .segmented button {
     width: 100%;
+  }
+}
+
+/* Handover point dashboard */
+.handover-page {
+  display: grid;
+  gap: 18px;
+}
+
+.handover-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: end;
+  padding: clamp(22px, 4vw, 34px);
+  border: 1px solid rgba(6, 81, 160, 0.12);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(239, 248, 255, 0.92)),
+    white;
+  box-shadow: 0 18px 42px rgba(22, 32, 51, 0.07);
+}
+
+.handover-hero h2,
+.handover-hero p {
+  margin: 0;
+}
+
+.handover-hero h2 {
+  margin-top: 4px;
+  color: var(--ink);
+  font-size: clamp(2rem, 5vw, 4rem);
+  line-height: 1;
+}
+
+.handover-hero p {
+  max-width: 780px;
+  margin-top: 10px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.handover-hero-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(96px, 1fr));
+  gap: 10px;
+}
+
+.handover-hero-stats span,
+.handover-filter-count {
+  display: grid;
+  gap: 4px;
+  min-height: 72px;
+  align-content: center;
+  padding: 12px;
+  border: 1px solid rgba(0, 141, 222, 0.16);
+  border-radius: 8px;
+  background: white;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.handover-hero-stats strong,
+.handover-filter-count strong {
+  color: var(--fpt-blue);
+  font-size: 1.55rem;
+  line-height: 1;
+}
+
+.handover-admin-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(243, 113, 36, 0.26);
+  border-radius: 8px;
+  background: #fff7f1;
+}
+
+.handover-admin-banner span,
+.handover-filter-bar label > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #9b4012;
+  font-weight: 950;
+}
+
+.handover-filter-bar {
+  display: grid;
+  grid-template-columns: minmax(250px, 1.35fr) minmax(160px, 0.7fr) minmax(160px, 0.7fr) minmax(120px, 0.35fr);
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(223, 231, 239, 0.95);
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 14px 34px rgba(22, 32, 51, 0.06);
+}
+
+.handover-filter-bar label {
+  min-width: 0;
+}
+
+.handover-filter-bar select {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdff;
+  color: var(--ink);
+  padding: 0 11px;
+}
+
+.handover-filter-count {
+  min-height: 44px;
+  padding: 8px 12px;
+}
+
+.handover-filter-count strong {
+  font-size: 1.25rem;
+}
+
+.handover-workbench {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.82fr) minmax(0, 1.5fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.handover-list-panel,
+.handover-map-panel,
+.campus-map-shell {
+  min-width: 0;
+}
+
+.handover-list {
+  display: grid;
+  gap: 12px;
+  max-height: calc(100vh - 260px);
+  min-height: 520px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.handover-point-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid rgba(223, 231, 239, 0.95);
+  border-radius: 8px;
+  background: white;
+  padding: 14px;
+  box-shadow: 0 12px 28px rgba(22, 32, 51, 0.05);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.handover-point-card.selected,
+.handover-point-card:hover {
+  border-color: rgba(243, 113, 36, 0.42);
+  box-shadow: 0 20px 44px rgba(243, 113, 36, 0.12);
+  transform: translateY(-1px);
+}
+
+.handover-card-main {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+}
+
+.handover-card-topline,
+.handover-card-actions,
+.handover-admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.handover-card-topline {
+  justify-content: space-between;
+}
+
+.handover-status-badge,
+.handover-item-count,
+.campus-map-live {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 0 10px;
+  font-size: 0.74rem;
+  font-weight: 950;
+}
+
+.handover-status-badge.active {
+  background: var(--soft-green);
+  color: #2f7b29;
+}
+
+.handover-status-badge.closed {
+  background: #eef1f5;
+  color: #5f6f84;
+}
+
+.handover-item-count,
+.campus-map-live {
+  background: var(--soft-blue);
+  color: var(--fpt-blue);
+}
+
+.handover-point-card h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1.08rem;
+  line-height: 1.35;
+}
+
+.handover-point-card p,
+.handover-popup p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.52;
+}
+
+.handover-card-meta,
+.handover-popup-meta {
+  display: grid;
+  gap: 7px;
+  color: #52647d;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.handover-card-meta span,
+.handover-popup-meta span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.handover-card-actions .secondary-button,
+.handover-card-actions .primary-button {
+  flex: 1 1 135px;
+}
+
+.handover-admin-actions {
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+}
+
+.handover-admin-actions button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(6, 81, 160, 0.14);
+  border-radius: 8px;
+  background: #f7fbff;
+  color: var(--fpt-blue);
+  padding: 0 10px;
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+.handover-admin-actions button.danger {
+  border-color: rgba(180, 35, 24, 0.18);
+  background: #fff1f1;
+  color: #b42318;
+}
+
+.handover-map-panel {
+  position: sticky;
+  top: 86px;
+  display: grid;
+  gap: 12px;
+}
+
+.campus-map-shell {
+  overflow: hidden;
+  border: 1px solid rgba(6, 81, 160, 0.14);
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 18px 42px rgba(22, 32, 51, 0.08);
+}
+
+.campus-map-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.campus-map-toolbar strong,
+.campus-map-toolbar span {
+  display: block;
+}
+
+.campus-map-toolbar span {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.campus-image-map {
+  position: relative;
+  height: min(64vh, 620px);
+  min-height: 460px;
+  overflow: hidden;
+  background: #eaf7ff;
+}
+
+.campus-image-map > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.campus-map-marker {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 3px solid white;
+  border-radius: 999px;
+  background: var(--fpt-orange);
+  color: white;
+  box-shadow: 0 12px 26px rgba(22, 32, 51, 0.24);
+  transform: translate(-50%, -100%);
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    background 160ms ease;
+}
+
+.campus-map-marker span {
+  position: absolute;
+  right: -9px;
+  bottom: -7px;
+  display: grid;
+  min-width: 20px;
+  height: 20px;
+  place-items: center;
+  border: 2px solid white;
+  border-radius: 999px;
+  background: var(--fpt-blue);
+  color: white;
+  font-size: 0.68rem;
+  font-weight: 950;
+}
+
+.campus-map-marker.closed {
+  background: #667085;
+}
+
+.campus-map-marker.selected,
+.campus-map-marker:hover,
+.campus-map-marker:focus-visible {
+  background: var(--fpt-green);
+  box-shadow: 0 16px 34px rgba(83, 184, 72, 0.32);
+  outline: 0;
+  transform: translate(-50%, -100%) scale(1.14);
+}
+
+.campus-map-missing {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  padding: 24px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.campus-map-missing strong {
+  color: var(--ink);
+}
+
+.campus-map-popup {
+  position: absolute;
+  z-index: 3;
+  width: min(290px, calc(100% - 24px));
+  transform: translate(-50%, calc(-100% - 18px));
+  pointer-events: none;
+}
+
+.handover-popup {
+  display: grid;
+  gap: 11px;
+  padding: 14px;
+  border: 1px solid rgba(223, 231, 239, 0.95);
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 18px 42px rgba(22, 32, 51, 0.12);
+}
+
+.handover-popup.compact {
+  gap: 8px;
+  padding: 12px;
+}
+
+.handover-popup-heading {
+  display: grid;
+  gap: 5px;
+}
+
+.handover-popup-heading strong {
+  color: var(--ink);
+  font-size: 1.02rem;
+}
+
+.handover-popup-heading small {
+  color: var(--fpt-blue);
+  font-weight: 900;
+}
+
+.handover-route-note {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid rgba(83, 184, 72, 0.28);
+  border-radius: 8px;
+  background: #f3fbf1;
+  color: #2f7b29;
+}
+
+.handover-route-note strong,
+.handover-route-note span {
+  display: block;
+}
+
+.handover-route-note span {
+  margin-top: 3px;
+  color: #52647d;
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.handover-route-note button {
+  min-height: 34px;
+  border: 1px solid rgba(83, 184, 72, 0.35);
+  border-radius: 8px;
+  background: white;
+  color: #2f7b29;
+  padding: 0 10px;
+  font-weight: 900;
+}
+
+.handover-skeleton-card {
+  display: grid;
+  gap: 12px;
+  min-height: 188px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+}
+
+.handover-skeleton-card span,
+.handover-skeleton-card strong,
+.handover-skeleton-card p {
+  overflow: hidden;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #eef3f8, #f8fbff, #eef3f8);
+  background-size: 220% 100%;
+  animation: handover-skeleton 1.2s ease-in-out infinite;
+}
+
+.handover-skeleton-card span {
+  width: 110px;
+  height: 26px;
+}
+
+.handover-skeleton-card strong {
+  width: 70%;
+  height: 24px;
+}
+
+.handover-skeleton-card p {
+  width: 100%;
+  height: 16px;
+  margin: 0;
+}
+
+@keyframes handover-skeleton {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@media (max-width: 1120px) {
+  .handover-hero,
+  .handover-workbench,
+  .handover-filter-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .handover-map-panel {
+    position: static;
+  }
+
+  .handover-list {
+    max-height: none;
+    min-height: auto;
+  }
+
+  .handover-filter-count {
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 720px) {
+  .handover-hero-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .handover-admin-banner,
+  .campus-map-toolbar,
+  .handover-route-note {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+
+  .campus-image-map {
+    height: 420px;
+    min-height: 380px;
+  }
+
+  .handover-card-actions {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 }

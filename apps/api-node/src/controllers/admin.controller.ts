@@ -45,7 +45,10 @@ const handoverSchema = z.object({
   areaId: z.string().uuid().nullable().optional(),
   buildingId: z.string().uuid().nullable().optional(),
   openingHours: z.string().trim().max(255).nullable().optional(),
-  contactInfo: z.string().trim().max(255).nullable().optional()
+  contactInfo: z.string().trim().max(255).nullable().optional(),
+  mapImageUrl: z.string().trim().max(5_000_000).nullable().optional(),
+  mapPositionX: z.coerce.number().min(0).max(100).nullable().optional(),
+  mapPositionY: z.coerce.number().min(0).max(100).nullable().optional()
 });
 const warehouseStatusSchema = z.enum([
   "PENDING_APPROVAL",

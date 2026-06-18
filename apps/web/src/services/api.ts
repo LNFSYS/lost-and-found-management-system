@@ -46,6 +46,11 @@ export interface HandoverPoint {
   name: string;
   address: string;
   openingHours: string | null;
+  contactInfo?: string | null;
+  mapImageUrl?: string | null;
+  mapPositionX?: number | null;
+  mapPositionY?: number | null;
+  storedItems?: number;
 }
 
 export interface AdminOverview {
@@ -103,6 +108,10 @@ export interface AdminHandoverPoint extends AdminNamedResource {
   buildingId: string | null;
   openingHours: string | null;
   contactInfo: string | null;
+  mapImageUrl: string | null;
+  mapPositionX: number | null;
+  mapPositionY: number | null;
+  storedItems: number;
 }
 
 export type AdminWarehouseStatus =

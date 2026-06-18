@@ -125,6 +125,7 @@ Current table count: 32 base tables. Business table count: 31, because `schema_m
 | `010_notifications_and_warehouse.sql` | Notification threshold config and `warehouse_items` |
 | `011_media_kind_and_match_threshold.sql` | `post_media.media_kind` and match notification threshold |
 | `012_indexes_and_warehouse_lifecycle.sql` | Hot-query indexes and expanded warehouse lifecycle statuses |
+| `013_handover_map_location.sql` | Adds handover map image URL/data and percentage marker coordinates |
 
 ## 8. Roles And Users
 
@@ -256,7 +257,7 @@ The user-facing app is intentionally a community board/social feed, not an admin
 | `board` | Public community feed with filters/search |
 | `my-posts` | Current user's own posts |
 | `create` | Create LOST/FOUND post, upload item/evidence images |
-| `handover` | View active handover points |
+| `handover` | View active handover points on an interactive campus map |
 | `account` | Login/register/forgot password/profile/activity/reputation |
 
 ### Admin Views
@@ -273,7 +274,7 @@ Admin tab type:
 | Moderation | Manage posts, mark complete, hide/delete/restore state |
 | Categories | Two-level item category CRUD |
 | Locations | Area/building CRUD, no room table |
-| Handover | Handover point CRUD |
+| Handover | Handover point CRUD, campus map image selection, draggable marker placement, stored-item counts |
 | Warehouse | `warehouse_items` CRUD/status management |
 | Users | User management, status and roles |
 | Reports | Report queue and moderation action handling |
@@ -289,6 +290,8 @@ Admin tab type:
 - Post detail shows media, AI tags, matches, contact, claim flow.
 - Notifications menu shows unread count and read/read-all actions.
 - Admin sidebar contains Dashboard, Kiểm duyệt, Danh mục, Khu vực, Bàn giao, Kho đồ, Người dùng, Báo cáo.
+- Handover page uses API-backed handover points, map image/marker coordinates, status badges, filters, popup details, and warehouse item counts.
+- Admin handover form lets staff/admin choose a campus map image and drag/click a location marker before saving the point.
 
 ## 12. Mobile App
 

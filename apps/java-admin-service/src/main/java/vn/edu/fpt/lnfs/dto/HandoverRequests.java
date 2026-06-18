@@ -11,6 +11,9 @@ public final class HandoverRequests {
       @NotBlank String address,
       String openingHours,
       String contactInfo,
+      String mapImageUrl,
+      Double mapPositionX,
+      Double mapPositionY,
       String areaId,
       String buildingId,
       String roomId) {

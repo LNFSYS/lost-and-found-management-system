@@ -219,6 +219,8 @@ File này là checklist tổng hợp từ đầu đến cuối, chia theo 5 dev.
 | [x] | UC-164 | Admin category CRUD | `/admin/categories` |
 | [x] | UC-165 | Admin campus area/building CRUD | `/admin/locations/...` |
 | [x] | UC-166 | Admin handover point CRUD | `/admin/handover-points` |
+| [x] | UC-166A | Admin handover map placement | Admin can select a campus map image, drag marker coordinates and persist them on `handover_points` |
+| [x] | UC-110A | Handover stored-item counts | Handover APIs count active `warehouse_items` by `handover_point_id` |
 | [x] | UC-184 | Optimize DB indexes for feed/search/matching/notifications/logs | migration `012_indexes_and_warehouse_lifecycle.sql` |
 | [x] | UC-185 | Expand warehouse lifecycle status enum in schema/API | migration 012, Node enum |
 

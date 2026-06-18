@@ -22,7 +22,7 @@ import {
   UserCircle,
   Users
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   api,
@@ -45,7 +45,6 @@ import {
   type AdminWarehouseStatus,
   type BoardPost,
   type Building,
-  type HandoverPoint,
   type ListPostsParams,
   type NotificationItem,
   type PostMatchSuggestion,
@@ -54,6 +53,7 @@ import {
   type PublicConfigEntry,
   type PublicUser,
 } from "./services/api";
+import { HandoverPointPage } from "./handover/HandoverPointPage";
 
 type View = "board" | "my-posts" | "create" | "handover" | "account";
 type AuthMode = "login" | "register" | "forgot" | "reset";
@@ -555,10 +555,11 @@ export function App() {
         )}
 
         {!adminMode && view === "handover" && (
-          <HandoverView
+          <HandoverPointPage
             handoverPoints={handoverQuery.data?.handoverPoints ?? []}
             loading={handoverQuery.isLoading}
             error={handoverQuery.error}
+            canManage={canUseAdmin}
           />
         )}
 
@@ -1283,6 +1284,8 @@ function AdminHandoverPanel(props: {
   const [editing, setEditing] = useState<AdminHandoverPoint | null>(null);
   const [selectedAreaId, setSelectedAreaId] = useState<string>(editing?.areaId ?? "");
   const [selectedBuildingId, setSelectedBuildingId] = useState<string>(editing?.buildingId ?? "");
+  const [mapImageUrl, setMapImageUrl] = useState("");
+  const [mapPosition, setMapPosition] = useState({ x: 50, y: 50 });
 
   const buildingsQuery = useQuery({
     queryKey: ["admin-handover-buildings", selectedAreaId],
@@ -1293,6 +1296,11 @@ function AdminHandoverPanel(props: {
   useEffect(() => {
     setSelectedAreaId(editing?.areaId ?? "");
     setSelectedBuildingId(editing?.buildingId ?? "");
+    setMapImageUrl(editing?.mapImageUrl ?? "");
+    setMapPosition({
+      x: editing?.mapPositionX ?? 50,
+      y: editing?.mapPositionY ?? 50
+    });
   }, [editing]);
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -1304,13 +1312,31 @@ function AdminHandoverPanel(props: {
       areaId: selectedAreaId || null,
       buildingId: selectedBuildingId || null,
       openingHours: formNullable(data, "openingHours"),
-      contactInfo: formNullable(data, "contactInfo")
+      contactInfo: formNullable(data, "contactInfo"),
+      mapImageUrl: mapImageUrl.trim() || null,
+      mapPositionX: mapPosition.x,
+      mapPositionY: mapPosition.y
     };
     props.onRun(() => (editing ? api.adminUpdateHandoverPoint(editing.id, payload) : api.adminCreateHandoverPoint(payload)));
     setEditing(null);
     event.currentTarget.reset();
     setSelectedAreaId("");
     setSelectedBuildingId("");
+    setMapImageUrl("");
+    setMapPosition({ x: 50, y: 50 });
+  }
+
+  function selectMapFile(file: File | undefined) {
+    if (!file) {
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setMapImageUrl(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
   }
 
   return (
@@ -1373,6 +1399,32 @@ function AdminHandoverPanel(props: {
             <input name="contactInfo" defaultValue={editing?.contactInfo ?? ""} placeholder="Email/SĐT phụ trách" />
           </label>
         </div>
+        <div className="admin-map-picker-field">
+          <label>
+            Ảnh bản đồ campus
+            <input
+              value={mapImageUrl.startsWith("data:") ? "Ảnh đã chọn từ máy" : mapImageUrl}
+              onChange={(event) => setMapImageUrl(event.target.value)}
+              placeholder="/fpt-campus-map.jpg hoặc chọn file bên dưới"
+              readOnly={mapImageUrl.startsWith("data:")}
+            />
+          </label>
+          <label className="upload-strip admin-map-upload">
+            <Upload size={18} />
+            Chọn ảnh map
+            <input type="file" accept="image/*" onChange={(event) => selectMapFile(event.target.files?.[0])} />
+          </label>
+          {mapImageUrl.startsWith("data:") && (
+            <button className="secondary-button" type="button" onClick={() => setMapImageUrl("")}>
+              Chọn lại bằng URL
+            </button>
+          )}
+        </div>
+        <AdminMapLocationPicker
+          imageUrl={mapImageUrl}
+          position={mapPosition}
+          onChange={setMapPosition}
+        />
         <div className="admin-form-actions">
           {editing && <button className="secondary-button" type="button" onClick={() => setEditing(null)}>Hủy sửa</button>}
           <button className="primary-button" disabled={props.pending} type="submit">{editing ? "Lưu điểm" : "Tạo điểm"}</button>
@@ -1384,7 +1436,7 @@ function AdminHandoverPanel(props: {
         items={props.handoverPoints.map((point) => ({
           id: point.id,
           name: point.name,
-          meta: `${point.address}${point.openingHours ? ` · ${point.openingHours}` : ""}`,
+          meta: `${point.address}${point.openingHours ? ` · ${point.openingHours}` : ""} · ${point.storedItems} vật phẩm`,
           active: point.isActive,
           onEdit: () => setEditing(point),
           onToggle: () => props.onRun(() => api.adminSetHandoverPointActive(point.id, !point.isActive))
@@ -1392,6 +1444,60 @@ function AdminHandoverPanel(props: {
         pending={props.pending}
       />
     </section>
+  );
+}
+
+function AdminMapLocationPicker(props: {
+  imageUrl: string;
+  position: { x: number; y: number };
+  onChange: (position: { x: number; y: number }) => void;
+}) {
+  const mapRef = useRef<HTMLDivElement | null>(null);
+
+  function updateFromPointer(clientX: number, clientY: number) {
+    const rect = mapRef.current?.getBoundingClientRect();
+    if (!rect) {
+      return;
+    }
+    const x = Math.min(100, Math.max(0, ((clientX - rect.left) / rect.width) * 100));
+    const y = Math.min(100, Math.max(0, ((clientY - rect.top) / rect.height) * 100));
+    props.onChange({ x: Number(x.toFixed(3)), y: Number(y.toFixed(3)) });
+  }
+
+  return (
+    <div className="admin-map-picker">
+      <div className="admin-map-picker-heading">
+        <strong>Vị trí điểm bàn giao trên map</strong>
+        <span>{props.position.x.toFixed(1)}%, {props.position.y.toFixed(1)}%</span>
+      </div>
+      <div
+        className={`admin-map-picker-surface ${props.imageUrl ? "" : "empty"}`}
+        ref={mapRef}
+        onPointerDown={(event) => {
+          event.currentTarget.setPointerCapture(event.pointerId);
+          updateFromPointer(event.clientX, event.clientY);
+        }}
+        onPointerMove={(event) => {
+          if (event.buttons === 1) {
+            updateFromPointer(event.clientX, event.clientY);
+          }
+        }}
+      >
+        {props.imageUrl ? (
+          <img src={props.imageUrl} alt="Bản đồ campus dùng để đặt điểm bàn giao" />
+        ) : (
+          <span>Chọn ảnh map trước, sau đó kéo marker tới vị trí mong muốn.</span>
+        )}
+        <button
+          className="admin-map-location-pin"
+          type="button"
+          style={{ left: `${props.position.x}%`, top: `${props.position.y}%` }}
+          aria-label="Vị trí điểm bàn giao"
+        >
+          <MapPin size={22} />
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -2270,35 +2376,6 @@ function PostCard({ post, onSelect, onClaim }: { post: BoardPost; onSelect: (id:
         )}
       </div>
     </article>
-  );
-}
-
-function HandoverView(props: { handoverPoints: HandoverPoint[]; loading: boolean; error: unknown }) {
-  return (
-    <div className="screen-grid">
-      {props.error instanceof Error && <div className="notice error">Không tải được điểm bàn giao: {props.error.message}</div>}
-      {props.loading && <div className="notice">Đang tải điểm bàn giao...</div>}
-      <section className="handover-grid">
-        {props.handoverPoints.map((point) => (
-          <article className="handover-card" key={point.id}>
-            <span>
-              <Handshake size={18} />
-              Điểm bàn giao
-            </span>
-            <h2>{point.name}</h2>
-            <p>{point.address}</p>
-            <small>{point.openingHours ?? "Chưa cấu hình giờ mở cửa"}</small>
-          </article>
-        ))}
-        {!props.loading && props.handoverPoints.length === 0 && (
-          <div className="empty-state">
-            <MapPin size={28} />
-            <strong>Chưa có điểm bàn giao</strong>
-            <span>Admin có thể tạo điểm bàn giao trong Java Admin Service.</span>
-          </div>
-        )}
-      </section>
-    </div>
   );
 }
 

@@ -30,6 +30,15 @@ public class HandoverPointEntity {
   @Column(name = "contact_info")
   private String contactInfo;
 
+  @Column(name = "map_image_url")
+  private String mapImageUrl;
+
+  @Column(name = "map_position_x")
+  private Double mapPositionX;
+
+  @Column(name = "map_position_y")
+  private Double mapPositionY;
+
   @Column(name = "is_active")
   private boolean active;
 
@@ -46,12 +55,16 @@ public class HandoverPointEntity {
   }
 
   public HandoverPointEntity(String id, String name, String address, String openingHours, String contactInfo,
-      String areaId, String buildingId, String roomId, String createdBy) {
+      String mapImageUrl, Double mapPositionX, Double mapPositionY, String areaId, String buildingId, String roomId,
+      String createdBy) {
     this.id = id;
     this.name = name;
     this.address = address;
     this.openingHours = openingHours;
     this.contactInfo = contactInfo;
+    this.mapImageUrl = mapImageUrl;
+    this.mapPositionX = mapPositionX;
+    this.mapPositionY = mapPositionY;
     this.areaId = areaId;
     this.buildingId = buildingId;
     this.roomId = roomId;
@@ -119,6 +132,30 @@ public class HandoverPointEntity {
 
   public void setContactInfo(String contactInfo) {
     this.contactInfo = contactInfo;
+  }
+
+  public String getMapImageUrl() {
+    return mapImageUrl;
+  }
+
+  public void setMapImageUrl(String mapImageUrl) {
+    this.mapImageUrl = mapImageUrl;
+  }
+
+  public Double getMapPositionX() {
+    return mapPositionX;
+  }
+
+  public void setMapPositionX(Double mapPositionX) {
+    this.mapPositionX = mapPositionX;
+  }
+
+  public Double getMapPositionY() {
+    return mapPositionY;
+  }
+
+  public void setMapPositionY(Double mapPositionY) {
+    this.mapPositionY = mapPositionY;
   }
 
   public boolean isActive() {

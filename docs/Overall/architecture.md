@@ -92,7 +92,7 @@ Current Node API endpoints:
 | `PATCH` | `/api/admin/users/:id/roles` | Admin-only role update |
 | `GET/POST/PUT/PATCH` | `/api/admin/categories...` | Admin-only category CRUD and active toggle |
 | `GET/POST/PUT/PATCH` | `/api/admin/locations/...` | Admin-only area and building CRUD |
-| `GET/POST/PUT/PATCH` | `/api/admin/handover-points...` | Admin-only handover point CRUD |
+| `GET/POST/PUT/PATCH` | `/api/admin/handover-points...` | Admin-only handover point CRUD, map image/marker coordinates and stored-item counts |
 | `GET/POST/PUT/PATCH/DELETE` | `/api/admin/warehouse-items...` | Admin-only warehouse item list, create, update, status update and soft delete |
 | `GET` | `/api/admin/reports` | Admin-only report queue |
 | `PATCH` | `/api/admin/reports/:id/handle` | Admin-only report handling and moderation action |
@@ -118,6 +118,7 @@ All Node API responses use `{ success, data?, error?, message? }`.
 | `010_notifications_and_warehouse.sql` | Add match notification threshold config and `warehouse_items` |
 | `011_media_kind_and_match_threshold.sql` | Add `post_media.media_kind` and keep notification threshold at `0.8` |
 | `012_indexes_and_warehouse_lifecycle.sql` | Add feed/matching/notification/log indexes and expand warehouse lifecycle statuses |
+| `013_handover_map_location.sql` | Add `handover_points.map_image_url`, `map_position_x`, and `map_position_y` for campus map placement |
 
 Run migrations with:
 

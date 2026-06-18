@@ -188,6 +188,7 @@ paths:
       security:
         - bearerAuth: []
       summary: Admin list handover points
+      description: Returns handover points with mapImageUrl, mapPositionX/Y and storedItems counted from active warehouse items.
       responses:
         "200":
           description: Handover point list
@@ -195,6 +196,7 @@ paths:
       security:
         - bearerAuth: []
       summary: Admin create handover point
+      description: Creates a handover point and can persist campus map image data/URL plus marker coordinates in percentages.
       responses:
         "201":
           description: Handover point created
@@ -342,12 +344,14 @@ paths:
   /handover-points:
     get:
       summary: List active handover points
+      description: Returns active handover points with map image/marker coordinates and stored item counts.
       responses:
         "200":
           description: Handover point list
   /handover-points/{id}:
     get:
       summary: Get active handover point detail
+      description: Returns one active handover point with map image/marker coordinates and stored item count.
       responses:
         "200":
           description: Handover point detail

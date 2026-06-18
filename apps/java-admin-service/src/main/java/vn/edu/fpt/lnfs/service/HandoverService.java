@@ -44,6 +44,9 @@ public class HandoverService {
         request.address(),
         request.openingHours(),
         request.contactInfo(),
+        request.mapImageUrl(),
+        request.mapPositionX(),
+        request.mapPositionY(),
         request.areaId(),
         request.buildingId(),
         request.roomId(),
@@ -57,6 +60,9 @@ public class HandoverService {
     point.setAddress(request.address());
     point.setOpeningHours(request.openingHours());
     point.setContactInfo(request.contactInfo());
+    point.setMapImageUrl(request.mapImageUrl());
+    point.setMapPositionX(request.mapPositionX());
+    point.setMapPositionY(request.mapPositionY());
     point.setAreaId(request.areaId());
     point.setBuildingId(request.buildingId());
     point.setRoomId(request.roomId());

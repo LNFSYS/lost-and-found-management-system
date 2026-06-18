@@ -77,7 +77,23 @@ interface HandoverAdminRow extends RowDataPacket {
   building_id: string | null;
   opening_hours: string | null;
   contact_info: string | null;
+  map_image_url: string | null;
+  map_position_x: string | number | null;
+  map_position_y: string | number | null;
+  stored_items: number | null;
   is_active: number;
+}
+
+interface HandoverInput {
+  name: string;
+  address: string;
+  areaId?: string | null;
+  buildingId?: string | null;
+  openingHours?: string | null;
+  contactInfo?: string | null;
+  mapImageUrl?: string | null;
+  mapPositionX?: number | null;
+  mapPositionY?: number | null;
 }
 
 type WarehouseStatus =
@@ -576,9 +592,19 @@ export const adminRepository = {
   async handoverPoints() {
     const [rows] = await dbPool.query<HandoverAdminRow[]>(
       `
-        SELECT id, name, address, area_id, building_id, opening_hours, contact_info, is_active
-        FROM handover_points
-        ORDER BY name
+        SELECT
+          hp.id, hp.name, hp.address, hp.area_id, hp.building_id, hp.opening_hours, hp.contact_info,
+          hp.map_image_url, hp.map_position_x, hp.map_position_y, hp.is_active,
+          COALESCE(stored.total, 0) AS stored_items
+        FROM handover_points hp
+        LEFT JOIN (
+          SELECT handover_point_id, COUNT(*) AS total
+          FROM warehouse_items
+          WHERE deleted_at IS NULL
+            AND status IN ('PENDING_APPROVAL', 'RECEIVED', 'STORED', 'CLAIMED')
+          GROUP BY handover_point_id
+        ) stored ON stored.handover_point_id = hp.id
+        ORDER BY hp.name
       `
     );
     return rows.map((row) => ({
@@ -589,19 +615,16 @@ export const adminRepository = {
       buildingId: row.building_id,
       openingHours: row.opening_hours,
       contactInfo: row.contact_info,
+      mapImageUrl: row.map_image_url,
+      mapPositionX: row.map_position_x === null ? null : Number(row.map_position_x),
+      mapPositionY: row.map_position_y === null ? null : Number(row.map_position_y),
+      storedItems: Number(row.stored_items ?? 0),
       isActive: activeFlag(row.is_active)
     }));
   },
 
   async createHandoverPoint(
-    input: {
-      name: string;
-      address: string;
-      areaId?: string | null;
-      buildingId?: string | null;
-      openingHours?: string | null;
-      contactInfo?: string | null;
-    },
+    input: HandoverInput,
     actorId: string
   ) {
     // Validate areaId exists
@@ -631,9 +654,10 @@ export const adminRepository = {
     await dbPool.execute(
       `
         INSERT INTO handover_points (
-          id, name, address, area_id, building_id, opening_hours, contact_info, created_by
+          id, name, address, area_id, building_id, opening_hours, contact_info,
+          map_image_url, map_position_x, map_position_y, created_by
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         id,
@@ -643,20 +667,16 @@ export const adminRepository = {
         input.buildingId ?? null,
         input.openingHours ?? null,
         input.contactInfo ?? null,
+        input.mapImageUrl ?? null,
+        input.mapPositionX ?? null,
+        input.mapPositionY ?? null,
         actorId
       ]
     );
     return { id };
   },
 
-  async updateHandoverPoint(id: string, input: {
-    name: string;
-    address: string;
-    areaId?: string | null;
-    buildingId?: string | null;
-    openingHours?: string | null;
-    contactInfo?: string | null;
-  }) {
+  async updateHandoverPoint(id: string, input: HandoverInput) {
     // Validate areaId exists
     if (input.areaId) {
       const exists = await postRepository.activeRecordExists("campus_areas", input.areaId);
@@ -683,7 +703,9 @@ export const adminRepository = {
     await dbPool.execute(
       `
         UPDATE handover_points
-        SET name = ?, address = ?, area_id = ?, building_id = ?, opening_hours = ?, contact_info = ?
+        SET
+          name = ?, address = ?, area_id = ?, building_id = ?, opening_hours = ?, contact_info = ?,
+          map_image_url = ?, map_position_x = ?, map_position_y = ?
         WHERE id = ?
       `,
       [
@@ -693,6 +715,9 @@ export const adminRepository = {
         input.buildingId ?? null,
         input.openingHours ?? null,
         input.contactInfo ?? null,
+        input.mapImageUrl ?? null,
+        input.mapPositionX ?? null,
+        input.mapPositionY ?? null,
         id
       ]
     );

@@ -32,6 +32,10 @@ interface HandoverPointRow extends RowDataPacket {
   building_id: string | null;
   opening_hours: string | null;
   contact_info: string | null;
+  map_image_url: string | null;
+  map_position_x: string | number | null;
+  map_position_y: string | number | null;
+  stored_items: number | null;
 }
 
 export const lookupRepository = {
@@ -95,10 +99,20 @@ export const lookupRepository = {
   async listHandoverPoints() {
     const [rows] = await dbPool.query<HandoverPointRow[]>(
       `
-        SELECT id, name, address, area_id, building_id, opening_hours, contact_info
-        FROM handover_points
-        WHERE is_active = TRUE
-        ORDER BY name
+        SELECT
+          hp.id, hp.name, hp.address, hp.area_id, hp.building_id, hp.opening_hours, hp.contact_info,
+          hp.map_image_url, hp.map_position_x, hp.map_position_y,
+          COALESCE(stored.total, 0) AS stored_items
+        FROM handover_points hp
+        LEFT JOIN (
+          SELECT handover_point_id, COUNT(*) AS total
+          FROM warehouse_items
+          WHERE deleted_at IS NULL
+            AND status IN ('PENDING_APPROVAL', 'RECEIVED', 'STORED', 'CLAIMED')
+          GROUP BY handover_point_id
+        ) stored ON stored.handover_point_id = hp.id
+        WHERE hp.is_active = TRUE
+        ORDER BY hp.name
       `
     );
 
@@ -109,16 +123,30 @@ export const lookupRepository = {
       areaId: row.area_id,
       buildingId: row.building_id,
       openingHours: row.opening_hours,
-      contactInfo: row.contact_info
+      contactInfo: row.contact_info,
+      mapImageUrl: row.map_image_url,
+      mapPositionX: row.map_position_x === null ? null : Number(row.map_position_x),
+      mapPositionY: row.map_position_y === null ? null : Number(row.map_position_y),
+      storedItems: Number(row.stored_items ?? 0)
     }));
   },
 
   async findHandoverPointById(id: string) {
     const [rows] = await dbPool.query<HandoverPointRow[]>(
       `
-        SELECT id, name, address, area_id, building_id, opening_hours, contact_info
-        FROM handover_points
-        WHERE id = ? AND is_active = TRUE
+        SELECT
+          hp.id, hp.name, hp.address, hp.area_id, hp.building_id, hp.opening_hours, hp.contact_info,
+          hp.map_image_url, hp.map_position_x, hp.map_position_y,
+          COALESCE(stored.total, 0) AS stored_items
+        FROM handover_points hp
+        LEFT JOIN (
+          SELECT handover_point_id, COUNT(*) AS total
+          FROM warehouse_items
+          WHERE deleted_at IS NULL
+            AND status IN ('PENDING_APPROVAL', 'RECEIVED', 'STORED', 'CLAIMED')
+          GROUP BY handover_point_id
+        ) stored ON stored.handover_point_id = hp.id
+        WHERE hp.id = ? AND hp.is_active = TRUE
         LIMIT 1
       `,
       [id]
@@ -136,7 +164,11 @@ export const lookupRepository = {
       areaId: row.area_id,
       buildingId: row.building_id,
       openingHours: row.opening_hours,
-      contactInfo: row.contact_info
+      contactInfo: row.contact_info,
+      mapImageUrl: row.map_image_url,
+      mapPositionX: row.map_position_x === null ? null : Number(row.map_position_x),
+      mapPositionY: row.map_position_y === null ? null : Number(row.map_position_y),
+      storedItems: Number(row.stored_items ?? 0)
     };
   }
 };

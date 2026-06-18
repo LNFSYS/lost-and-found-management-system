@@ -40,6 +40,7 @@ paths:
   /admin/handover-points:
     get:
       summary: List active handover points
+      description: Handover point payloads may include mapImageUrl and mapPositionX/Y for campus map placement.
       security:
         - bearerAuth: []
       responses:
@@ -47,6 +48,7 @@ paths:
           description: Handover point list
     post:
       summary: Create handover point
+      description: Creates a point with optional campus map image data/URL and percentage marker coordinates.
       security:
         - bearerAuth: []
       responses:
@@ -55,6 +57,7 @@ paths:
   /admin/handover-points/{id}:
     put:
       summary: Update handover point
+      description: Updates point profile, optional map image data/URL and percentage marker coordinates.
       security:
         - bearerAuth: []
       responses:

@@ -172,6 +172,25 @@ interface ReportAdminRow extends RowDataPacket {
   created_at: string;
 }
 
+let handoverMapColumnsAvailableCache: boolean | null = null;
+
+async function handoverMapColumnsAvailable() {
+  if (handoverMapColumnsAvailableCache !== null) {
+    return handoverMapColumnsAvailableCache;
+  }
+  const [rows] = await dbPool.query<Array<RowDataPacket & { total: number }>>(
+    `
+      SELECT COUNT(*) AS total
+      FROM information_schema.columns
+      WHERE table_schema = DATABASE()
+        AND table_name = 'handover_points'
+        AND column_name IN ('map_image_url', 'map_position_x', 'map_position_y')
+    `
+  );
+  handoverMapColumnsAvailableCache = Number(rows[0]?.total ?? 0) === 3;
+  return handoverMapColumnsAvailableCache;
+}
+
 interface ReportLookupRow extends RowDataPacket {
   id: string;
   entity_type: "POST" | "USER" | "CLAIM";
@@ -590,11 +609,13 @@ export const adminRepository = {
   },
 
   async handoverPoints() {
+    const hasMapColumns = await handoverMapColumnsAvailable();
     const [rows] = await dbPool.query<HandoverAdminRow[]>(
       `
         SELECT
           hp.id, hp.name, hp.address, hp.area_id, hp.building_id, hp.opening_hours, hp.contact_info,
-          hp.map_image_url, hp.map_position_x, hp.map_position_y, hp.is_active,
+          ${hasMapColumns ? "hp.map_image_url, hp.map_position_x, hp.map_position_y," : "NULL AS map_image_url, NULL AS map_position_x, NULL AS map_position_y,"}
+          hp.is_active,
           COALESCE(stored.total, 0) AS stored_items
         FROM handover_points hp
         LEFT JOIN (
@@ -651,13 +672,38 @@ export const adminRepository = {
     }
 
     const id = randomUUID();
+    if (await handoverMapColumnsAvailable()) {
+      await dbPool.execute(
+        `
+          INSERT INTO handover_points (
+            id, name, address, area_id, building_id, opening_hours, contact_info,
+            map_image_url, map_position_x, map_position_y, created_by
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          id,
+          input.name.trim(),
+          input.address.trim(),
+          input.areaId ?? null,
+          input.buildingId ?? null,
+          input.openingHours ?? null,
+          input.contactInfo ?? null,
+          input.mapImageUrl ?? null,
+          input.mapPositionX ?? null,
+          input.mapPositionY ?? null,
+          actorId
+        ]
+      );
+      return { id };
+    }
+
     await dbPool.execute(
       `
         INSERT INTO handover_points (
-          id, name, address, area_id, building_id, opening_hours, contact_info,
-          map_image_url, map_position_x, map_position_y, created_by
+          id, name, address, area_id, building_id, opening_hours, contact_info, created_by
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         id,
@@ -667,9 +713,6 @@ export const adminRepository = {
         input.buildingId ?? null,
         input.openingHours ?? null,
         input.contactInfo ?? null,
-        input.mapImageUrl ?? null,
-        input.mapPositionX ?? null,
-        input.mapPositionY ?? null,
         actorId
       ]
     );
@@ -700,12 +743,35 @@ export const adminRepository = {
       }
     }
 
+    if (await handoverMapColumnsAvailable()) {
+      await dbPool.execute(
+        `
+          UPDATE handover_points
+          SET
+            name = ?, address = ?, area_id = ?, building_id = ?, opening_hours = ?, contact_info = ?,
+            map_image_url = ?, map_position_x = ?, map_position_y = ?
+          WHERE id = ?
+        `,
+        [
+          input.name.trim(),
+          input.address.trim(),
+          input.areaId ?? null,
+          input.buildingId ?? null,
+          input.openingHours ?? null,
+          input.contactInfo ?? null,
+          input.mapImageUrl ?? null,
+          input.mapPositionX ?? null,
+          input.mapPositionY ?? null,
+          id
+        ]
+      );
+      return { updated: true };
+    }
+
     await dbPool.execute(
       `
         UPDATE handover_points
-        SET
-          name = ?, address = ?, area_id = ?, building_id = ?, opening_hours = ?, contact_info = ?,
-          map_image_url = ?, map_position_x = ?, map_position_y = ?
+        SET name = ?, address = ?, area_id = ?, building_id = ?, opening_hours = ?, contact_info = ?
         WHERE id = ?
       `,
       [
@@ -715,9 +781,6 @@ export const adminRepository = {
         input.buildingId ?? null,
         input.openingHours ?? null,
         input.contactInfo ?? null,
-        input.mapImageUrl ?? null,
-        input.mapPositionX ?? null,
-        input.mapPositionY ?? null,
         id
       ]
     );

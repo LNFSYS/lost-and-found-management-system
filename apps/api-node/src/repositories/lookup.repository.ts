@@ -38,6 +38,25 @@ interface HandoverPointRow extends RowDataPacket {
   stored_items: number | null;
 }
 
+let handoverMapColumnsAvailableCache: boolean | null = null;
+
+async function handoverMapColumnsAvailable() {
+  if (handoverMapColumnsAvailableCache !== null) {
+    return handoverMapColumnsAvailableCache;
+  }
+  const [rows] = await dbPool.query<Array<RowDataPacket & { total: number }>>(
+    `
+      SELECT COUNT(*) AS total
+      FROM information_schema.columns
+      WHERE table_schema = DATABASE()
+        AND table_name = 'handover_points'
+        AND column_name IN ('map_image_url', 'map_position_x', 'map_position_y')
+    `
+  );
+  handoverMapColumnsAvailableCache = Number(rows[0]?.total ?? 0) === 3;
+  return handoverMapColumnsAvailableCache;
+}
+
 export const lookupRepository = {
   async listCategories() {
     const [rows] = await dbPool.query<CategoryRow[]>(
@@ -97,11 +116,12 @@ export const lookupRepository = {
   },
 
   async listHandoverPoints() {
+    const hasMapColumns = await handoverMapColumnsAvailable();
     const [rows] = await dbPool.query<HandoverPointRow[]>(
       `
         SELECT
           hp.id, hp.name, hp.address, hp.area_id, hp.building_id, hp.opening_hours, hp.contact_info,
-          hp.map_image_url, hp.map_position_x, hp.map_position_y,
+          ${hasMapColumns ? "hp.map_image_url, hp.map_position_x, hp.map_position_y," : "NULL AS map_image_url, NULL AS map_position_x, NULL AS map_position_y,"}
           COALESCE(stored.total, 0) AS stored_items
         FROM handover_points hp
         LEFT JOIN (
@@ -132,11 +152,12 @@ export const lookupRepository = {
   },
 
   async findHandoverPointById(id: string) {
+    const hasMapColumns = await handoverMapColumnsAvailable();
     const [rows] = await dbPool.query<HandoverPointRow[]>(
       `
         SELECT
           hp.id, hp.name, hp.address, hp.area_id, hp.building_id, hp.opening_hours, hp.contact_info,
-          hp.map_image_url, hp.map_position_x, hp.map_position_y,
+          ${hasMapColumns ? "hp.map_image_url, hp.map_position_x, hp.map_position_y," : "NULL AS map_image_url, NULL AS map_position_x, NULL AS map_position_y,"}
           COALESCE(stored.total, 0) AS stored_items
         FROM handover_points hp
         LEFT JOIN (

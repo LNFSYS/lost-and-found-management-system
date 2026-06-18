@@ -2101,8 +2101,8 @@ function AdminListPanel(props: { title: string; icon: React.ReactNode; items: st
         {props.icon}
       </div>
       <div className="admin-chip-list">
-        {props.items.slice(0, 8).map((item) => (
-          <span key={item}>{item}</span>
+        {props.items.slice(0, 8).map((item, index) => (
+          <span key={`${item}-${index}`}>{item}</span>
         ))}
         {props.items.length === 0 && <small>Chưa có dữ liệu.</small>}
       </div>

@@ -616,7 +616,7 @@ export const adminRepository = {
           hp.id, hp.name, hp.address, hp.area_id, hp.building_id, hp.opening_hours, hp.contact_info,
           ${hasMapColumns ? "hp.map_image_url, hp.map_position_x, hp.map_position_y," : "NULL AS map_image_url, NULL AS map_position_x, NULL AS map_position_y,"}
           hp.is_active,
-          COALESCE(stored.total, 0) AS stored_items
+          COALESCE(wi_counts.total, 0) AS stored_items
         FROM handover_points hp
         LEFT JOIN (
           SELECT handover_point_id, COUNT(*) AS total
@@ -624,7 +624,7 @@ export const adminRepository = {
           WHERE deleted_at IS NULL
             AND status IN ('PENDING_APPROVAL', 'RECEIVED', 'STORED', 'CLAIMED')
           GROUP BY handover_point_id
-        ) stored ON stored.handover_point_id = hp.id
+        ) wi_counts ON wi_counts.handover_point_id = hp.id
         ORDER BY hp.name
       `
     );

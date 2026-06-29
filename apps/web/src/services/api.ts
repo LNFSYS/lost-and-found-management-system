@@ -73,6 +73,8 @@ export interface AdminUser {
   studentCode: string | null;
   status: string;
   roles: string[];
+  reputationPoints: number;
+  reputationLevel: string;
   createdAt: string;
 }
 
@@ -150,6 +152,24 @@ export interface AdminWarehouseItem {
   storageCode: string | null;
   receivedAt: string;
   returnedAt: string | null;
+  retentionDeadline: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ReturnAppointment {
+  id: string;
+  claimId: string;
+  postId: string;
+  proposer: { id: string; fullName: string | null };
+  status: "PENDING" | "ACCEPTED" | "REJECTED" | "CANCELLED" | "COMPLETED" | "RESCHEDULED";
+  proposedAt: string;
+  handoverPoint: { id: string; name: string | null } | null;
+  customLocation: string | null;
+  rejectionReason: string | null;
+  cancellationReason: string | null;
+  acceptedAt: string | null;
+  completedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -219,6 +239,7 @@ export interface MatchResult {
 export interface PostMatchSuggestion {
   match: MatchResult;
   post: BoardPost;
+  sourcePostId?: string;
 }
 
 export interface PostDetail {
@@ -241,6 +262,47 @@ export interface ClaimDetail {
     createdAt: string;
   };
   evidence: Array<{ id: string; secureUrl: string; evidenceType: string; description: string | null }>;
+}
+
+export interface ClaimVerification {
+  claimId: string;
+  ownershipConfidence: number;
+  level: "LOW" | "MEDIUM" | "HIGH";
+  isSystemVerified: boolean;
+  note: string;
+  breakdown: {
+    matchScore: number;
+    textScore: number;
+    locationScore: number;
+    timeScore: number;
+    evidenceScore: number;
+  };
+  signals: {
+    hasClaimantMatchedLostPost: boolean;
+    evidenceCount: number;
+    hasEvidenceOcrText: boolean;
+    hasApproximateLostTime: boolean;
+    hasApproximateLocation: boolean;
+  };
+}
+
+export interface PostClaimSummary {
+  id: string;
+  postId: string;
+  postOwnerId: string;
+  claimant: { id: string; fullName: string };
+  status: "PENDING" | "NEED_MORE_INFO" | "ACCEPTED" | "REJECTED" | "CANCELLED";
+  description: string | null;
+  secretAnswer: string | null;
+  approximateLostAt: string | null;
+  approximateLocation: string | null;
+  rejectionReason: string | null;
+  moreInfoRequest: string | null;
+  acceptedAt: string | null;
+  rejectedAt: string | null;
+  cancelledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface NotificationItem {
@@ -280,6 +342,14 @@ export interface ListPostsParams {
 
 function getToken() {
   return localStorage.getItem(TOKEN_KEY);
+}
+
+export function getStoredAccessToken() {
+  return getToken();
+}
+
+export function getApiOrigin() {
+  return API_BASE_URL.replace(/\/api\/?$/, "");
 }
 
 export function hasAccessToken() {
@@ -348,11 +418,22 @@ export const api = {
       `/posts/my${buildQuery(params)}`
     );
   },
+  myMatchSuggestions() {
+    return request<{ suggestions: PostMatchSuggestion[] }>("/posts/my/match-suggestions");
+  },
   getPost(id: string) {
     return request<PostDetail>(`/posts/${id}`);
   },
   getMatches(id: string) {
     return request<{ matches: MatchResult[] }>(`/posts/${id}/matches`);
+  },
+  getMatchExplanations(id: string) {
+    return request<{
+      explanations: Array<{ matchId: string; lostPostId: string; foundPostId: string; totalScore: number; summary: string; reasons: string[] }>;
+    }>(`/posts/${id}/matches/explanations`);
+  },
+  postClaims(id: string) {
+    return request<{ claims: PostClaimSummary[] }>(`/posts/${id}/claims`);
   },
   createPost(input: Record<string, unknown>) {
     return request<{ post: BoardPost; matchSuggestions: PostMatchSuggestion[] }>("/posts", {
@@ -366,9 +447,21 @@ export const api = {
       body: JSON.stringify({ status })
     });
   },
+  updatePost(id: string, input: Record<string, unknown>) {
+    return request<{ post: BoardPost }>(`/posts/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(input)
+    });
+  },
   deletePost(id: string) {
     return request<{ deleted: boolean }>(`/posts/${id}`, {
       method: "DELETE"
+    });
+  },
+  reportPost(id: string, input: Record<string, unknown>) {
+    return request<{ id: string }>(`/posts/${id}/report`, {
+      method: "POST",
+      body: JSON.stringify(input)
     });
   },
   uploadPostImages(id: string, files: FileList | File[], evidenceFiles: FileList | File[] = []) {
@@ -386,6 +479,9 @@ export const api = {
       body: JSON.stringify(input)
     });
   },
+  getClaim(id: string) {
+    return request<ClaimDetail>(`/claims/${id}`);
+  },
   uploadClaimEvidence(id: string, file: File, evidenceType: string) {
     const data = new FormData();
     data.append("evidence", file);
@@ -393,6 +489,53 @@ export const api = {
     return request<ClaimDetail>(`/claims/${id}/evidence`, {
       method: "POST",
       body: data
+    });
+  },
+  claimVerification(id: string) {
+    return request<{ verification: ClaimVerification }>(`/claims/${id}/verification`);
+  },
+  requestClaimMoreInfo(id: string, message: string) {
+    return request<ClaimDetail>(`/claims/${id}/more-info`, {
+      method: "PATCH",
+      body: JSON.stringify({ message })
+    });
+  },
+  acceptClaim(id: string) {
+    return request<ClaimDetail>(`/claims/${id}/accept`, {
+      method: "PATCH"
+    });
+  },
+  rejectClaim(id: string, reason: string) {
+    return request<ClaimDetail>(`/claims/${id}/reject`, {
+      method: "PATCH",
+      body: JSON.stringify({ reason })
+    });
+  },
+  cancelClaim(id: string, reason: string) {
+    return request<ClaimDetail>(`/claims/${id}/cancel`, {
+      method: "PATCH",
+      body: JSON.stringify({ reason })
+    });
+  },
+  createAppointment(input: Record<string, unknown>) {
+    return request<{ appointment: ReturnAppointment }>("/appointments", {
+      method: "POST",
+      body: JSON.stringify(input)
+    });
+  },
+  claimAppointments(claimId: string) {
+    return request<{ appointments: ReturnAppointment[] }>(`/appointments/claim/${claimId}`);
+  },
+  rescheduleAppointment(id: string, input: Record<string, unknown>) {
+    return request<{ appointment: ReturnAppointment }>(`/appointments/${id}/reschedule`, {
+      method: "PATCH",
+      body: JSON.stringify(input)
+    });
+  },
+  sendAppointmentReminders(hoursAhead = 24) {
+    return request<{ reminded: number }>("/appointments/jobs/send-reminders", {
+      method: "POST",
+      body: JSON.stringify({ hoursAhead })
     });
   },
   register(input: Record<string, unknown>) {
@@ -464,7 +607,20 @@ export const api = {
     return request<{ activity: Array<{ id: string; action: string; createdAt: string }> }>("/auth/activity");
   },
   reputation() {
-    return request<{ reputation: { totalPoints: number; level: string } }>("/auth/reputation");
+    return request<{
+      reputation: {
+        totalPoints: number;
+        level: string;
+        recentLogs: Array<{
+          id: string;
+          delta: number;
+          reason: string;
+          entityType: string | null;
+          entityId: string | null;
+          createdAt: string;
+        }>;
+      };
+    }>("/auth/reputation");
   },
   notifications() {
     return request<{ items: NotificationItem[]; unreadCount: number }>("/auth/notifications");
@@ -496,6 +652,9 @@ export const api = {
   },
   adminOverview() {
     return request<{ overview: AdminOverview }>("/admin/dashboard/overview");
+  },
+  adminDashboardExportUrl() {
+    return `${API_BASE_URL}/admin/dashboard/export.csv`;
   },
   adminUsers() {
     return request<{ users: AdminUser[] }>("/admin/users");
@@ -605,6 +764,11 @@ export const api = {
   adminWarehouseItems() {
     return request<{ warehouseItems: AdminWarehouseItem[] }>("/admin/warehouse-items");
   },
+  adminWarehouseCapacity() {
+    return request<{
+      capacity: { activeItems: number; capacity: number; warningAt: number; usageRatio: number; isFull: boolean; isNearFull: boolean };
+    }>("/admin/warehouse/capacity");
+  },
   adminCreateWarehouseItem(input: Record<string, unknown>) {
     return request<{ id: string }>("/admin/warehouse-items", {
       method: "POST",
@@ -626,6 +790,27 @@ export const api = {
   adminDeleteWarehouseItem(id: string) {
     return request<{ deleted: boolean }>(`/admin/warehouse-items/${id}`, {
       method: "DELETE"
+    });
+  },
+  adminExpirePosts() {
+    return request<{ expired: number }>("/admin/jobs/expire-posts", {
+      method: "POST"
+    });
+  },
+  adminExpireWarehouseItems() {
+    return request<{ expired: number }>("/admin/warehouse-items/expire-overdue", {
+      method: "POST"
+    });
+  },
+  adminAlertWarehouseNearExpiry(daysAhead = 7) {
+    return request<{ alertedItems: number }>("/admin/warehouse-items/alert-near-expiry", {
+      method: "POST",
+      body: JSON.stringify({ daysAhead })
+    });
+  },
+  adminAlertWarehouseCapacity() {
+    return request<{ alerted: boolean }>("/admin/warehouse/alert-capacity", {
+      method: "POST"
     });
   },
   adminReports() {

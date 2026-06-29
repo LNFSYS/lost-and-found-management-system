@@ -19,11 +19,11 @@ try {
     const page = await browser.newPage({ viewport });
     await page.goto(baseUrl, { waitUntil: "networkidle" });
     await page.waitForSelector(".app-shell", { state: "visible", timeout: 10000 });
-    await page.waitForSelector(".toolbar-band", { state: "visible", timeout: 10000 });
+    await page.waitForSelector(".feed-top-actions", { state: "visible", timeout: 10000 });
 
     const layout = await page.evaluate(() => {
       const shell = document.querySelector(".app-shell")?.getBoundingClientRect();
-      const toolbar = document.querySelector(".toolbar-band")?.getBoundingClientRect();
+      const toolbar = document.querySelector(".feed-top-actions")?.getBoundingClientRect();
       const topbar = document.querySelector(".topbar")?.getBoundingClientRect();
       const overflowX = document.documentElement.scrollWidth > window.innerWidth + 1;
       return {

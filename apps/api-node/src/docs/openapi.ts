@@ -118,6 +118,20 @@ export const openApiDocument = {
         responses: { "200": { description: "Admin overview" } }
       }
     },
+    "/admin/dashboard/export.csv": {
+      get: {
+        security: [{ bearerAuth: [] }],
+        summary: "Export dashboard overview metrics as CSV",
+        responses: { "200": { description: "Dashboard CSV export" } }
+      }
+    },
+    "/admin/jobs/expire-posts": {
+      post: {
+        security: [{ bearerAuth: [] }],
+        summary: "Expire overdue posts",
+        responses: { "200": { description: "Expired post count" } }
+      }
+    },
     "/admin/users": {
       get: {
         security: [{ bearerAuth: [] }],
@@ -171,6 +185,41 @@ export const openApiDocument = {
         security: [{ bearerAuth: [] }],
         summary: "Admin create handover point",
         responses: { "201": { description: "Handover point created" } }
+      }
+    },
+    "/admin/warehouse-items/expire-overdue": {
+      post: {
+        security: [{ bearerAuth: [] }],
+        summary: "Mark overdue warehouse items as expired",
+        responses: { "200": { description: "Overdue items expired" } }
+      }
+    },
+    "/admin/warehouse/capacity": {
+      get: {
+        security: [{ bearerAuth: [] }],
+        summary: "Get warehouse capacity snapshot",
+        responses: { "200": { description: "Warehouse capacity" } }
+      }
+    },
+    "/admin/warehouse/alert-capacity": {
+      post: {
+        security: [{ bearerAuth: [] }],
+        summary: "Send warehouse capacity warning if threshold is reached",
+        responses: { "200": { description: "Capacity alert result" } }
+      }
+    },
+    "/admin/warehouse-items/alert-near-expiry": {
+      post: {
+        security: [{ bearerAuth: [] }],
+        summary: "Send near-expiry alerts for warehouse items",
+        responses: { "200": { description: "Near-expiry alert result" } }
+      }
+    },
+    "/admin/warehouse-items/{id}/process": {
+      post: {
+        security: [{ bearerAuth: [] }],
+        summary: "Process an expired warehouse item as disposed, donated, or transferred",
+        responses: { "200": { description: "Expired item processed" } }
       }
     },
     "/posts": {
@@ -228,6 +277,20 @@ export const openApiDocument = {
         responses: { "200": { description: "Match result list" } }
       }
     },
+    "/posts/{id}/matches/explanations": {
+      get: {
+        security: [{ bearerAuth: [] }],
+        summary: "Explain why matches are similar",
+        responses: { "200": { description: "Match explanations" } }
+      }
+    },
+    "/posts/{id}/matches/re-run": {
+      post: {
+        security: [{ bearerAuth: [] }],
+        summary: "Admin re-run matching for a post",
+        responses: { "200": { description: "Matching re-run completed" } }
+      }
+    },
     "/posts/{id}/status": {
       patch: {
         security: [{ bearerAuth: [] }],
@@ -240,6 +303,13 @@ export const openApiDocument = {
         security: [{ bearerAuth: [] }],
         summary: "List claims for a post",
         responses: { "200": { description: "Claim list" } }
+      }
+    },
+    "/posts/{id}/report": {
+      post: {
+        security: [{ bearerAuth: [] }],
+        summary: "Report a post for moderation",
+        responses: { "201": { description: "Report submitted" } }
       }
     },
     "/search": {
@@ -262,6 +332,41 @@ export const openApiDocument = {
         responses: { "200": { description: "Claim detail" } }
       }
     },
+    "/claims/{id}/verification": {
+      get: {
+        security: [{ bearerAuth: [] }],
+        summary: "Calculate claim evidence ownership verification percentage",
+        responses: { "200": { description: "Claim verification confidence" } }
+      }
+    },
+    "/claims/{id}/more-info": {
+      patch: {
+        security: [{ bearerAuth: [] }],
+        summary: "Request more information for a claim",
+        responses: { "200": { description: "Claim marked as needing more info" } }
+      }
+    },
+    "/claims/{id}/accept": {
+      patch: {
+        security: [{ bearerAuth: [] }],
+        summary: "Accept a claim",
+        responses: { "200": { description: "Claim accepted" } }
+      }
+    },
+    "/claims/{id}/reject": {
+      patch: {
+        security: [{ bearerAuth: [] }],
+        summary: "Reject a claim with reason",
+        responses: { "200": { description: "Claim rejected" } }
+      }
+    },
+    "/claims/{id}/cancel": {
+      patch: {
+        security: [{ bearerAuth: [] }],
+        summary: "Cancel a claim",
+        responses: { "200": { description: "Claim cancelled" } }
+      }
+    },
     "/claims/{id}/evidence": {
       post: {
         security: [{ bearerAuth: [] }],
@@ -273,6 +378,62 @@ export const openApiDocument = {
       get: {
         summary: "Get public configuration entries",
         responses: { "200": { description: "Public config list" } }
+      }
+    },
+    "/appointments": {
+      post: {
+        security: [{ bearerAuth: [] }],
+        summary: "Create return appointment after an accepted claim",
+        responses: { "201": { description: "Appointment created" } }
+      }
+    },
+    "/appointments/claim/{claimId}": {
+      get: {
+        security: [{ bearerAuth: [] }],
+        summary: "List appointments for a claim",
+        responses: { "200": { description: "Appointment list" } }
+      }
+    },
+    "/appointments/{id}/accept": {
+      patch: {
+        security: [{ bearerAuth: [] }],
+        summary: "Accept an appointment",
+        responses: { "200": { description: "Appointment accepted" } }
+      }
+    },
+    "/appointments/{id}/reject": {
+      patch: {
+        security: [{ bearerAuth: [] }],
+        summary: "Reject an appointment with reason",
+        responses: { "200": { description: "Appointment rejected" } }
+      }
+    },
+    "/appointments/{id}/cancel": {
+      patch: {
+        security: [{ bearerAuth: [] }],
+        summary: "Cancel an appointment with reason",
+        responses: { "200": { description: "Appointment cancelled" } }
+      }
+    },
+    "/appointments/{id}/reschedule": {
+      patch: {
+        security: [{ bearerAuth: [] }],
+        summary: "Reschedule an appointment",
+        responses: { "200": { description: "Appointment rescheduled" } }
+      }
+    },
+    "/appointments/{id}/complete": {
+      patch: {
+        security: [{ bearerAuth: [] }],
+        summary: "Complete an accepted appointment",
+        responses: { "200": { description: "Appointment completed" } }
+      }
+    },
+    "/appointments/jobs/send-reminders": {
+      post: {
+        security: [{ bearerAuth: [] }],
+        summary: "Send appointment reminders",
+        responses: { "200": { description: "Reminder count" } }
       }
     },
     "/categories": {

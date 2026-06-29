@@ -1,11 +1,21 @@
 import { randomUUID } from "node:crypto";
 import type { AccessTokenPayload } from "../middlewares/auth.middleware.js";
 import { claimRepository } from "../repositories/claim.repository.js";
+import { notificationRepository } from "../repositories/notification.repository.js";
+import { postRepository } from "../repositories/post.repository.js";
+import { chatRepository } from "../repositories/chat.repository.js";
+import { userRepository } from "../repositories/user.repository.js";
 import { HttpError } from "../utils/http-error.js";
+import { normalizeText } from "../utils/normalize-text.js";
 import type { CreateClaimInput } from "../validators/claim.validator.js";
+import { matchingService } from "./matching.service.js";
 
 function canReviewClaims(auth: AccessTokenPayload, ownerId: string) {
   return auth.sub === ownerId || auth.roles.includes("STAFF") || auth.roles.includes("ADMIN");
+}
+
+function canCancelClaim(auth: AccessTokenPayload, claim: { claimant: { id: string }; postOwnerId: string }) {
+  return auth.sub === claim.claimant.id || canReviewClaims(auth, claim.postOwnerId);
 }
 
 function parseOptionalDate(value: string | null | undefined) {
@@ -28,6 +38,73 @@ function isDuplicateEntry(error: unknown) {
     "code" in error &&
     (error as { code?: string }).code === "ER_DUP_ENTRY"
   );
+}
+
+function tokenSet(value: string | null | undefined) {
+  return new Set(
+    normalizeText(value ?? "")
+      .split(/\s+/)
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 3)
+  );
+}
+
+function overlapScore(left: string | null | undefined, right: string | null | undefined) {
+  const leftTokens = tokenSet(left);
+  const rightTokens = tokenSet(right);
+  if (leftTokens.size === 0 || rightTokens.size === 0) {
+    return 0;
+  }
+
+  let overlap = 0;
+  for (const token of leftTokens) {
+    if (rightTokens.has(token)) {
+      overlap += 1;
+    }
+  }
+  return Math.min(1, overlap / Math.min(leftTokens.size, rightTokens.size));
+}
+
+function timeConfidence(claimTime: string | null | undefined, postTime: string | null | undefined) {
+  if (!claimTime || !postTime) {
+    return 0;
+  }
+  const left = new Date(claimTime).getTime();
+  const right = new Date(postTime).getTime();
+  if (Number.isNaN(left) || Number.isNaN(right)) {
+    return 0;
+  }
+  const days = Math.abs(left - right) / (24 * 60 * 60 * 1000);
+  if (days <= 1) {
+    return 1;
+  }
+  return Math.max(0, 1 / (1 + days / 7));
+}
+
+async function notifyClaimUsers(
+  claim: { id: string; claimant: { id: string }; postOwnerId: string },
+  type: string,
+  title: string,
+  body: string
+) {
+  await notificationRepository.createMany([
+    {
+      userId: claim.claimant.id,
+      type,
+      title,
+      body,
+      entityType: "CLAIM",
+      entityId: claim.id
+    },
+    {
+      userId: claim.postOwnerId,
+      type,
+      title,
+      body,
+      entityType: "CLAIM",
+      entityId: claim.id
+    }
+  ]);
 }
 
 export const claimService = {
@@ -72,6 +149,15 @@ export const claimService = {
       throw new HttpError(500, "Unable to create claim");
     }
 
+    await notificationRepository.create({
+      userId: post.user_id,
+      type: "CLAIM_SUBMITTED",
+      title: "Có yêu cầu nhận đồ mới",
+      body: "Một người dùng vừa gửi claim cho bài FOUND của bạn. Hãy kiểm tra bằng chứng trước khi xử lý.",
+      entityType: "CLAIM",
+      entityId: result.claim.id
+    });
+
     return result;
   },
 
@@ -98,5 +184,176 @@ export const claimService = {
     }
 
     return claimRepository.listByPostId(postId);
+  },
+
+  async requestMoreInfo(auth: AccessTokenPayload, claimId: string, message: string) {
+    const detail = await this.getClaim(auth, claimId);
+    if (!canReviewClaims(auth, detail.claim.postOwnerId)) {
+      throw new HttpError(403, "You do not have permission to request more claim info");
+    }
+    if (detail.claim.status !== "PENDING" && detail.claim.status !== "NEED_MORE_INFO") {
+      throw new HttpError(409, "Only pending claims can request more info");
+    }
+    const result = await claimRepository.updateStatus({
+      id: claimId,
+      actorId: auth.sub,
+      status: "NEED_MORE_INFO",
+      moreInfoRequest: message.trim(),
+      note: message.trim()
+    });
+    if (!result) {
+      throw new HttpError(404, "Claim not found");
+    }
+    await notifyClaimUsers(
+      detail.claim,
+      "CLAIM_NEED_MORE_INFO",
+      "Claim can bo sung thong tin",
+      message.trim()
+    );
+    return result;
+  },
+
+  async accept(auth: AccessTokenPayload, claimId: string) {
+    const detail = await this.getClaim(auth, claimId);
+    if (!canReviewClaims(auth, detail.claim.postOwnerId)) {
+      throw new HttpError(403, "You do not have permission to accept this claim");
+    }
+    if (detail.claim.status !== "PENDING" && detail.claim.status !== "NEED_MORE_INFO") {
+      throw new HttpError(409, "Only pending claims can be accepted");
+    }
+    const result = await claimRepository.updateStatus({
+      id: claimId,
+      actorId: auth.sub,
+      status: "ACCEPTED",
+      note: "Claim accepted"
+    });
+    if (!result) {
+      throw new HttpError(404, "Claim not found");
+    }
+    await notifyClaimUsers(
+      detail.claim,
+      "CLAIM_ACCEPTED",
+      "Claim da duoc chap nhan",
+      "Claim da duoc chap nhan. Hai ben co the tao lich hen ban giao."
+    );
+    await chatRepository.getOrCreateRoom(claimId);
+    return result;
+  },
+
+  async reject(auth: AccessTokenPayload, claimId: string, reason: string) {
+    const detail = await this.getClaim(auth, claimId);
+    if (!canReviewClaims(auth, detail.claim.postOwnerId)) {
+      throw new HttpError(403, "You do not have permission to reject this claim");
+    }
+    if (detail.claim.status === "ACCEPTED" || detail.claim.status === "CANCELLED" || detail.claim.status === "REJECTED") {
+      throw new HttpError(409, "This claim can no longer be rejected");
+    }
+    const result = await claimRepository.updateStatus({
+      id: claimId,
+      actorId: auth.sub,
+      status: "REJECTED",
+      rejectionReason: reason.trim(),
+      note: reason.trim()
+    });
+    if (!result) {
+      throw new HttpError(404, "Claim not found");
+    }
+    await notifyClaimUsers(detail.claim, "CLAIM_REJECTED", "Claim bi tu choi", reason.trim());
+    const rejectedCount = await claimRepository.countRejectedClaimsForUser(detail.claim.claimant.id);
+    if (rejectedCount >= 3) {
+      await userRepository.addReputation({
+        userId: detail.claim.claimant.id,
+        delta: -2,
+        reason: "Multiple rejected claims",
+        entityType: "CLAIM",
+        entityId: claimId
+      });
+    }
+    return result;
+  },
+
+  async cancel(auth: AccessTokenPayload, claimId: string, reason: string) {
+    const detail = await this.getClaim(auth, claimId);
+    if (!canCancelClaim(auth, detail.claim)) {
+      throw new HttpError(403, "You do not have permission to cancel this claim");
+    }
+    if (detail.claim.status === "ACCEPTED" || detail.claim.status === "CANCELLED" || detail.claim.status === "REJECTED") {
+      throw new HttpError(409, "This claim can no longer be cancelled");
+    }
+    const result = await claimRepository.updateStatus({
+      id: claimId,
+      actorId: auth.sub,
+      status: "CANCELLED",
+      note: reason.trim()
+    });
+    if (!result) {
+      throw new HttpError(404, "Claim not found");
+    }
+    await notifyClaimUsers(detail.claim, "CLAIM_CANCELLED", "Claim da bi huy", reason.trim());
+    return result;
+  },
+
+  async verifyClaimEvidence(auth: AccessTokenPayload, claimId: string) {
+    const detail = await this.getClaim(auth, claimId);
+    const post = await postRepository.findById(detail.claim.postId);
+    if (!post) {
+      throw new HttpError(404, "Post not found");
+    }
+
+    const matches = await matchingService.listMatches(detail.claim.postId);
+    const relatedPostIds = matches.map((match) =>
+      match.lostPostId === detail.claim.postId ? match.foundPostId : match.lostPostId
+    );
+    const relatedPosts = await postRepository.findByIds(relatedPostIds);
+    const claimantPostIds = new Set(relatedPosts.filter((item) => item.userId === detail.claim.claimant.id).map((item) => item.id));
+    const claimantMatch = matches
+      .filter((match) => claimantPostIds.has(match.lostPostId) || claimantPostIds.has(match.foundPostId))
+      .sort((left, right) => right.totalScore - left.totalScore)[0];
+
+    const evidenceText = detail.evidence.map((item) => item.description ?? "").join(" ");
+    const claimText = [detail.claim.description, detail.claim.secretAnswer, evidenceText].filter(Boolean).join(" ");
+    const postText = [post.title, post.description, post.category?.name].filter(Boolean).join(" ");
+    const postLocation = [
+      post.location.roomText,
+      post.location.customLocation,
+      post.location.buildingName,
+      post.location.areaName
+    ].filter(Boolean).join(" ");
+
+    const textScore = overlapScore(claimText, postText);
+    const evidenceScore = evidenceText.trim() ? Math.max(0.2, overlapScore(evidenceText, postText)) : 0;
+    const locationScore = overlapScore(detail.claim.approximateLocation, postLocation);
+    const timeScore = timeConfidence(detail.claim.approximateLostAt, post.lostFoundAt);
+    const matchScore = claimantMatch?.totalScore ?? 0;
+
+    const ownershipScore =
+      0.35 * matchScore +
+      0.25 * textScore +
+      0.15 * locationScore +
+      0.15 * timeScore +
+      0.1 * evidenceScore;
+    const ownershipConfidence = Math.round(Math.max(0, Math.min(1, ownershipScore)) * 100);
+
+    return {
+      claimId,
+      ownershipConfidence,
+      level: ownershipConfidence >= 75 ? "HIGH" : ownershipConfidence >= 45 ? "MEDIUM" : "LOW",
+      isSystemVerified: ownershipConfidence >= 75,
+      note: "AI/matching score is advisory only. Staff or the post owner must still verify evidence before returning the item.",
+      breakdown: {
+        matchScore: Math.round(matchScore * 100),
+        textScore: Math.round(textScore * 100),
+        locationScore: Math.round(locationScore * 100),
+        timeScore: Math.round(timeScore * 100),
+        evidenceScore: Math.round(evidenceScore * 100)
+      },
+      signals: {
+        hasClaimantMatchedLostPost: Boolean(claimantMatch),
+        evidenceCount: detail.evidence.length,
+        hasEvidenceOcrText: detail.evidence.some((item) => item.description?.includes("OCR:")),
+        hasApproximateLostTime: Boolean(detail.claim.approximateLostAt),
+        hasApproximateLocation: Boolean(detail.claim.approximateLocation)
+      }
+    };
   }
 };

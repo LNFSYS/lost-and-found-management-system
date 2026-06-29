@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { ok } from "../utils/api-response.js";
 import { adminRoutes } from "./admin.routes.js";
+import { appointmentRoutes } from "./appointment.routes.js";
 import { authRoutes } from "./auth.routes.js";
 import { claimRoutes } from "./claim.routes.js";
 import { configRoutes } from "./config.routes.js";
@@ -16,6 +17,7 @@ apiRoutes.get("/health", (_request, response) => {
 
 apiRoutes.use("/auth", authRoutes);
 apiRoutes.use("/admin", adminRoutes);
+apiRoutes.use("/appointments", appointmentRoutes);
 apiRoutes.use("/claims", claimRoutes);
 apiRoutes.use("/config", configRoutes);
 apiRoutes.use("/categories", categoryRoutes);

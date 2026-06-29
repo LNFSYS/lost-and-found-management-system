@@ -5,7 +5,7 @@ import { postRepository } from "../repositories/post.repository.js";
 import { normalizeText } from "../utils/normalize-text.js";
 import { HttpError } from "../utils/http-error.js";
 import type { AccessTokenPayload } from "../middlewares/auth.middleware.js";
-import type { CreatePostInput, ListPostsQuery, UpdatePostInput } from "../validators/post.validator.js";
+import type { CreatePostInput, ListPostsQuery, ReportPostInput, UpdatePostInput } from "../validators/post.validator.js";
 import { matchingService } from "./matching.service.js";
 
 function assertPostOwnerOrAdmin(auth: AccessTokenPayload, ownerId: string) {
@@ -127,6 +127,29 @@ export const postService = {
     return postRepository.list(normalizeQuery(query), auth.sub);
   },
 
+  async listMyMatchSuggestions(auth: AccessTokenPayload) {
+    const lostPostIds = await postRepository.listActiveLostPostIdsByUser(auth.sub);
+    const suggestions = [];
+
+    for (const postId of lostPostIds) {
+      const matches = await matchingService.runForPost(postId);
+      const postSuggestions = await matchingService.buildSuggestions(postId, matches);
+      suggestions.push(...postSuggestions.map((suggestion) => ({ ...suggestion, sourcePostId: postId })));
+    }
+
+    const unique = new Map<string, (typeof suggestions)[number]>();
+    for (const suggestion of suggestions) {
+      const key = `${suggestion.sourcePostId}:${suggestion.post.id}`;
+      if (!unique.has(key)) {
+        unique.set(key, suggestion);
+      }
+    }
+
+    return {
+      suggestions: Array.from(unique.values()).sort((left, right) => right.match.totalScore - left.match.totalScore)
+    };
+  },
+
   async getPostDetail(postId: string) {
     await postRepository.incrementViewCount(postId);
     const detail = await postRepository.getDetail(postId);
@@ -207,5 +230,22 @@ export const postService = {
     }
 
     return { deleted: true };
+  },
+
+  async expireOverduePosts() {
+    return postRepository.expireOverduePosts();
+  },
+
+  async reportPost(auth: AccessTokenPayload, postId: string, input: ReportPostInput) {
+    const report = await postRepository.createReport({
+      reporterId: auth.sub,
+      postId,
+      reason: input.reason,
+      details: input.details ?? null
+    });
+    if (!report) {
+      throw new HttpError(404, "Post not found");
+    }
+    return report;
   }
 };

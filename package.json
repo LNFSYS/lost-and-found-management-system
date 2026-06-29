@@ -10,6 +10,7 @@
     "dev:api": "npm --workspace apps/api-node run dev",
     "dev:java": "mvn -f apps/java-admin-service/pom.xml spring-boot:run",
     "check:db": "npm --workspace apps/api-node run check:db",
+    "e2e:core": "npm --workspace apps/api-node run e2e:core",
     "migrate:api": "npm --workspace apps/api-node run migrate",
     "build": "npm run build:api && npm run build:web",
     "build:all": "npm run build:api && npm run build:web && npm run build:java",

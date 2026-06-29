@@ -60,6 +60,21 @@ function requireFile(file: Express.Multer.File | undefined, fieldName: string) {
   return file;
 }
 
+function compactOcrText(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function evidenceDescriptionWithOcr(description: string | null | undefined, ocrText: string) {
+  const manualDescription = description?.trim() ?? "";
+  const compactOcr = compactOcrText(ocrText);
+  if (!compactOcr) {
+    return manualDescription || null;
+  }
+
+  const nextDescription = manualDescription ? `${manualDescription} | OCR: ${compactOcr}` : `OCR: ${compactOcr}`;
+  return nextDescription.slice(0, 255);
+}
+
 export interface PostMediaUpload {
   file: Express.Multer.File;
   mediaKind: "ITEM" | "EVIDENCE";
@@ -147,6 +162,16 @@ export const mediaService = {
           safeSearch: vision.safeSearch,
           suggestedCategories
         });
+      } else {
+        const vision = await visionService.analyzeImageUrl(uploaded.secureUrl);
+        ai.push({
+          mediaId,
+          mediaKind: "EVIDENCE",
+          tags: [],
+          ocrText: vision.ocrText,
+          safeSearch: vision.safeSearch,
+          suggestedCategories: []
+        });
       }
     }
 
@@ -158,7 +183,9 @@ export const mediaService = {
       metadata: {
         count: uploadedMedia.length,
         itemImages: uploads.filter((upload) => upload.mediaKind === "ITEM").length,
-        evidenceImages: uploads.filter((upload) => upload.mediaKind === "EVIDENCE").length
+        evidenceImages: uploads.filter((upload) => upload.mediaKind === "EVIDENCE").length,
+        evidenceOcrImages: ai.filter((entry) => entry.mediaKind === "EVIDENCE" && compactOcrText(entry.ocrText).length > 0)
+          .length
       }
     });
 
@@ -210,20 +237,25 @@ export const mediaService = {
     }
 
     const uploaded = await cloudinaryService.uploadImage(image.buffer, `lnfs/private/claims/${claimId}`);
+    const vision = await visionService.analyzeImageUrl(uploaded.secureUrl);
     const result = await claimRepository.createEvidence({
       id: randomUUID(),
       claimId,
       secureUrl: uploaded.secureUrl,
       publicId: uploaded.publicId,
       evidenceType: body.evidenceType,
-      description: body.description?.trim() ?? null
+      description: evidenceDescriptionWithOcr(body.description, vision.ocrText)
     });
 
     await userRepository.createActivityLog({
       userId: auth.sub,
       action: "CLAIM_EVIDENCE_UPLOADED",
       entityType: "CLAIM",
-      entityId: claimId
+      entityId: claimId,
+      metadata: {
+        evidenceType: body.evidenceType,
+        ocrTextPresent: compactOcrText(vision.ocrText).length > 0
+      }
     });
 
     return result;

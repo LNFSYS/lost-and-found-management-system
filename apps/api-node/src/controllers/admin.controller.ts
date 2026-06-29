@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { env } from "../config/env.js";
 import { adminRepository } from "../repositories/admin.repository.js";
+import { postService } from "../services/post.service.js";
 import { ok } from "../utils/api-response.js";
 import { HttpError } from "../utils/http-error.js";
 import { normalizeEmail } from "../utils/normalize-email.js";
@@ -78,10 +79,18 @@ const warehouseSchema = z.object({
   conditionNotes: z.string().trim().max(2000).nullable().optional(),
   storageCode: z.string().trim().max(60).nullable().optional(),
   receivedAt: optionalDateTimeSchema,
-  returnedAt: optionalDateTimeSchema
+  returnedAt: optionalDateTimeSchema,
+  retentionDeadline: optionalDateTimeSchema
 });
 const warehouseStatusUpdateSchema = z.object({
   status: warehouseStatusSchema
+});
+const warehouseProcessSchema = z.object({
+  status: z.enum(["DISPOSED", "DONATED", "TRANSFERRED"]),
+  note: z.string().trim().min(2).max(1000)
+});
+const nearExpirySchema = z.object({
+  daysAhead: z.coerce.number().int().min(1).max(90).default(7)
 });
 const reportHandleSchema = z.object({
   status: z.enum(["REVIEWED", "DISMISSED"]),
@@ -97,9 +106,48 @@ function idParam(request: Request) {
   return id;
 }
 
+function csvCell(value: unknown) {
+  const text = value === null || value === undefined ? "" : String(value);
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function csvRow(values: unknown[]) {
+  return values.map(csvCell).join(",");
+}
+
 export const adminController = {
   async overview(_request: Request, response: Response) {
     response.json(ok({ overview: await adminRepository.overview() }));
+  },
+
+  async expireOverduePosts(_request: Request, response: Response) {
+    response.json(ok(await postService.expireOverduePosts()));
+  },
+
+  async exportOverview(_request: Request, response: Response) {
+    const overview = await adminRepository.overview();
+    const rows: unknown[][] = [
+      ["section", "key", "value"],
+      ["summary", "users", overview.users],
+      ["summary", "posts", overview.posts],
+      ["summary", "claims", overview.claims],
+      ["summary", "reports", overview.reports],
+      ["summary", "categories", overview.categories],
+      ["summary", "areas", overview.areas],
+      ["summary", "handoverPoints", overview.handoverPoints],
+      ["summary", "warehouseItems", overview.warehouseItems]
+    ];
+
+    for (const item of overview.postsByStatus) {
+      rows.push(["postsByStatus", item.status, item.total]);
+    }
+    for (const item of overview.postsByType) {
+      rows.push(["postsByType", item.type, item.total]);
+    }
+
+    response.setHeader("Content-Type", "text/csv; charset=utf-8");
+    response.setHeader("Content-Disposition", `attachment; filename="lost-found-dashboard-${Date.now()}.csv"`);
+    response.send(rows.map(csvRow).join("\n"));
   },
 
   async users(_request: Request, response: Response) {
@@ -205,6 +253,10 @@ export const adminController = {
     response.json(ok({ warehouseItems: await adminRepository.warehouseItems() }));
   },
 
+  async warehouseCapacity(_request: Request, response: Response) {
+    response.json(ok({ capacity: await adminRepository.warehouseCapacity() }));
+  },
+
   async createWarehouseItem(request: Request, response: Response) {
     response
       .status(201)
@@ -224,6 +276,24 @@ export const adminController = {
         )
       )
     );
+  },
+
+  async expireOverdueWarehouseItems(request: Request, response: Response) {
+    response.json(ok(await adminRepository.expireOverdueWarehouseItems(request.auth!.sub)));
+  },
+
+  async alertWarehouseNearExpiry(request: Request, response: Response) {
+    const input = nearExpirySchema.parse(request.body);
+    response.json(ok(await adminRepository.alertWarehouseItemsNearExpiry(input.daysAhead)));
+  },
+
+  async alertWarehouseCapacity(_request: Request, response: Response) {
+    response.json(ok(await adminRepository.alertWarehouseCapacityIfNeeded()));
+  },
+
+  async processOverdueWarehouseItem(request: Request, response: Response) {
+    const input = warehouseProcessSchema.parse(request.body);
+    response.json(ok(await adminRepository.processOverdueWarehouseItem(idParam(request), input.status, input.note)));
   },
 
   async deleteWarehouseItem(request: Request, response: Response) {

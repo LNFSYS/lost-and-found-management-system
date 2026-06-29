@@ -21,11 +21,11 @@ docs/
 
 | Area | Owner | Responsibility |
 | --- | --- | --- |
-| Web App | DEV 1 | Guest/User/Staff/Admin UI, dashboard, configuration screens |
-| Mobile App | DEV 2 | User mobile flows: auth, posts, claims, chat, appointments |
-| Node API | DEV 3 | Core REST API, auth, user profile, posts, Cloudinary, claim base, chat history |
-| AI/Realtime | DEV 4 | Vision/OCR, auto tags, matching engine, Socket.IO notifications |
-| Java Admin Service | DEV 5 | Admin config, moderation, dashboard APIs, handover, appointments, reputation, scheduled tasks |
+| Web App | VQ-supported implementation surface | Guest/User/Staff/Admin UI currently lives in the React web app; no dedicated UI owner is assigned in the canonical UC checklist |
+| Mobile App | AK | User mobile flows: auth, posts, claims, chat, appointments |
+| Node API | VQ | Core REST API, auth, user profile, posts, Cloudinary, claim base, admin/staff API, matching, Socket.IO, chat history |
+| AI / Evidence / Warehouse Algorithm | QD | Vision/OCR, auto tags, evidence verification, ownership confidence percentage, overdue warehouse processing, disposal/donation algorithm |
+| Java Admin Service | TL | Java business rules, claim transitions, handover lifecycle, appointments, reputation, scheduled tasks, AI training pipeline |
 
 ## Backend API Foundation
 
@@ -73,12 +73,21 @@ Current Node API endpoints:
 | `POST` | `/api/posts/:id/media` | Upload item images/evidence images to Cloudinary, save `media_kind`, run AI for item images and return match suggestions |
 | `DELETE` | `/api/posts/:id/media/:mediaId` | Delete post media asset and metadata |
 | `GET` | `/api/posts/:id/matches` | Return saved matching results for a post |
+| `GET` | `/api/posts/:id/matches/explanations` | Return score summary and match reasons |
+| `POST` | `/api/posts/:id/matches/re-run` | Admin manual matching re-run |
+| `POST` | `/api/posts/:id/report` | User-facing post report |
 | `DELETE` | `/api/posts/:id` | Soft-delete owned/admin post |
 | `GET` | `/api/search` | Search public posts by normalized keyword, filters and `sort=highest_match` |
 | `POST` | `/api/claims` | Submit claim for a FOUND post |
 | `GET` | `/api/claims/:id` | Get claim detail with permission guard |
 | `POST` | `/api/claims/:id/evidence` | Upload claim evidence image to Cloudinary private folder |
+| `GET` | `/api/claims/:id/verification` | Return ownership confidence percentage and evidence breakdown |
+| `PATCH` | `/api/claims/:id/more-info` | Request additional claim information |
+| `PATCH` | `/api/claims/:id/accept` | Accept claim |
+| `PATCH` | `/api/claims/:id/reject` | Reject claim with reason |
+| `PATCH` | `/api/claims/:id/cancel` | Cancel claim with reason |
 | `GET` | `/api/posts/:id/claims` | List claims for a post owner, staff or admin |
+| `POST/PATCH/GET` | `/api/appointments...` | Create, accept, reject, cancel, reschedule, complete and remind return appointments |
 | `GET` | `/api/config/public` | Return public config entries for web/mobile validation |
 | `GET` | `/api/categories` | Return active item categories |
 | `GET` | `/api/locations/areas` | Return active campus areas |
@@ -94,6 +103,11 @@ Current Node API endpoints:
 | `GET/POST/PUT/PATCH` | `/api/admin/locations/...` | Admin-only area and building CRUD |
 | `GET/POST/PUT/PATCH` | `/api/admin/handover-points...` | Admin-only handover point CRUD, map image/marker coordinates and stored-item counts |
 | `GET/POST/PUT/PATCH/DELETE` | `/api/admin/warehouse-items...` | Admin-only warehouse item list, create, update, status update and soft delete |
+| `POST` | `/api/admin/warehouse-items/expire-overdue` | Mark overdue warehouse items as expired |
+| `POST` | `/api/admin/warehouse-items/alert-near-expiry` | Notify staff/admin about near-expiry items |
+| `GET` | `/api/admin/warehouse/capacity` | Return warehouse capacity snapshot |
+| `POST` | `/api/admin/warehouse/alert-capacity` | Notify staff/admin when capacity reaches warning threshold |
+| `POST` | `/api/admin/jobs/expire-posts` | Expire overdue posts |
 | `GET` | `/api/admin/reports` | Admin-only report queue |
 | `PATCH` | `/api/admin/reports/:id/handle` | Admin-only report handling and moderation action |
 | `GET` | `/api/health` | API health check |
@@ -119,6 +133,7 @@ All Node API responses use `{ success, data?, error?, message? }`.
 | `011_media_kind_and_match_threshold.sql` | Add `post_media.media_kind` and keep notification threshold at `0.8` |
 | `012_indexes_and_warehouse_lifecycle.sql` | Add feed/matching/notification/log indexes and expand warehouse lifecycle statuses |
 | `013_handover_map_location.sql` | Add `handover_points.map_image_url`, `map_position_x`, and `map_position_y` for campus map placement |
+| `014_warehouse_retention_and_appointments.sql` | Add warehouse retention, return appointments, and chat/realtime lifecycle support |
 
 Run migrations with:
 
@@ -146,7 +161,7 @@ Security and integrity notes:
 
 ## AI And Matching
 
-Post item image upload sends each Cloudinary `secure_url` through Google Vision when `GOOGLE_VISION_API_KEY` is configured. Evidence images are stored as `EVIDENCE` media and skipped by AI. The Node API stores label/object/OCR tags in `ai_tags`, returns suggested categories in the upload response, and falls back to empty tags/OCR text if Vision is not configured or fails.
+Post item image upload sends each Cloudinary `secure_url` through Google Vision when Vision is configured. Claim/post evidence images also run OCR where supported so evidence verification can use extracted text, but evidence remains private and AI remains advisory. The Node API stores label/object/OCR tags in `ai_tags`, returns suggested categories in the upload response, and falls back to empty tags/OCR text if Vision is not configured or fails.
 
 The matching engine runs after post create/update and after post image tags are saved. It builds TF-IDF vectors from normalized title, description and AI tags, calculates cosine text score plus category/location/time scores, applies weights from `config_entries`, and upserts rows into `match_results` when the total score passes `matching.threshold`. When `total_score >= matching.notification_threshold`, it marks the pair as `MATCHED`, persists `MATCH_FOUND` notifications for both users, marks the match as notified, and returns match suggestions to the UI for LOST posts.
 
@@ -171,9 +186,11 @@ The matching engine runs after post create/update and after post image tags are 
 
 | Module | Status | Document |
 | --- | --- | --- |
-| Project Overview | General thesis/use-case document updated | [lost-found-system-overview.md](lost-found-system-overview.md) |
-| Authentication, Authorization, User Profile | DB design completed | [db-auth-design.md](db-auth-design.md) |
-| Master Dev Checklist | Per-dev independent checklist created | [master-dev-checklist.md](master-dev-checklist.md) |
+| Project Overview | Clean product overview | [lost-found-system-overview.md](lost-found-system-overview.md) |
+| Master Dev Checklist | Canonical 100-UC checklist | [../Checklist/master-dev-checklist.md](../Checklist/master-dev-checklist.md) |
+| Pending Tasks | Granular open task list | [../Checklist/pending-tasks.md](../Checklist/pending-tasks.md) |
+| Requirements | FR/NFR status | [../Requirements and Business Rules/requirements.md](../Requirements%20and%20Business%20Rules/requirements.md) |
+| Business Rules | Business policy status | [../Requirements and Business Rules/business-rules.md](../Requirements%20and%20Business%20Rules/business-rules.md) |
 
 ## Integration Flow
 
@@ -183,8 +200,8 @@ The matching engine runs after post create/update and after post image tags are 
 4. In-app notifications are persisted for likely owners/finders when score passes the notification threshold.
 5. Claimant submits evidence; finder/staff/admin reviews it.
 6. Accepted claim creates chat room and return appointment.
-7. Java service manages handover, appointment state, reputation, admin dashboard, and scheduled expiration.
-8. Planned warehouse lifecycle extension tracks retention deadlines, expiring-item alerts, capacity warnings and expired-item disposition records.
+7. Appointment completion updates return state, post/warehouse status, notifications and reputation where applicable.
+8. Scheduled Node jobs handle overdue posts, overdue warehouse items, near-expiry alerts, capacity alerts and appointment reminders.
 
 ## Frontend Foundation
 

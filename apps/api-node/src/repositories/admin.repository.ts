@@ -1,8 +1,10 @@
-import type { RowDataPacket } from "mysql2/promise";
+import type { ResultSetHeader, RowDataPacket } from "mysql2/promise";
 import { randomUUID } from "node:crypto";
 import { dbPool } from "../config/db.js";
 import type { UserRole } from "../models/user.model.js";
+import { notificationRepository } from "./notification.repository.js";
 import { postRepository } from "./post.repository.js";
+import { userRepository } from "./user.repository.js";
 import { HttpError } from "../utils/http-error.js";
 import { normalizeText } from "../utils/normalize-text.js";
 
@@ -17,6 +19,8 @@ interface UserAdminRow extends RowDataPacket {
   student_code: string | null;
   status: string;
   roles: string | null;
+  reputation_points: number | null;
+  reputation_level: string | null;
   created_at: string;
 }
 
@@ -131,6 +135,7 @@ interface WarehouseAdminRow extends RowDataPacket {
   storage_code: string | null;
   received_at: string;
   returned_at: string | null;
+  retention_deadline: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -152,6 +157,7 @@ interface WarehouseInput {
   storageCode?: string | null;
   receivedAt?: string | null;
   returnedAt?: string | null;
+  retentionDeadline?: string | null;
 }
 
 interface ReportAdminRow extends RowDataPacket {
@@ -257,6 +263,54 @@ function isTerminalWarehouseStatus(status: WarehouseStatus) {
   return ["RETURNED", "DISPOSED", "DONATED", "TRANSFERRED"].includes(status);
 }
 
+function isActiveWarehouseStatus(status: WarehouseStatus) {
+  return !isTerminalWarehouseStatus(status) && status !== "EXPIRED";
+}
+
+async function activeWarehouseCount(excludeId?: string) {
+  if (!excludeId) {
+    return count(
+      "warehouse_items",
+      "deleted_at IS NULL AND status IN ('PENDING_APPROVAL', 'RECEIVED', 'STORED', 'CLAIMED')"
+    );
+  }
+  const [rows] = await dbPool.query<CountRow[]>(
+    `
+      SELECT COUNT(*) AS total
+      FROM warehouse_items
+      WHERE deleted_at IS NULL
+        AND status IN ('PENDING_APPROVAL', 'RECEIVED', 'STORED', 'CLAIMED')
+        AND id <> ?
+    `,
+    [excludeId]
+  );
+  return rows[0]?.total ?? 0;
+}
+
+async function warehouseCapacitySnapshot(excludeId?: string) {
+  const capacity = await postRepository.getConfigNumber("warehouse.capacity_total", 200);
+  const warningRatio = await postRepository.getConfigNumber("warehouse.capacity_warning_ratio", 0.8);
+  const activeItems = await activeWarehouseCount(excludeId);
+  return {
+    activeItems,
+    capacity,
+    warningAt: Math.ceil(capacity * warningRatio),
+    usageRatio: capacity > 0 ? Number((activeItems / capacity).toFixed(4)) : 1,
+    isFull: capacity > 0 && activeItems >= capacity,
+    isNearFull: capacity > 0 && activeItems >= Math.ceil(capacity * warningRatio)
+  };
+}
+
+async function assertWarehouseCapacityAllows(status: WarehouseStatus, excludeId?: string) {
+  if (!isActiveWarehouseStatus(status)) {
+    return;
+  }
+  const snapshot = await warehouseCapacitySnapshot(excludeId);
+  if (snapshot.isFull) {
+    throw new HttpError(409, "Warehouse capacity is full. Process or transfer existing items before adding more.");
+  }
+}
+
 async function userExists(userId: string) {
   const [rows] = await dbPool.query<CountRow[]>(
     "SELECT COUNT(*) AS total FROM users WHERE id = ? AND deleted_at IS NULL",
@@ -324,6 +378,7 @@ function mapWarehouseItem(row: WarehouseAdminRow) {
     storageCode: row.storage_code,
     receivedAt: row.received_at,
     returnedAt: row.returned_at,
+    retentionDeadline: row.retention_deadline,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -356,8 +411,10 @@ export const adminRepository = {
     const [rows] = await dbPool.query<UserAdminRow[]>(
       `
         SELECT u.id, u.email, u.full_name, u.student_code, u.status, u.created_at,
+               rs.total_points AS reputation_points, rs.level AS reputation_level,
                GROUP_CONCAT(r.code ORDER BY r.code SEPARATOR ',') AS roles
         FROM users u
+        LEFT JOIN reputation_scores rs ON rs.user_id = u.id
         LEFT JOIN user_roles ur ON ur.user_id = u.id
         LEFT JOIN roles r ON r.id = ur.role_id
         WHERE u.deleted_at IS NULL
@@ -374,6 +431,8 @@ export const adminRepository = {
       studentCode: row.student_code,
       status: row.status,
       roles: row.roles ? row.roles.split(",") : [],
+      reputationPoints: Number(row.reputation_points ?? 0),
+      reputationLevel: row.reputation_level ?? "NEW",
       createdAt: row.created_at
     }));
   },
@@ -716,6 +775,7 @@ export const adminRepository = {
         actorId
       ]
     );
+    await this.alertWarehouseCapacityIfNeeded();
     return { id };
   },
 
@@ -806,7 +866,7 @@ export const adminRepository = {
           wi.finder_user_id, finder.full_name AS finder_full_name,
           wi.finder_name, wi.finder_contact,
           wi.status, wi.condition_notes, wi.storage_code,
-          wi.received_at, wi.returned_at, wi.created_at, wi.updated_at
+          wi.received_at, wi.returned_at, wi.retention_deadline, wi.created_at, wi.updated_at
         FROM warehouse_items wi
         LEFT JOIN posts p ON p.id = wi.post_id
         LEFT JOIN handover_points hp ON hp.id = wi.handover_point_id
@@ -823,20 +883,122 @@ export const adminRepository = {
     return rows.map(mapWarehouseItem);
   },
 
+  async warehouseCapacity() {
+    return warehouseCapacitySnapshot();
+  },
+
+  async alertWarehouseCapacityIfNeeded() {
+    const snapshot = await warehouseCapacitySnapshot();
+    if (!snapshot.isNearFull) {
+      return { alerted: false, capacity: snapshot };
+    }
+    const [existing] = await dbPool.query<Array<RowDataPacket & { total: number }>>(
+      `
+        SELECT COUNT(*) AS total
+        FROM notifications
+        WHERE type = 'WAREHOUSE_CAPACITY_WARNING'
+          AND entity_type = 'WAREHOUSE'
+          AND entity_id = 'capacity'
+          AND created_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 DAY)
+      `
+    );
+    if (Number(existing[0]?.total ?? 0) > 0) {
+      return { alerted: false, capacity: snapshot };
+    }
+
+    const [users] = await dbPool.query<Array<RowDataPacket & { user_id: string }>>(
+      `
+        SELECT DISTINCT ur.user_id
+        FROM user_roles ur
+        INNER JOIN roles r ON r.id = ur.role_id
+        INNER JOIN users u ON u.id = ur.user_id
+        WHERE r.code IN ('ADMIN', 'STAFF')
+          AND u.status = 'ACTIVE'
+          AND u.deleted_at IS NULL
+      `
+    );
+    await notificationRepository.createMany(
+      users.map((user) => ({
+        userId: user.user_id,
+        type: "WAREHOUSE_CAPACITY_WARNING",
+        title: "Kho sap day",
+        body: `Kho dang luu ${snapshot.activeItems}/${snapshot.capacity} vat pham. Hay xu ly, chuyen giao hoac mo rong suc chua.`,
+        entityType: "WAREHOUSE",
+        entityId: "capacity"
+      }))
+    );
+    return { alerted: true, capacity: snapshot };
+  },
+
+  async alertWarehouseItemsNearExpiry(daysAhead = 7) {
+    const [items] = await dbPool.query<Array<RowDataPacket & { id: string; item_name: string; retention_deadline: string }>>(
+      `
+        SELECT id, item_name, retention_deadline
+        FROM warehouse_items wi
+        WHERE wi.deleted_at IS NULL
+          AND wi.retention_deadline IS NOT NULL
+          AND wi.retention_deadline > UTC_TIMESTAMP()
+          AND wi.retention_deadline <= DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? DAY)
+          AND wi.status IN ('PENDING_APPROVAL', 'RECEIVED', 'STORED', 'CLAIMED')
+          AND NOT EXISTS (
+            SELECT 1
+            FROM notifications n
+            WHERE n.type = 'WAREHOUSE_NEAR_EXPIRY'
+              AND n.entity_type = 'WAREHOUSE_ITEM'
+              AND n.entity_id = wi.id
+          )
+      `,
+      [daysAhead]
+    );
+    if (items.length === 0) {
+      return { alertedItems: 0 };
+    }
+
+    const [users] = await dbPool.query<Array<RowDataPacket & { user_id: string }>>(
+      `
+        SELECT DISTINCT ur.user_id
+        FROM user_roles ur
+        INNER JOIN roles r ON r.id = ur.role_id
+        INNER JOIN users u ON u.id = ur.user_id
+        WHERE r.code IN ('ADMIN', 'STAFF')
+          AND u.status = 'ACTIVE'
+          AND u.deleted_at IS NULL
+      `
+    );
+
+    await notificationRepository.createMany(
+      users.flatMap((user) =>
+        items.map((item) => ({
+          userId: user.user_id,
+          type: "WAREHOUSE_NEAR_EXPIRY",
+          title: "Vat pham sap het han luu kho",
+          body: `"${item.item_name}" se het han luu kho vao ${item.retention_deadline}.`,
+          entityType: "WAREHOUSE_ITEM",
+          entityId: item.id
+        }))
+      )
+    );
+
+    return { alertedItems: items.length };
+  },
+
   async createWarehouseItem(input: WarehouseInput, actorId: string) {
     await validateWarehouseInput(input);
     const id = randomUUID();
     const status = input.status ?? "RECEIVED";
+    await assertWarehouseCapacityAllows(status);
+    const receivedAt = optionalDate(input.receivedAt) ?? new Date();
     const returnedAt = optionalDate(input.returnedAt);
+    const retentionDeadline = optionalDate(input.retentionDeadline) ?? new Date(receivedAt.getTime() + 60 * 24 * 60 * 60 * 1000);
     await dbPool.execute(
       `
         INSERT INTO warehouse_items (
           id, post_id, handover_point_id, item_name, description,
           category_id, area_id, building_id, room_text,
           finder_user_id, finder_name, finder_contact,
-          status, condition_notes, storage_code, received_at, returned_at, created_by
+          status, condition_notes, storage_code, received_at, returned_at, retention_deadline, created_by
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         id,
@@ -854,8 +1016,9 @@ export const adminRepository = {
         status,
         input.conditionNotes ?? null,
         input.storageCode?.trim() || null,
-        optionalDate(input.receivedAt) ?? new Date(),
+        receivedAt,
         isTerminalWarehouseStatus(status) ? returnedAt ?? new Date() : returnedAt,
+        retentionDeadline,
         actorId
       ]
     );
@@ -865,7 +1028,10 @@ export const adminRepository = {
   async updateWarehouseItem(id: string, input: WarehouseInput) {
     await validateWarehouseInput(input);
     const status = input.status ?? "RECEIVED";
+    await assertWarehouseCapacityAllows(status, id);
+    const receivedAt = optionalDate(input.receivedAt) ?? new Date();
     const returnedAt = optionalDate(input.returnedAt);
+    const retentionDeadline = optionalDate(input.retentionDeadline) ?? new Date(receivedAt.getTime() + 60 * 24 * 60 * 60 * 1000);
     await dbPool.execute(
       `
         UPDATE warehouse_items
@@ -884,7 +1050,8 @@ export const adminRepository = {
             condition_notes = ?,
             storage_code = ?,
             received_at = ?,
-            returned_at = ?
+            returned_at = ?,
+            retention_deadline = ?
         WHERE id = ? AND deleted_at IS NULL
       `,
       [
@@ -902,8 +1069,9 @@ export const adminRepository = {
         status,
         input.conditionNotes ?? null,
         input.storageCode?.trim() || null,
-        optionalDate(input.receivedAt) ?? new Date(),
+        receivedAt,
         isTerminalWarehouseStatus(status) ? returnedAt ?? new Date() : returnedAt,
+        retentionDeadline,
         id
       ]
     );
@@ -921,6 +1089,67 @@ export const adminRepository = {
       [status, status, id]
     );
     return { updated: true };
+  },
+
+  async expireOverdueWarehouseItems(actorId: string) {
+    const [result] = await dbPool.execute<ResultSetHeader>(
+      `
+        UPDATE warehouse_items
+        SET status = 'EXPIRED',
+            condition_notes = CONCAT(COALESCE(condition_notes, ''), CASE WHEN condition_notes IS NULL OR condition_notes = '' THEN '' ELSE '\n' END, 'System marked item as overdue.'),
+            updated_at = UTC_TIMESTAMP()
+        WHERE deleted_at IS NULL
+          AND retention_deadline IS NOT NULL
+          AND retention_deadline <= UTC_TIMESTAMP()
+          AND status IN ('PENDING_APPROVAL', 'RECEIVED', 'STORED', 'CLAIMED')
+      `
+    );
+
+    if (result.affectedRows > 0) {
+      const [users] = await dbPool.query<Array<RowDataPacket & { user_id: string }>>(
+        `
+          SELECT DISTINCT ur.user_id
+          FROM user_roles ur
+          INNER JOIN roles r ON r.id = ur.role_id
+          INNER JOIN users u ON u.id = ur.user_id
+          WHERE r.code IN ('ADMIN', 'STAFF')
+            AND u.status = 'ACTIVE'
+            AND u.deleted_at IS NULL
+        `
+      );
+      await notificationRepository.createMany(
+        users.map((user) => ({
+          userId: user.user_id,
+          type: "WAREHOUSE_OVERDUE",
+          title: "Có vật phẩm trong kho đã quá hạn",
+          body: `${result.affectedRows} vật phẩm đã được chuyển sang trạng thái EXPIRED. Vui lòng xử lý thanh lý, quyên góp hoặc chuyển giao.`,
+          entityType: "USER",
+          entityId: actorId
+        }))
+      );
+    }
+
+    return { expired: result.affectedRows };
+  },
+
+  async processOverdueWarehouseItem(id: string, status: Extract<WarehouseStatus, "DISPOSED" | "DONATED" | "TRANSFERRED">, note: string) {
+    const [result] = await dbPool.execute<ResultSetHeader>(
+      `
+        UPDATE warehouse_items
+        SET status = ?,
+            returned_at = COALESCE(returned_at, UTC_TIMESTAMP()),
+            condition_notes = CONCAT(COALESCE(condition_notes, ''), CASE WHEN condition_notes IS NULL OR condition_notes = '' THEN '' ELSE '\n' END, ?),
+            updated_at = UTC_TIMESTAMP()
+        WHERE id = ?
+          AND deleted_at IS NULL
+          AND status = 'EXPIRED'
+      `,
+      [status, note.trim(), id]
+    );
+    if (result.affectedRows === 0) {
+      throw new HttpError(409, "Only expired warehouse items can be processed");
+    }
+    return { updated: true, status };
   },
 
   async deleteWarehouseItem(id: string) {
@@ -983,6 +1212,7 @@ export const adminRepository = {
     }
   ) {
     const connection = await dbPool.getConnection();
+    let moderationPenalty: { userId: string; entityType: string; entityId: string; reason: string } | null = null;
     try {
       await connection.beginTransaction();
       const [rows] = await connection.query<ReportLookupRow[]>(
@@ -1026,11 +1256,29 @@ export const adminRepository = {
 
         if (input.actionType === "HIDE_POST") {
           await connection.execute("UPDATE posts SET status = 'HIDDEN', updated_at = UTC_TIMESTAMP() WHERE id = ?", [targetId]);
+          const [ownerRows] = await connection.query<OwnerRow[]>("SELECT user_id FROM posts WHERE id = ? LIMIT 1", [targetId]);
+          if (ownerRows[0]?.user_id) {
+            moderationPenalty = {
+              userId: ownerRows[0].user_id,
+              entityType: "POST",
+              entityId: targetId,
+              reason: "Post hidden after moderation report"
+            };
+          }
         }
         if (input.actionType === "DELETE_POST") {
           await connection.execute("UPDATE posts SET deleted_at = UTC_TIMESTAMP(), updated_at = UTC_TIMESTAMP() WHERE id = ?", [
             targetId
           ]);
+          const [ownerRows] = await connection.query<OwnerRow[]>("SELECT user_id FROM posts WHERE id = ? LIMIT 1", [targetId]);
+          if (ownerRows[0]?.user_id) {
+            moderationPenalty = {
+              userId: ownerRows[0].user_id,
+              entityType: "POST",
+              entityId: targetId,
+              reason: "Post deleted after moderation report"
+            };
+          }
         }
         if (input.actionType === "BAN_USER") {
           await connection.execute("UPDATE users SET status = 'LOCKED', updated_at = UTC_TIMESTAMP() WHERE id = ?", [targetId]);
@@ -1041,6 +1289,15 @@ export const adminRepository = {
       }
 
       await connection.commit();
+      if (moderationPenalty) {
+        await userRepository.addReputation({
+          userId: moderationPenalty.userId,
+          delta: -5,
+          reason: moderationPenalty.reason,
+          entityType: moderationPenalty.entityType,
+          entityId: moderationPenalty.entityId
+        });
+      }
       return { updated: true };
     } catch (error) {
       await connection.rollback();

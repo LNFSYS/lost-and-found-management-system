@@ -1,61 +1,61 @@
 # Three-Layer Verification and AI Training Guide
 
-Last audit: 2026-06-15
+Last audit: 2026-06-29
 
-File này mô tả hướng xác minh 3 tầng cho FPTU Lost & Found System. Mục tiêu là dùng hệ thống để gợi ý thông minh hơn, nhưng quyết định trả đồ cuối cùng vẫn cần bằng chứng và xác nhận của người có quyền.
+This file describes the three-layer verification approach for the FPTU Lost & Found System. The goal is to use the system to provide smarter suggestions, while the final decision to return an item still requires evidence and confirmation from an authorized person.
 
-## 1. Mục tiêu xác minh 3 tầng
+## 1. Three-Layer Verification Objectives
 
-Hệ thống nên dùng 3 tầng để giảm claim sai và giảm rủi ro trả nhầm đồ:
+The system should use three layers to reduce incorrect claims and minimize the risk of returning items to the wrong person:
 
-- Tầng 1 - Rule-Based Matching: hệ thống tự tính phần trăm giống nhau giữa bài `LOST` và bài `FOUND` bằng thuật toán hiện tại.
-- Tầng 2 - Trained AI Model: model AI được train từ dữ liệu thực tế để phân loại vật phẩm, đánh giá match và cải thiện độ chính xác của gợi ý.
-- Tầng 3 - Human Verification: claimant cung cấp bằng chứng; chủ bài/staff/admin kiểm tra trước khi accept và bàn giao.
+- Layer 1 - Rule-Based Matching: the system automatically calculates the similarity percentage between a `LOST` post and a `FOUND` post using the current algorithm.
+- Layer 2 - Trained AI Model: an AI model trained on real-world data to classify items, evaluate matches, and improve suggestion accuracy.
+- Layer 3 - Human Verification: the claimant provides evidence; the post owner/staff/admin reviews it before accepting the claim and initiating handover.
 
-Luồng tổng quát:
+General flow:
 
-1. User tạo bài `LOST` hoặc `FOUND`.
-2. Tầng 1 chạy rule-based matching giữa bài mới và các bài đối lập đang mở.
-3. Tầng 2, nếu đã có model riêng, nhận diện ảnh vật phẩm, trích xuất text/logo/brand, so sánh ảnh `LOST` và ảnh `FOUND`, rồi tạo `modelMatchProbability`.
-4. Hệ thống lưu metadata từ tầng 2 như category gợi ý, mô tả ảnh, text/OCR, brand/logo và image similarity.
-5. Hệ thống chạy lại tầng 1 thêm một lần với dữ liệu đã được AI enrich để double-check.
-6. Hệ thống kết hợp điểm tầng 1 sau enrich và điểm tầng 2 để tạo `finalScore`.
-7. Nếu điểm đủ cao, hệ thống lưu `match_results`, hiển thị gợi ý và có thể gửi notification.
-8. Người nghi là chủ đồ gửi claim kèm mô tả bí mật/evidence.
-9. Tầng 3 kiểm tra bằng chứng, yêu cầu bổ sung nếu cần.
-10. Chỉ khi bằng chứng hợp lệ mới accept claim và chuyển sang luồng hẹn/bàn giao.
+1. User creates a `LOST` or `FOUND` post.
+2. Layer 1 runs rule-based matching between the new post and opposing open posts.
+3. Layer 2, if a custom model exists, recognizes item images, extracts text/logo/brand, compares `LOST` and `FOUND` images, then produces a `modelMatchProbability`.
+4. The system stores metadata from Layer 2 such as suggested category, image description, text/OCR, brand/logo, and image similarity.
+5. The system re-runs Layer 1 one more time with AI-enriched data for double-checking.
+6. The system combines the enriched Layer 1 score and the Layer 2 score to produce a `finalScore`.
+7. If the score is high enough, the system saves `match_results`, displays suggestions, and optionally sends a notification.
+8. The suspected owner submits a claim with a secret description/evidence.
+9. Layer 3 reviews the evidence and requests additional information if needed.
+10. Only when the evidence is valid does the claim get accepted and proceed to the appointment/handover flow.
 
-## 2. Tầng 1 - Thuật toán tính phần trăm giống nhau
+## 2. Layer 1 - Similarity Percentage Algorithm
 
-Tầng 1 là thuật toán hiện tại trong code. Tầng này chưa phải model AI tự train; nó dùng rule, TF-IDF, cosine similarity, category/location/time score và AI tags/OCR nếu có.
+Layer 1 is the current algorithm in the codebase. This layer is not a self-trained AI model; it uses rules, TF-IDF, cosine similarity, category/location/time scores, and AI tags/OCR when available.
 
-Tầng 1 nên chạy 2 lần khi có tầng 2:
+Layer 1 should run twice when Layer 2 is active:
 
-- Lần 1: chạy ngay sau khi user tạo bài/upload ảnh để có gợi ý nhanh.
-- Lần 2: chạy lại sau khi tầng 2 đã sinh metadata như item name, category suggestion, OCR text, brand/logo và mô tả ảnh. Lần này dùng dữ liệu giàu hơn để double-check kết quả.
+- Pass 1: runs immediately after the user creates a post/uploads images to provide quick suggestions.
+- Pass 2: re-runs after Layer 2 has generated metadata such as item name, category suggestion, OCR text, brand/logo, and image description. This pass uses richer data for double-checking results.
 
-Tầng 1 dựa trên 4 nhóm điểm:
+Layer 1 is based on 4 score components:
 
-| Thành phần | Ý nghĩa | Default weight |
+| Component | Meaning | Default weight |
 | --- | --- | --- |
-| Text score | Độ giống nội dung mô tả, tiêu đề, tag AI/OCR | 40% |
-| Category score | Độ giống danh mục đồ vật | 30% |
-| Location score | Độ gần vị trí mất/nhặt | 20% |
-| Time score | Độ gần thời gian mất/nhặt | 10% |
+| Text score | Similarity of descriptions, titles, AI/OCR tags | 40% |
+| Category score | Similarity of item categories | 30% |
+| Location score | Proximity of lost/found locations | 20% |
+| Time score | Proximity of lost/found times | 10% |
 
-Các weight lấy từ config:
+Weights are read from config:
 
-- `matching.weight_text`, mặc định `0.4`
-- `matching.weight_category`, mặc định `0.3`
-- `matching.weight_location`, mặc định `0.2`
-- `matching.weight_time`, mặc định `0.1`
+- `matching.weight_text`, default `0.4`
+- `matching.weight_category`, default `0.3`
+- `matching.weight_location`, default `0.2`
+- `matching.weight_time`, default `0.1`
 
-Ngưỡng xử lý:
+Processing thresholds:
 
-- `matching.threshold`, mặc định `0.4`: dưới ngưỡng này thì không lưu match.
-- `matching.notification_threshold`, mặc định `0.8`: từ ngưỡng này thì gửi notification match tốt.
+- `matching.threshold`, default `0.4`: below this threshold, the match is not saved.
+- `matching.notification_threshold`, default `0.8`: at or above this threshold, a high-confidence match notification is sent.
 
-### Công thức tầng 1
+### Layer 1 Formula
 
 ```txt
 ruleBasedScore =
@@ -67,93 +67,93 @@ ruleBasedScore =
 ruleBasedPercent = round(ruleBasedScore * 100)
 ```
 
-Lưu ý: các weight nên có tổng bằng `1.0`. Nếu sau này cho admin chỉnh weight tự do, nên validate hoặc normalize trước khi tính.
+Note: weights should sum to `1.0`. If admin weight adjustment is allowed in the future, validate or normalize before computing.
 
 ### Text score
 
-Text score dùng TF-IDF + cosine similarity:
+Text score uses TF-IDF + cosine similarity:
 
-1. Ghép text của bài: title, description, category/location text, AI tags/OCR nếu có.
-2. Chuẩn hóa tiếng Việt bằng `normalizeText`.
-3. Tách token theo khoảng trắng, bỏ token quá ngắn.
-4. Tính TF-IDF vector cho bài nguồn và các bài candidate.
-5. Tính cosine similarity giữa 2 vector.
+1. Concatenate post text: title, description, category/location text, AI tags/OCR if available.
+2. Normalize Vietnamese using `normalizeText`.
+3. Tokenize by whitespace, discard tokens that are too short.
+4. Compute TF-IDF vector for the source post and candidate posts.
+5. Compute cosine similarity between the two vectors.
 
-Kết quả:
+Result:
 
 ```txt
-textScore nằm trong khoảng 0.0 -> 1.0
+textScore ranges from 0.0 -> 1.0
 ```
 
-Ý nghĩa:
+Meaning:
 
-- `1.0`: nội dung rất giống.
-- `0.5`: giống vừa phải.
-- `0.0`: gần như không trùng thông tin.
+- `1.0`: content is very similar.
+- `0.5`: moderately similar.
+- `0.0`: almost no matching information.
 
 ### Category score
 
 ```txt
-Nếu cùng category cụ thể: 1.0
-Nếu cùng category cha hoặc quan hệ cha-con: 0.5
-Nếu khác hẳn category: 0.0
-Nếu thiếu category: 0.0
+If same specific category: 1.0
+If same parent category or parent-child relationship: 0.5
+If completely different categories: 0.0
+If category is missing: 0.0
 ```
 
-Ví dụ:
+Examples:
 
-- Cùng là `Tai nghe`: `1.0`
-- Một bên `Thiết bị điện tử`, một bên `Tai nghe`: `0.5`
-- Một bên `Ví tiền`, một bên `Tai nghe`: `0.0`
+- Both are `Headphones`: `1.0`
+- One is `Electronics`, the other is `Headphones`: `0.5`
+- One is `Wallet`, the other is `Headphones`: `0.0`
 
 ### Location score
 
 ```txt
-Nếu roomText/vị trí chi tiết giống nhau sau normalize: 1.0
-Nếu cùng building: 0.7
-Nếu cùng area/khu vực lớn: 0.4
-Nếu khác khu vực hoặc thiếu dữ liệu: 0.0
+If roomText/detailed location matches after normalization: 1.0
+If same building: 0.7
+If same area/zone: 0.4
+If different area or missing data: 0.0
 ```
 
-Ví dụ:
+Examples:
 
-- Cùng nhập `Alpha 301`: `1.0`
-- Cùng `Tòa Alpha`: `0.7`
-- Cùng khu `Tòa học`: `0.4`
-- Một bên nhà xe, một bên căn tin: `0.0`
+- Both entered `Alpha 301`: `1.0`
+- Both in `Alpha Building`: `0.7`
+- Both in `Academic Buildings` zone: `0.4`
+- One in parking lot, the other in cafeteria: `0.0`
 
 ### Time score
 
-Nếu thiếu thời gian ở một trong hai bài:
+If time is missing from either post:
 
 ```txt
 timeScore = 0.0
 ```
 
-Nếu thời gian mất/nhặt cách nhau không quá 1 ngày:
+If the lost/found times are within 1 day of each other:
 
 ```txt
 timeScore = 1.0
 ```
 
-Nếu lệch hơn 1 ngày:
+If more than 1 day apart:
 
 ```txt
 timeScore = 1 / (1 + daysDiff / 7)
 ```
 
-Ví dụ:
+Examples:
 
-| Lệch thời gian | Time score xấp xỉ |
+| Time difference | Approximate time score |
 | --- | --- |
-| 0-1 ngày | 100% |
-| 7 ngày | 50% |
-| 14 ngày | 33% |
-| 21 ngày | 25% |
+| 0-1 day | 100% |
+| 7 days | 50% |
+| 14 days | 33% |
+| 21 days | 25% |
 
-### Ví dụ tính điểm tầng 1
+### Layer 1 Scoring Example
 
-Một bài `LOST` và một bài `FOUND` có:
+A `LOST` post and a `FOUND` post have:
 
 ```txt
 textScore = 0.70
@@ -162,7 +162,7 @@ locationScore = 0.70
 timeScore = 0.50
 ```
 
-Với weight mặc định:
+With default weights:
 
 ```txt
 ruleBasedScore =
@@ -176,70 +176,70 @@ ruleBasedScore =
 ruleBasedPercent = 77%
 ```
 
-Kết luận:
+Conclusion:
 
-- `77% >= 40%`: lưu vào `match_results`.
-- `77% < 80%`: chưa gửi notification high-confidence theo threshold mặc định.
+- `77% >= 40%`: saved to `match_results`.
+- `77% < 80%`: does not send a high-confidence notification per the default threshold.
 
-## 3. Tầng 2 - Training Model AI
+## 3. Layer 2 - AI Model Training
 
-Tầng 2 là model AI riêng được train từ dữ liệu của hệ thống. Tầng này dùng để cải thiện kết quả gợi ý từ tầng 1, không tự động quyết định trả đồ.
+Layer 2 is a custom AI model trained on system data. This layer is used to improve suggestion results from Layer 1 and does not automatically decide item returns.
 
-Hiện tại tầng 2 là planned. Khi chưa có model riêng, hệ thống fallback về tầng 1.
+Currently Layer 2 is planned. When no custom model is available, the system falls back to Layer 1.
 
-### Dữ liệu cần thu thập
+### Data to Collect
 
-Nguồn dữ liệu:
+Data sources:
 
-- Ảnh vật phẩm từ bài đăng.
-- Tiêu đề/mô tả bài đăng.
-- Category user chọn.
-- AI tags/OCR hiện có.
-- Cặp LOST/FOUND đã match.
-- Claim accepted/rejected.
-- Feedback đúng/sai từ user/admin.
+- Item images from posts.
+- Post titles/descriptions.
+- User-selected categories.
+- Existing AI tags/OCR.
+- Matched LOST/FOUND pairs.
+- Accepted/rejected claims.
+- Correct/incorrect feedback from users/admins.
 
-Nhãn cần có:
+Required labels:
 
-- `item_category`: danh mục đúng của vật.
-- `object_tags`: tag mô tả vật.
-- `match_label`: cặp LOST/FOUND là match đúng hay sai.
-- `quality_label`: ảnh rõ/mờ/trùng/rác nếu cần.
+- `item_category`: correct item category.
+- `object_tags`: descriptive item tags.
+- `match_label`: whether the LOST/FOUND pair is a correct or incorrect match.
+- `quality_label`: image quality — clear/blurry/duplicate/junk if needed.
 
-### Làm sạch và bảo mật dataset
+### Dataset Cleaning and Security
 
-Trước khi train:
+Before training:
 
-- Xóa hoặc ẩn danh email, số điện thoại, MSSV, địa chỉ liên hệ.
-- Không đưa thông tin quá nhạy cảm vào dataset nếu không cần.
-- Loại bỏ ảnh không phải vật phẩm.
-- Loại bỏ sample spam hoặc feedback đáng ngờ.
-- Lưu dataset version để có thể tái lập kết quả train.
+- Remove or anonymize emails, phone numbers, student IDs, and contact information.
+- Do not include overly sensitive information in the dataset if not needed.
+- Remove images that are not item photos.
+- Remove spam samples or suspicious feedback.
+- Version datasets to ensure training reproducibility.
 
-### Model nên train
+### Models to Train
 
-Giai đoạn 1:
+Phase 1:
 
-- Model phân loại ảnh/category vật phẩm.
-- Input: ảnh vật phẩm.
+- Image/category item classification model.
+- Input: item image.
 - Output: category suggestion + confidence.
 
-Giai đoạn 2:
+Phase 2:
 
-- Model semantic matching cho LOST/FOUND.
+- Semantic matching model for LOST/FOUND.
 - Input: text + category + location + time + image embedding.
 - Output: `modelMatchProbability`.
 
-Giai đoạn 3:
+Phase 3:
 
 - Image-to-image comparison.
-- Input: ảnh vật phẩm của bài `LOST` và ảnh vật phẩm của bài `FOUND`.
-- Output: `imageSimilarityScore`, các vùng ảnh giống nhau nếu model hỗ trợ, và lý do match ngắn gọn.
+- Input: item image from the `LOST` post and item image from the `FOUND` post.
+- Output: `imageSimilarityScore`, matching image regions if the model supports it, and a brief match reason.
 
-Giai đoạn 4:
+Phase 4:
 
 - Hybrid scoring.
-- Kết hợp tầng 1 với tầng 2:
+- Combines Layer 1 with Layer 2:
 
 ```txt
 finalScore =
@@ -249,107 +249,109 @@ finalScore =
 finalPercent = round(finalScore * 100)
 ```
 
-Trong đó `alpha + beta = 1`. `enrichedRuleBasedScore` là điểm tầng 1 sau khi đã chạy lại với metadata từ tầng 2. Ví dụ giai đoạn đầu có thể dùng `alpha = 0.7`, `beta = 0.3`; khi model ổn định hơn có thể tăng `beta`.
+Where `alpha + beta = 1`. `enrichedRuleBasedScore` is the Layer 1 score after re-running with Layer 2 metadata. For example, early phases might use `alpha = 0.7`, `beta = 0.3`; as the model stabilizes, `beta` can be increased.
 
-### AI Lens response đề xuất
+### Proposed AI Lens Response
 
-Khi phân tích một ảnh vật phẩm:
+When analyzing a single item image:
 
 ```json
 {
-  "itemName": "tai nghe không dây",
-  "categorySuggestion": "Thiết bị điện tử > Tai nghe",
-  "description": "Hộp tai nghe màu trắng, kiểu dáng giống AirPods",
+  "itemName": "wireless headphones",
+  "categorySuggestion": "Electronics > Headphones",
+  "description": "White headphone case, AirPods-style design",
   "brand": "Apple",
   "visibleText": ["AirPods Pro"],
   "serialCandidates": ["A2698"],
-  "colors": ["trắng"],
+  "colors": ["white"],
   "confidence": 0.86
 }
 ```
 
-Khi so sánh 2 ảnh `LOST` và `FOUND`:
+When comparing 2 images from `LOST` and `FOUND`:
 
 ```json
 {
   "imageSimilarityScore": 0.82,
   "sameItemProbability": 0.76,
-  "matchingSignals": ["cùng kiểu tai nghe", "cùng màu trắng", "logo Apple tương đồng"],
-  "mismatchSignals": ["không đọc được serial ở ảnh LOST"],
+  "matchingSignals": ["same headphone type", "same white color", "similar Apple logo"],
+  "mismatchSignals": ["cannot read serial in LOST image"],
   "modelVersion": "ai-lens-v1"
 }
 ```
 
-### Metrics đánh giá
+### Evaluation Metrics
 
-Không chỉ nhìn accuracy. Nên đo:
+Do not look at accuracy alone. Measure:
 
-- Precision: trong các match hệ thống gợi ý, bao nhiêu cái đúng.
-- Recall: trong các match đúng thật, hệ thống tìm được bao nhiêu cái.
-- F1-score: cân bằng precision và recall.
-- Top-k accuracy: match đúng có nằm trong top 3/top 5 gợi ý không.
-- False positive rate: tỷ lệ gợi ý sai nhưng điểm cao.
+- Precision: of the matches the system suggests, how many are correct.
+- Recall: of the actual correct matches, how many the system found.
+- F1-score: balance between precision and recall.
+- Top-k accuracy: whether the correct match appears in the top 3/top 5 suggestions.
+- False positive rate: rate of incorrect suggestions with high scores.
 
-Với hệ thống Lost & Found, nên ưu tiên precision cao để tránh gợi ý sai quá nhiều và tránh trả nhầm đồ.
+For a Lost & Found system, prioritize high precision to avoid too many incorrect suggestions and prevent returning items to the wrong person.
 
-### Deploy và fallback
+### Deploy and Fallback
 
-Khi có model riêng:
+When a custom model is available:
 
-1. Deploy model thành inference service riêng.
-2. API gọi model để lấy category suggestion, OCR/text, brand/logo, image similarity hoặc `modelMatchProbability`.
-3. Sau khi nhận metadata tầng 2, API lưu metadata vào post/AI tags rồi trigger tầng 1 chạy lại để double-check.
-4. Nếu model lỗi hoặc timeout, fallback về Google Vision/rule matching hiện tại.
-5. Lưu `model_version` vào kết quả AI/matching để audit.
-6. Chỉ bật model mới nếu metrics đạt ngưỡng và được admin approve.
+1. Deploy the model as a separate inference service.
+2. API calls the model for category suggestion, OCR/text, brand/logo, image similarity, or `modelMatchProbability`.
+3. After receiving Layer 2 metadata, the API saves metadata to post/AI tags then triggers Layer 1 to re-run for double-checking.
+4. If the model fails or times out, fall back to Google Vision/current rule matching.
+5. Save `model_version` in AI/matching results for audit.
+6. Only activate a new model if metrics meet thresholds and admin approves.
 
-## 4. Tầng 3 - Human Verification
+## 4. Layer 3 - Human Verification
 
-Tầng 3 dùng để xác minh quyền sở hữu thật. Đây là tầng cuối cùng và quan trọng nhất trước khi accept claim hoặc bàn giao.
+Layer 3 is used to verify actual ownership. This is the final and most important layer before accepting a claim or initiating handover.
 
-Thông tin claimant cần cung cấp:
+Information the claimant needs to provide:
 
-- Mô tả chi tiết vật bị mất.
-- Dấu hiệu riêng: vết trầy, sticker, màu, serial, hình nền, vật bên trong.
-- Thời gian mất gần đúng.
-- Vị trí mất gần đúng.
-- Ảnh/bằng chứng nếu có.
+- Detailed description of the lost item.
+- Distinguishing marks: scratches, stickers, color, serial number, wallpaper, contents inside.
+- Approximate time of loss.
+- Approximate location of loss.
+- Photos/evidence if available.
 
-Người kiểm tra cần làm:
+What the reviewer needs to do:
 
-1. So sánh mô tả bí mật với thông tin chủ bài đang giữ.
-2. Kiểm tra evidence có liên quan thật không.
-3. Kiểm tra timeline có hợp lý không.
-4. So sánh với điểm gợi ý tầng 1 và tầng 2, nhưng không phụ thuộc hoàn toàn vào điểm.
-5. Nếu thiếu thông tin, chuyển claim sang `NEED_MORE_INFO`.
-6. Nếu claimant đã bổ sung evidence mới và hợp lệ, mới accept.
-7. Nếu bằng chứng không khớp, reject kèm lý do.
+1. Compare the secret description with information held by the post owner.
+2. Check whether the evidence is genuinely relevant.
+3. Check whether the timeline is reasonable.
+4. Compare with Layer 1 and Layer 2 suggestion scores, but do not rely entirely on the scores.
+5. If information is insufficient, transition the claim to `NEED_MORE_INFO`.
+6. Only accept if the claimant has provided new and valid evidence.
+7. If the evidence does not match, reject with a reason.
 
-Rule quan trọng:
+Important rules:
 
-- Điểm tầng 1 hoặc tầng 2 cao không đồng nghĩa được nhận đồ.
-- Tầng 2 AI chỉ là trợ lý gợi ý, không được tự động accept claim.
-- Claim `NEED_MORE_INFO` chỉ được accept khi có evidence mới sau yêu cầu bổ sung.
-- Sau khi claim accepted mới được tạo lịch hẹn/bàn giao.
-- Toàn bộ transition trạng thái claim nên đi qua Java Admin Service có row lock.
+- A high Layer 1 or Layer 2 score does not mean the person gets their item back.
+- Layer 2 AI is only a suggestion assistant; it must not automatically accept claims.
+- A claim in `NEED_MORE_INFO` may only be accepted when new evidence is provided after the request.
+- Appointments/handover may only be created after a claim is accepted.
+- All claim state transitions should go through the Java Admin Service with row locks.
 
-## 5. Checklist triển khai
+## 5. Implementation Checklist
 
-- [ ] Tách rõ UI hiển thị điểm tầng 1, điểm tầng 2 và trạng thái kiểm tra tầng 3.
-- [ ] Hiển thị breakdown tầng 1: text/category/location/time.
-- [ ] Validate tổng matching weight tầng 1 bằng `1.0` hoặc normalize trước khi tính.
-- [ ] Thêm admin action chạy lại matching thủ công.
-- [ ] Thêm background queue cho matching khi dữ liệu lớn.
-- [ ] Thêm form feedback match đúng/sai để phục vụ tầng 2.
-- [ ] Thiết kế bảng lưu training samples/labels.
-- [ ] Thiết kế bảng model registry.
-- [ ] Làm pipeline export/anonymize dataset.
-- [ ] Train model category/image đầu tiên.
-- [ ] Train model semantic matching sau khi đủ labeled data.
-- [ ] Train hoặc tích hợp model so sánh ảnh LOST/FOUND.
-- [ ] Lưu metadata AI Lens: item name, category suggestion, OCR text, brand/logo, colors.
-- [ ] Sau khi tầng 2 trả metadata, trigger tầng 1 chạy lại để double-check.
-- [ ] Thêm inference endpoint và fallback.
-- [ ] Lưu `ruleBasedScore`, `enrichedRuleBasedScore`, `imageSimilarityScore`, `modelMatchProbability`, `finalScore` và `model_version`.
-- [ ] Thêm dashboard training/model metrics cho admin.
-- [ ] Đảm bảo human verification tầng 3 vẫn là bước quyết định cuối cùng trước khi trả đồ.
+| Status | Item | Note |
+| --- | --- | --- |
+| Done | Display Layer 1 match score and main breakdown | Web suggestion cards show overall score and text/category/location scores. Time score display can be improved later. |
+| Done | Add admin action to re-run matching manually | Covered by matching re-run API and admin action. |
+| Done | Ensure human verification in Layer 3 remains the final decision step before item return | Covered by business rules and claim/appointment guards. |
+| Partial | Clearly separate Layer 1, Layer 2 and Layer 3 in UI | Claim verification percentage exists; custom Layer 2 model does not yet exist. |
+| Partial | Validate or normalize matching weights | Config weights are read by matching logic; full admin weight UI/validation remains open. |
+| Planned | Add background queue for matching when data is large | Kept in pending tasks. |
+| Planned | Add match correct/incorrect feedback form to support Layer 2 | AI training backlog. |
+| Planned | Design table for training samples/labels | AI training backlog. |
+| Planned | Design model registry table | AI training backlog. |
+| Planned | Build export/anonymize dataset pipeline | AI training backlog. |
+| Planned | Train first category/image model | AI training backlog. |
+| Planned | Train semantic matching model after sufficient labeled data | AI training backlog. |
+| Planned | Train or integrate LOST/FOUND image comparison model | AI training backlog. |
+| Planned | Save AI Lens metadata beyond current Vision tags/OCR | Item tags/OCR exist; custom AI Lens metadata remains planned. |
+| Planned | After Layer 2 returns metadata, trigger Layer 1 re-run for double-checking | Depends on custom model. |
+| Planned | Add inference endpoint and fallback | Custom model not implemented. |
+| Planned | Save model scores and model version fields | Custom model not implemented. |
+| Planned | Add training/model metrics dashboard for admin | AI training backlog. |

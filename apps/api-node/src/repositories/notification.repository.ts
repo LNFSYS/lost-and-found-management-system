@@ -1,6 +1,7 @@
 import type { ResultSetHeader, RowDataPacket } from "mysql2/promise";
 import { randomUUID } from "node:crypto";
 import { dbPool } from "../config/db.js";
+import { emitUserNotification } from "../services/realtime.service.js";
 
 interface NotificationRow extends RowDataPacket {
   id: string;
@@ -61,6 +62,18 @@ export const notificationRepository = {
         input.entityId ?? null
       ]
     );
+    emitUserNotification(input.userId, {
+      id,
+      userId: input.userId,
+      type: input.type,
+      title: input.title,
+      body: input.body ?? null,
+      entityType: input.entityType ?? null,
+      entityId: input.entityId ?? null,
+      isRead: false,
+      readAt: null,
+      createdAt: new Date().toISOString()
+    });
     return { id };
   },
 

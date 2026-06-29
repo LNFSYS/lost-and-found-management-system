@@ -61,6 +61,11 @@ export const updatePostStatusSchema = z.object({
   status: postStatusSchema
 });
 
+export const reportPostSchema = z.object({
+  reason: z.string().trim().min(3).max(255),
+  details: z.string().trim().max(2000).nullable().optional()
+});
+
 export const listPostsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
@@ -78,4 +83,5 @@ export const listPostsQuerySchema = z.object({
 export type CreatePostInput = z.infer<typeof createPostSchema>;
 export type UpdatePostInput = z.infer<typeof updatePostSchema>;
 export type UpdatePostStatusInput = z.infer<typeof updatePostStatusSchema>;
+export type ReportPostInput = z.infer<typeof reportPostSchema>;
 export type ListPostsQuery = z.infer<typeof listPostsQuerySchema>;

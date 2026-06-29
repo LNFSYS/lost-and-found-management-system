@@ -6,6 +6,7 @@ import { HttpError } from "../utils/http-error.js";
 import {
   createPostSchema,
   listPostsQuerySchema,
+  reportPostSchema,
   updatePostSchema,
   updatePostStatusSchema
 } from "../validators/post.validator.js";
@@ -43,6 +44,11 @@ export const postController = {
     response.json(ok(result));
   },
 
+  async myMatchSuggestions(request: Request, response: Response) {
+    const result = await postService.listMyMatchSuggestions(request.auth!);
+    response.json(ok(result));
+  },
+
   async detail(request: Request, response: Response) {
     const detail = await postService.getPostDetail(requireStringParam(request.params.id, "id"));
     response.json(ok(detail));
@@ -52,6 +58,18 @@ export const postController = {
     const postId = requireStringParam(request.params.id, "id");
     const matches = await matchingService.listMatches(postId);
     response.json(ok({ matches }));
+  },
+
+  async matchExplanations(request: Request, response: Response) {
+    const postId = requireStringParam(request.params.id, "id");
+    const explanations = await matchingService.explainMatches(postId);
+    response.json(ok({ explanations }));
+  },
+
+  async rerunMatches(request: Request, response: Response) {
+    const postId = requireStringParam(request.params.id, "id");
+    const matches = await matchingService.runForPost(postId);
+    response.json(ok({ matches }, "Matching re-run completed"));
   },
 
   async update(request: Request, response: Response) {
@@ -66,6 +84,12 @@ export const postController = {
     const input = updatePostStatusSchema.parse(request.body);
     const post = await postService.updateStatus(request.auth!, postId, input.status);
     response.json(ok({ post }, "Post status updated"));
+  },
+
+  async report(request: Request, response: Response) {
+    const postId = requireStringParam(request.params.id, "id");
+    const result = await postService.reportPost(request.auth!, postId, reportPostSchema.parse(request.body));
+    response.status(201).json(created(result, "Report submitted"));
   },
 
   async remove(request: Request, response: Response) {

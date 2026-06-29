@@ -165,6 +165,33 @@ function percent(value: number) {
   return `${Math.round(value * 100)}%`;
 }
 
+function explainScore(match: MatchRunResult) {
+  const reasons = [
+    `text ${percent(match.textScore)}`,
+    `category ${percent(match.categoryScore)}`,
+    `location ${percent(match.locationScore)}`,
+    `time ${percent(match.timeScore)}`
+  ];
+  const strongest = [
+    { label: "mo ta", score: match.textScore },
+    { label: "danh muc", score: match.categoryScore },
+    { label: "vi tri", score: match.locationScore },
+    { label: "thoi gian", score: match.timeScore }
+  ]
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 2)
+    .filter((item) => item.score > 0)
+    .map((item) => item.label);
+
+  return {
+    summary:
+      strongest.length > 0
+        ? `Hai bai co do tuong dong ${percent(match.totalScore)}, noi bat o ${strongest.join(" va ")}.`
+        : `Hai bai co do tuong dong ${percent(match.totalScore)}.`,
+    reasons
+  };
+}
+
 async function notifyHighConfidenceMatch(
   post: MatchCandidatePost,
   candidate: MatchCandidatePost,
@@ -281,11 +308,23 @@ export const matchingService = {
     return results;
   },
 
-  async buildSuggestions(postId: string, matches: MatchRunResult[], minimumScore = 0.8) {
-    return buildMatchSuggestions(postId, matches, minimumScore);
+  async buildSuggestions(postId: string, matches: MatchRunResult[], minimumScore?: number) {
+    const score = minimumScore ?? (await postRepository.getConfigNumber("matching.threshold", 0.4));
+    return buildMatchSuggestions(postId, matches, score);
   },
 
   async listMatches(postId: string) {
     return postRepository.listMatchesForPost(postId);
+  },
+
+  async explainMatches(postId: string) {
+    const matches = await postRepository.listMatchesForPost(postId);
+    return matches.map((match) => ({
+      matchId: match.id,
+      lostPostId: match.lostPostId,
+      foundPostId: match.foundPostId,
+      totalScore: match.totalScore,
+      ...explainScore(match)
+    }));
   }
 };

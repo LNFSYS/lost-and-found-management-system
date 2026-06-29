@@ -1,5 +1,7 @@
 import type { ResultSetHeader, RowDataPacket } from "mysql2/promise";
+import { randomUUID } from "node:crypto";
 import { dbPool } from "../config/db.js";
+import { notificationRepository } from "./notification.repository.js";
 import type { ListPostsQuery } from "../validators/post.validator.js";
 
 export type PostType = "LOST" | "FOUND";
@@ -103,6 +105,12 @@ interface MediaOwnerRow extends RowDataPacket {
 
 interface ConfigNumberRow extends RowDataPacket {
   config_value: string;
+}
+
+interface ExpiringPostRow extends RowDataPacket {
+  id: string;
+  user_id: string;
+  title: string;
 }
 
 export interface MatchCandidatePost {
@@ -715,6 +723,24 @@ export const postRepository = {
     return rows.map(mapMatch);
   },
 
+  async listActiveLostPostIdsByUser(userId: string) {
+    const [rows] = await dbPool.query<Array<RowDataPacket & { id: string }>>(
+      `
+        SELECT id
+        FROM posts
+        WHERE user_id = ?
+          AND type = 'LOST'
+          AND status IN ('OPEN', 'MATCHED')
+          AND deleted_at IS NULL
+        ORDER BY created_at DESC
+        LIMIT 20
+      `,
+      [userId]
+    );
+
+    return rows.map((row) => row.id);
+  },
+
   async list(query: ListPostsQuery, userId?: string) {
     const { clause, values } = buildListWhere(query, userId);
     const offset = (query.page - 1) * query.pageSize;
@@ -811,6 +837,65 @@ export const postRepository = {
       [status, status, id]
     );
     return this.findById(id);
+  },
+
+  async expireOverduePosts() {
+    const [rows] = await dbPool.query<ExpiringPostRow[]>(
+      `
+        SELECT id, user_id, title
+        FROM posts
+        WHERE deleted_at IS NULL
+          AND expires_at IS NOT NULL
+          AND expires_at <= UTC_TIMESTAMP()
+          AND status IN ('OPEN', 'MATCHED')
+      `
+    );
+    if (rows.length === 0) {
+      return { expired: 0 };
+    }
+
+    await dbPool.execute(
+      `
+        UPDATE posts
+        SET status = 'EXPIRED',
+            updated_at = UTC_TIMESTAMP()
+        WHERE deleted_at IS NULL
+          AND expires_at IS NOT NULL
+          AND expires_at <= UTC_TIMESTAMP()
+          AND status IN ('OPEN', 'MATCHED')
+      `
+    );
+
+    await notificationRepository.createMany(
+      rows.map((post) => ({
+        userId: post.user_id,
+        type: "POST_EXPIRED",
+        title: "Bai dang da het han",
+        body: `"${post.title}" da duoc chuyen sang trang thai het han.`,
+        entityType: "POST",
+        entityId: post.id
+      }))
+    );
+
+    return { expired: rows.length };
+  },
+
+  async createReport(input: { reporterId: string; postId: string; reason: string; details?: string | null }) {
+    const id = randomUUID();
+    const [result] = await dbPool.execute<ResultSetHeader>(
+      `
+        INSERT INTO reports (id, reporter_id, entity_type, entity_id, reason, details)
+        SELECT ?, ?, 'POST', p.id, ?, ?
+        FROM posts p
+        WHERE p.id = ?
+          AND p.deleted_at IS NULL
+      `,
+      [id, input.reporterId, input.reason.trim(), input.details?.trim() || null, input.postId]
+    );
+    if (result.affectedRows === 0) {
+      return null;
+    }
+    return { id };
   },
 
   async softDelete(id: string) {

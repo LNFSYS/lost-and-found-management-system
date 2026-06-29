@@ -12,6 +12,12 @@ adminRoutes.use(requireAuth);
 adminRoutes.get("/dashboard/overview", requireStaffOrAdmin, (request, response, next) => {
   adminController.overview(request, response).catch(next);
 });
+adminRoutes.get("/dashboard/export.csv", requireStaffOrAdmin, (request, response, next) => {
+  adminController.exportOverview(request, response).catch(next);
+});
+adminRoutes.post("/jobs/expire-posts", requireStaffOrAdmin, (request, response, next) => {
+  adminController.expireOverduePosts(request, response).catch(next);
+});
 
 adminRoutes.get("/users", requireAdmin, (request, response, next) => {
   adminController.users(request, response).catch(next);
@@ -27,7 +33,7 @@ adminRoutes.patch("/users/:id/roles", requireAdmin, (request, response, next) =>
   adminController.updateUserRoles(request, response).catch(next);
 });
 
-adminRoutes.get("/categories", requireAdmin, (request, response, next) => {
+adminRoutes.get("/categories", requireStaffOrAdmin, (request, response, next) => {
   adminController.categories(request, response).catch(next);
 });
 adminRoutes.post("/categories", requireAdmin, (request, response, next) => {
@@ -40,7 +46,7 @@ adminRoutes.patch("/categories/:id/active", requireAdmin, (request, response, ne
   adminController.setCategoryActive(request, response).catch(next);
 });
 
-adminRoutes.get("/locations/areas", requireAdmin, (request, response, next) => {
+adminRoutes.get("/locations/areas", requireStaffOrAdmin, (request, response, next) => {
   adminController.areas(request, response).catch(next);
 });
 adminRoutes.post("/locations/areas", requireAdmin, (request, response, next) => {
@@ -53,7 +59,7 @@ adminRoutes.patch("/locations/areas/:id/active", requireAdmin, (request, respons
   adminController.setAreaActive(request, response).catch(next);
 });
 
-adminRoutes.get("/locations/buildings", requireAdmin, (request, response, next) => {
+adminRoutes.get("/locations/buildings", requireStaffOrAdmin, (request, response, next) => {
   adminController.buildings(request, response).catch(next);
 });
 adminRoutes.post("/locations/buildings", requireAdmin, (request, response, next) => {
@@ -66,7 +72,7 @@ adminRoutes.patch("/locations/buildings/:id/active", requireAdmin, (request, res
   adminController.setBuildingActive(request, response).catch(next);
 });
 
-adminRoutes.get("/handover-points", requireAdmin, (request, response, next) => {
+adminRoutes.get("/handover-points", requireStaffOrAdmin, (request, response, next) => {
   adminController.handoverPoints(request, response).catch(next);
 });
 adminRoutes.post("/handover-points", requireAdmin, (request, response, next) => {
@@ -79,17 +85,32 @@ adminRoutes.patch("/handover-points/:id/active", requireAdmin, (request, respons
   adminController.setHandoverPointActive(request, response).catch(next);
 });
 
-adminRoutes.get("/warehouse-items", requireAdmin, (request, response, next) => {
+adminRoutes.get("/warehouse-items", requireStaffOrAdmin, (request, response, next) => {
   adminController.warehouseItems(request, response).catch(next);
 });
-adminRoutes.post("/warehouse-items", requireAdmin, (request, response, next) => {
+adminRoutes.get("/warehouse/capacity", requireStaffOrAdmin, (request, response, next) => {
+  adminController.warehouseCapacity(request, response).catch(next);
+});
+adminRoutes.post("/warehouse-items", requireStaffOrAdmin, (request, response, next) => {
   adminController.createWarehouseItem(request, response).catch(next);
 });
-adminRoutes.put("/warehouse-items/:id", requireAdmin, (request, response, next) => {
+adminRoutes.put("/warehouse-items/:id", requireStaffOrAdmin, (request, response, next) => {
   adminController.updateWarehouseItem(request, response).catch(next);
 });
-adminRoutes.patch("/warehouse-items/:id/status", requireAdmin, (request, response, next) => {
+adminRoutes.patch("/warehouse-items/:id/status", requireStaffOrAdmin, (request, response, next) => {
   adminController.updateWarehouseItemStatus(request, response).catch(next);
+});
+adminRoutes.post("/warehouse-items/expire-overdue", requireStaffOrAdmin, (request, response, next) => {
+  adminController.expireOverdueWarehouseItems(request, response).catch(next);
+});
+adminRoutes.post("/warehouse-items/alert-near-expiry", requireStaffOrAdmin, (request, response, next) => {
+  adminController.alertWarehouseNearExpiry(request, response).catch(next);
+});
+adminRoutes.post("/warehouse/alert-capacity", requireStaffOrAdmin, (request, response, next) => {
+  adminController.alertWarehouseCapacity(request, response).catch(next);
+});
+adminRoutes.post("/warehouse-items/:id/process", requireStaffOrAdmin, (request, response, next) => {
+  adminController.processOverdueWarehouseItem(request, response).catch(next);
 });
 adminRoutes.delete("/warehouse-items/:id", requireAdmin, (request, response, next) => {
   adminController.deleteWarehouseItem(request, response).catch(next);

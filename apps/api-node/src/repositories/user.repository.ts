@@ -606,5 +606,55 @@ export const userRepository = {
         createdAt: row.created_at
       }))
     };
+  },
+
+  async addReputation(input: {
+    userId: string;
+    delta: number;
+    reason: string;
+    entityType?: string | null;
+    entityId?: string | null;
+  }) {
+    await this.ensureReputationScore(input.userId);
+    await dbPool.execute(
+      `
+        INSERT INTO reputation_logs (id, user_id, delta, reason, entity_type, entity_id)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `,
+      [
+        randomUUID(),
+        input.userId,
+        input.delta,
+        input.reason,
+        input.entityType ?? null,
+        input.entityId ?? null
+      ]
+    );
+    await dbPool.execute(
+      `
+        UPDATE reputation_scores
+        SET total_points = GREATEST(0, total_points + ?),
+            level = CASE
+              WHEN GREATEST(0, total_points + ?) >= 100 THEN 'EXCELLENT'
+              WHEN GREATEST(0, total_points + ?) >= 50 THEN 'RELIABLE'
+              WHEN GREATEST(0, total_points + ?) >= 20 THEN 'TRUSTED'
+              ELSE 'NEW'
+            END,
+            updated_at = UTC_TIMESTAMP()
+        WHERE user_id = ?
+      `,
+      [input.delta, input.delta, input.delta, input.delta, input.userId]
+    );
+
+    await this.createActivityLog({
+      userId: input.userId,
+      action: "REPUTATION_UPDATED",
+      entityType: input.entityType ?? "USER",
+      entityId: input.entityId ?? input.userId,
+      metadata: {
+        delta: input.delta,
+        reason: input.reason
+      }
+    });
   }
 };

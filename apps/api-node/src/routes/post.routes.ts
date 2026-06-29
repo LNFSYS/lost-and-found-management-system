@@ -2,7 +2,7 @@ import { Router } from "express";
 import { claimController } from "../controllers/claim.controller.js";
 import { mediaController } from "../controllers/media.controller.js";
 import { postController } from "../controllers/post.controller.js";
-import { requireAuth } from "../middlewares/auth.middleware.js";
+import { requireAnyRole, requireAuth } from "../middlewares/auth.middleware.js";
 import { memoryUpload } from "../middlewares/upload.middleware.js";
 
 export const postRoutes = Router();
@@ -20,12 +20,24 @@ postRoutes.get("/my", requireAuth, (request, response, next) => {
   postController.myPosts(request, response).catch(next);
 });
 
+postRoutes.get("/my/match-suggestions", requireAuth, (request, response, next) => {
+  postController.myMatchSuggestions(request, response).catch(next);
+});
+
 postRoutes.get("/:id/claims", requireAuth, (request, response, next) => {
   claimController.listForPost(request, response).catch(next);
 });
 
 postRoutes.get("/:id/matches", requireAuth, (request, response, next) => {
   postController.matches(request, response).catch(next);
+});
+
+postRoutes.get("/:id/matches/explanations", requireAuth, (request, response, next) => {
+  postController.matchExplanations(request, response).catch(next);
+});
+
+postRoutes.post("/:id/matches/re-run", requireAuth, requireAnyRole(["ADMIN"]), (request, response, next) => {
+  postController.rerunMatches(request, response).catch(next);
 });
 
 postRoutes.get("/:id", (request, response, next) => {
@@ -38,6 +50,10 @@ postRoutes.put("/:id", requireAuth, (request, response, next) => {
 
 postRoutes.patch("/:id/status", requireAuth, (request, response, next) => {
   postController.updateStatus(request, response).catch(next);
+});
+
+postRoutes.post("/:id/report", requireAuth, (request, response, next) => {
+  postController.report(request, response).catch(next);
 });
 
 postRoutes.post(

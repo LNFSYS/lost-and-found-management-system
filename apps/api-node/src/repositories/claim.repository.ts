@@ -1,4 +1,4 @@
-import type { RowDataPacket } from "mysql2/promise";
+import type { ResultSetHeader, RowDataPacket } from "mysql2/promise";
 import { dbPool } from "../config/db.js";
 
 interface ClaimPostRow extends RowDataPacket {
@@ -95,6 +95,14 @@ export const claimRepository = {
     return rows[0] ?? null;
   },
 
+  async countRejectedClaimsForUser(claimantId: string) {
+    const [rows] = await dbPool.query<Array<RowDataPacket & { total: number }>>(
+      "SELECT COUNT(*) AS total FROM claims WHERE claimant_id = ? AND status = 'REJECTED'",
+      [claimantId]
+    );
+    return Number(rows[0]?.total ?? 0);
+  },
+
   async create(input: {
     id: string;
     postId: string;
@@ -170,6 +178,58 @@ export const claimRepository = {
     );
 
     return rows.map(mapClaim);
+  },
+
+  async updateStatus(input: {
+    id: string;
+    actorId: string;
+    status: "NEED_MORE_INFO" | "ACCEPTED" | "REJECTED" | "CANCELLED";
+    rejectionReason?: string | null;
+    moreInfoRequest?: string | null;
+    note?: string | null;
+  }) {
+    const existing = await this.findById(input.id);
+    if (!existing) {
+      return null;
+    }
+
+    const [result] = await dbPool.execute<ResultSetHeader>(
+      `
+        UPDATE claims
+        SET status = ?,
+            rejection_reason = CASE WHEN ? = 'REJECTED' THEN ? ELSE rejection_reason END,
+            more_info_request = CASE WHEN ? = 'NEED_MORE_INFO' THEN ? ELSE more_info_request END,
+            accepted_at = CASE WHEN ? = 'ACCEPTED' THEN COALESCE(accepted_at, UTC_TIMESTAMP()) ELSE accepted_at END,
+            rejected_at = CASE WHEN ? = 'REJECTED' THEN COALESCE(rejected_at, UTC_TIMESTAMP()) ELSE rejected_at END,
+            cancelled_at = CASE WHEN ? = 'CANCELLED' THEN COALESCE(cancelled_at, UTC_TIMESTAMP()) ELSE cancelled_at END,
+            updated_at = UTC_TIMESTAMP()
+        WHERE id = ?
+      `,
+      [
+        input.status,
+        input.status,
+        input.rejectionReason ?? null,
+        input.status,
+        input.moreInfoRequest ?? null,
+        input.status,
+        input.status,
+        input.status,
+        input.id
+      ]
+    );
+    if (result.affectedRows === 0) {
+      return null;
+    }
+
+    await dbPool.execute(
+      `
+        INSERT INTO claim_state_logs (id, claim_id, from_status, to_status, actor_id, note)
+        VALUES (UUID(), ?, ?, ?, ?, ?)
+      `,
+      [input.id, existing.claim.status, input.status, input.actorId, input.note ?? null]
+    );
+
+    return this.findById(input.id);
   },
 
   async createEvidence(input: {

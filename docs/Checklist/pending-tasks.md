@@ -1,164 +1,173 @@
 # Pending Task Checklist
 
-Last audit: 2026-06-14
+Last audit: 2026-06-29
+
+## Current Audit Summary
+
+| Metric | Count |
+| --- | ---: |
+| Completed checklist items | 60 |
+| Open checklist items | 61 |
+
+Open work is concentrated in Google OAuth/auth ownership, advanced AI category selection, direct chat file upload, thumbnail optimization, Java evidence ownership guard, background matching queue, smart notification tiers, configurable warehouse retention/disposition proof, chat unread badge, full web config UI, feedback/negative-feedback review, mobile app, AI training/MLOps, and automated hardening tests.
 
 
 ## Auth / Account
 
-- [ ] Thêm Google OAuth login.
-- [ ] Quyết định rõ Node hay Java sở hữu auth mở rộng.
-- [ ] Nếu Java cần auth riêng, bổ sung validate email/password/token tương thích Node.
+- [ ] Add Google OAuth login.
+- [ ] Decide clearly whether Node or Java owns auth extensions.
+- [ ] If Java needs its own auth, add email/password/token validation compatible with Node.
 
 ## User Post / Community Feed
 
-- [ ] Thêm cron chuyển bài quá hạn sang `EXPIRED`.
-- [ ] Làm màn sửa bài cho user.
-- [ ] Làm nút đóng bài cho user.
-- [ ] Làm nút xóa mềm bài cho user.
-- [ ] Làm report vi phạm từ phía user.
-- [ ] Hoàn thiện chọn/sửa AI suggested category.
-- [ ] Thêm gallery/lightbox ảnh bài đăng.
-- [ ] Cân nhắc category multi-select nếu cần search nâng cao.
-- [ ] Kiểm tra lại index/query plan cho feed khi có nhiều dữ liệu.
+- [x] Add cron job to transition expired posts to `EXPIRED`.
+- [x] Build post edit screen for users.
+- [x] Build close post button for users.
+- [x] Build soft-delete post button for users.
+- [x] Build violation report from user side.
+- [ ] Complete AI suggested category selection/editing.
+- [x] Add gallery/lightbox for post images.
+- [ ] Consider category multi-select if advanced search is needed.
+- [x] Review index/query plans for feed with large datasets.
 
 ## Media
 
-- [ ] Cho phép upload ảnh trong chat.
-- [ ] Tạo thumbnail/ảnh tối ưu nếu cần.
-- [ ] Cho phép claim upload nhiều evidence file.
+- [ ] Allow image upload in chat.
+- [ ] Create thumbnail/optimized images if needed.
+- [x] Allow claim to upload multiple evidence files.
 
 ## Claim / Evidence
 
-- [ ] Làm UI xem evidence claim cho người có quyền.
-- [ ] Làm UI yêu cầu bổ sung thông tin claim.
-- [ ] Làm modal accept claim.
-- [ ] Làm modal reject claim kèm lý do.
-- [ ] Làm nút cancel claim cho claimant.
-- [ ] Nếu Java quản lý evidence, thêm guard claim/post relationship.
+- [x] Build UI to view claim evidence for authorized users.
+- [x] Build UI to request additional claim information.
+- [x] Build accept claim modal.
+- [x] Build reject claim modal with reason.
+- [x] Build cancel claim button for claimant.
+- [ ] If Java manages evidence, add claim/post relationship guard.
 
 ## Matching / Notification
 
-- [ ] Chuyển matching nặng sang background queue.
-- [ ] Thêm chức năng admin chạy lại matching thủ công.
-- [ ] Thêm realtime toast khi có match tốt.
-- [ ] Thêm notification khi có claim mới.
-- [ ] Thêm notification khi claim accepted/rejected.
-- [ ] Thêm smart notification theo score tier hoặc digest.
+- [ ] Move heavy matching to background queue.
+- [x] Add admin manual re-run matching feature.
+- [x] Add realtime toast when a good match is found.
+- [x] Add notification when a new claim is submitted.
+- [x] Add notification when claim is accepted/rejected.
+- [ ] Add smart notification by score tier or digest.
 
 ## Handover / Warehouse
 
-- [ ] Thêm job đánh dấu đồ lưu kho quá hạn.
-- [ ] Thêm cấu hình hạn lưu giữ theo loại đồ/giá trị.
-- [ ] Cảnh báo đồ sắp quá hạn.
-- [ ] Làm màn quản lý đồ quá hạn.
-- [ ] Làm form biên bản xử lý đồ quá hạn.
-- [ ] Cho phép xử lý quá hạn: hủy, quyên góp, chuyển giao, gia hạn.
-- [ ] Thêm quản lý sức chứa kho.
-- [ ] Cảnh báo kho đạt 80% sức chứa.
-- [ ] Chặn chọn kho đã đầy hoặc đề xuất kho khác.
-- [ ] Thêm upload ảnh biên bản/bằng chứng bàn giao.
-- [ ] Làm API/UI xem vị trí lưu kho hiện tại rõ hơn.
+- [x] Add job to mark overdue warehouse items.
+- [ ] Add configurable retention period by item type/value.
+- [x] Alert for items nearing expiry.
+- [x] Build overdue item management screen.
+- [ ] Build overdue item disposition report form.
+- [x] Allow overdue processing: dispose, donate, transfer, extend.
+- [x] Add warehouse capacity management.
+- [x] Alert when warehouse reaches 80% capacity.
+- [x] Block selecting a full warehouse or suggest alternatives.
+- [ ] Add handover/proof image upload.
+- [x] Build API/UI to view current storage location more clearly.
 
 ## Appointment
 
-- [ ] Tạo lịch hẹn sau khi claim accepted.
-- [ ] Chặn tạo lịch nếu claim chưa accepted.
-- [ ] Validate thời gian hẹn.
-- [ ] Tránh trùng lịch tại cùng điểm bàn giao.
-- [ ] Cho phép chọn điểm bàn giao làm nơi trả.
-- [ ] Cho phép nhập địa điểm hẹn tùy chỉnh.
-- [ ] Cho phép accept lịch hẹn.
-- [ ] Cho phép reject lịch hẹn kèm lý do.
-- [ ] Cho phép reschedule lịch hẹn.
-- [ ] Cho phép cancel lịch hẹn.
-- [ ] Cho phép mark completed.
-- [ ] Sau khi completed, cập nhật post thành `RESOLVED` nếu phù hợp.
-- [ ] Gửi reminder lịch hẹn qua notification/email.
+- [x] Create appointment after claim is accepted.
+- [x] Block appointment creation if claim is not accepted.
+- [x] Validate appointment time.
+- [x] Prevent scheduling conflicts at the same handover point.
+- [x] Allow selecting a handover point as the return location.
+- [x] Allow entering a custom meeting location.
+- [x] Allow accepting an appointment.
+- [x] Allow rejecting an appointment with reason.
+- [x] Allow rescheduling an appointment.
+- [x] Allow canceling an appointment.
+- [x] Allow marking appointment as completed.
+- [x] After completion, update post to `RESOLVED` if appropriate.
+- [x] Send appointment reminder via notification.
 
 ## Chat / Realtime
 
-- [ ] Tạo chat room sau khi claim accepted.
-- [ ] Dựng Socket.IO server với auth/CORS.
-- [ ] Cho user liên quan join room theo claim.
-- [ ] Gửi tin nhắn text realtime.
-- [ ] Lưu message vào DB.
-- [ ] Nhận tin nhắn realtime trên web.
-- [ ] Làm UI bong bóng chat.
-- [ ] Gửi ảnh trong chat.
-- [ ] Hiển thị trạng thái đã xem.
-- [ ] Thêm unread badge realtime cho tin nhắn.
+- [x] Create chat room after claim is accepted.
+- [x] Set up Socket.IO server with auth/CORS.
+- [x] Allow related users to join room by claim.
+- [x] Send text messages in realtime.
+- [x] Save messages to DB.
+- [x] Receive realtime messages on web.
+- [x] Build chat bubble UI.
+- [x] Send image URL messages in chat.
+- [x] Display seen/read status.
+- [ ] Add realtime unread badge for messages.
 
 ## Admin Dashboard / Report / Config
 
-- [ ] Thêm biểu đồ số bài LOST/FOUND theo thời gian.
-- [ ] Thêm biểu đồ tỷ lệ trả đồ thành công.
-- [ ] Thêm biểu đồ theo danh mục.
-- [ ] Thêm heatmap khu vực hay mất đồ.
-- [ ] Thêm bảng top trusted users.
-- [ ] Export báo cáo PDF/CSV.
-- [ ] Làm trang chỉnh config đầy đủ trên web.
-- [ ] Thêm rollback config.
-- [ ] Thêm UI cấu hình expiration bài đăng.
-- [ ] Thêm UI cấu hình matching threshold.
-- [ ] Thêm UI chỉnh matching weight.
-- [ ] Thêm UI cấu hình notification/email rule.
-- [ ] Hoàn thiện trang lịch sử config nếu cần thao tác sâu hơn.
+- [x] Add chart for LOST/FOUND posts over time.
+- [x] Add chart for successful return rate.
+- [x] Add chart by category.
+- [x] Add heatmap for high-loss areas.
+- [x] Add top trusted users table.
+- [x] Export report as CSV.
+- [ ] Build full config page on web.
+- [ ] Add config rollback.
+- [ ] Add UI for post expiration configuration.
+- [ ] Add UI for matching threshold configuration.
+- [ ] Add UI for matching weight adjustment.
+- [ ] Add UI for notification/email rule configuration.
+- [ ] Complete config history page if deeper operations are needed.
 
 ## Reputation / Feedback
 
-- [ ] Cộng điểm sau khi trả đồ thành công.
-- [ ] Cộng điểm sau khi claim thành công.
-- [ ] Trừ điểm khi claim sai nhiều lần.
-- [ ] Trừ điểm khi bài bị admin xóa vì vi phạm.
-- [ ] Tính reputation level.
-- [ ] Làm trang lịch sử reputation.
-- [ ] Làm form feedback sau khi trả đồ.
-- [ ] Làm màn admin xem feedback xấu và flag user.
+- [x] Add points after successful item return.
+- [x] Add points after successful claim.
+- [x] Deduct points after multiple incorrect claims.
+- [x] Deduct points when a post is deleted by admin for violation.
+- [x] Calculate reputation level.
+- [x] Build reputation history page.
+- [ ] Build feedback form after item return.
+- [ ] Build admin screen to review negative feedback and flag users.
 
 ## Mobile App
 
-- [ ] Làm mobile auth: đăng ký, OTP, login, logout.
-- [ ] Làm mobile profile/edit profile/avatar.
-- [ ] Làm mobile feed LOST/FOUND.
-- [ ] Làm mobile tạo bài LOST/FOUND.
-- [ ] Làm mobile upload ảnh từ camera/gallery.
-- [ ] Làm mobile search/filter/sort.
-- [ ] Làm mobile claim và upload evidence.
-- [ ] Làm mobile handover point list.
-- [ ] Làm mobile appointment flow.
-- [ ] Làm mobile chat realtime.
-- [ ] Làm mobile notification.
-- [ ] Lưu token mobile bằng secure storage.
-- [ ] Thêm retry/offline handling cho mobile.
+- [ ] Build mobile auth: register, OTP, login, logout.
+- [ ] Build mobile profile/edit profile/avatar.
+- [ ] Build mobile LOST/FOUND feed.
+- [ ] Build mobile create LOST/FOUND post.
+- [ ] Build mobile image upload from camera/gallery.
+- [ ] Build mobile search/filter/sort.
+- [ ] Build mobile claim and evidence upload.
+- [ ] Build mobile handover point list.
+- [ ] Build mobile appointment flow.
+- [ ] Build mobile realtime chat.
+- [ ] Build mobile notification.
+- [ ] Store mobile token using secure storage.
+- [ ] Add retry/offline handling for mobile.
 
 ## AI Model Training / MLOps
 
-- [ ] Thu thập dữ liệu training từ bài đăng, ảnh, AI tags, match và feedback.
-- [ ] Làm công cụ admin label category/tag/match đúng-sai.
-- [ ] Làm pipeline export dataset.
-- [ ] Làm sạch và ẩn danh dataset trước khi train.
-- [ ] Train model phân loại ảnh/category.
-- [ ] Train hoặc fine-tune model semantic matching.
-- [ ] Thêm AI Lens nhận diện item name, mô tả ảnh, OCR/text, brand/logo.
-- [ ] Thêm so sánh trực tiếp ảnh LOST và FOUND.
-- [ ] Sau khi AI trả metadata, chạy lại rule-based matching để double-check.
-- [ ] Đánh giá model bằng precision/recall/F1/top-k.
-- [ ] Lưu model version, dataset snapshot và training metadata.
-- [ ] Thêm registry trạng thái model: draft, approved, deployed.
-- [ ] Deploy inference endpoint cho model riêng.
-- [ ] Fallback về Google Vision/rule matching khi model riêng lỗi.
-- [ ] Làm dashboard theo dõi dataset/training/model metrics.
-- [ ] Ghi nhận feedback đúng-sai để retraining.
-- [ ] Chống spam/dirty feedback trước khi đưa vào dataset.
+- [ ] Collect training data from posts, images, AI tags, matches, and feedback.
+- [ ] Build admin tool for labeling category/tag/match correct/incorrect.
+- [ ] Build dataset export pipeline.
+- [ ] Clean and anonymize dataset before training.
+- [ ] Train image/category classification model.
+- [ ] Train or fine-tune semantic matching model.
+- [ ] Add AI Lens for item name recognition, image description, OCR/text, brand/logo.
+- [ ] Add direct image comparison between LOST and FOUND.
+- [ ] After AI returns metadata, re-run rule-based matching for double-check.
+- [ ] Evaluate model with precision/recall/F1/top-k.
+- [ ] Save model version, dataset snapshot, and training metadata.
+- [ ] Add model status registry: draft, approved, deployed.
+- [ ] Deploy inference endpoint for custom model.
+- [ ] Fallback to Google Vision/rule matching when custom model fails.
+- [ ] Build dashboard for tracking dataset/training/model metrics.
+- [ ] Record correct/incorrect feedback for retraining.
+- [ ] Filter spam/dirty feedback before adding to dataset.
 
 ## Testing / Hardening
 
-- [ ] Viết e2e test cho đăng ký OTP, login, đăng bài, claim.
-- [ ] Viết test cho admin CRUD danh mục/khu vực/bàn giao/user/report.
-- [ ] Viết test cho claim transition và race condition.
-- [ ] Viết test cho warehouse lifecycle.
-- [ ] Viết test cho appointment khi implement.
-- [ ] Viết test cho notification/matching threshold.
-- [ ] Chuẩn hóa seed data demo.
-- [ ] Kiểm tra lại migration từ DB trắng.
-- [ ] Kiểm tra lại build toàn bộ trước khi nộp.
+- [ ] Write e2e test for OTP registration, login, post creation, claim.
+- [ ] Write tests for admin CRUD of categories/areas/handover/users/reports.
+- [ ] Write tests for claim transition and race condition.
+- [ ] Write tests for warehouse lifecycle.
+- [ ] Write tests for appointment when implemented.
+- [ ] Write tests for notification/matching threshold.
+- [ ] Standardize demo seed data.
+- [ ] Verify migration from blank DB.
+- [x] Verify full build before submission.

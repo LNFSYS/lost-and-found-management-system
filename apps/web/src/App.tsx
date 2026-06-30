@@ -45,6 +45,8 @@ import {
   getStoredRefreshToken,
   hasAccessToken,
   saveTokens,
+  type AdminConfigEntry,
+  type AdminConfigHistoryEntry,
   type Category,
   type AdminArea,
   type AdminBuilding,
@@ -76,7 +78,7 @@ type View = "board" | "my-posts" | "create" | "handover" | "account";
 type AuthMode = "login" | "register" | "forgot" | "reset";
 type AuthEntryMode = Extract<AuthMode, "login" | "register">;
 type AudienceRole = "STUDENT" | "LECTURER";
-type AdminTab = "overview" | "moderation" | "categories" | "locations" | "handover" | "warehouse" | "users" | "reports";
+type AdminTab = "overview" | "moderation" | "categories" | "locations" | "handover" | "warehouse" | "users" | "reports" | "config";
 
 type ChatMessageView = {
   id: string;
@@ -157,6 +159,7 @@ export function App() {
   const [matchSuggestions, setMatchSuggestions] = useState<PostMatchSuggestion[] | null>(null);
   const [dismissedMatch, setDismissedMatch] = useState<{ signature: string; dismissedAt: number } | null>(null);
   const [realtimeToast, setRealtimeToast] = useState<NotificationItem | null>(null);
+  const [oauthError, setOauthError] = useState<string | null>(null);
 
   const categoriesQuery = useQuery({ queryKey: ["categories"], queryFn: () => api.categories() });
   const areasQuery = useQuery({ queryKey: ["areas"], queryFn: () => api.areas() });
@@ -251,6 +254,16 @@ export function App() {
     queryFn: () => api.adminReports(),
     enabled: adminMode && isAdmin
   });
+  const adminConfigQuery = useQuery({
+    queryKey: ["admin-config", adminMode],
+    queryFn: () => api.adminConfig(),
+    enabled: adminMode && isAdmin
+  });
+  const adminConfigHistoryQuery = useQuery({
+    queryKey: ["admin-config-history", adminMode],
+    queryFn: () => api.adminConfigHistory(),
+    enabled: adminMode && isAdmin
+  });
   const myPostsQuery = useQuery({
     queryKey: ["my-posts", filters, authVersion],
     queryFn: () => api.myPosts(filters),
@@ -279,6 +292,40 @@ export function App() {
   );
   const imageRules = useMemo(() => getImageUploadRules(publicConfigQuery.data?.entries), [publicConfigQuery.data?.entries]);
   const title = viewTitle(view);
+
+  useEffect(() => {
+    const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
+    const params = new URLSearchParams(hash);
+    if (params.get("oauth") !== "google") {
+      return;
+    }
+
+    const error = params.get("error");
+    const accessToken = params.get("accessToken");
+    const refreshToken = params.get("refreshToken");
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+
+    if (error) {
+      setOauthError(error);
+      setView("account");
+      return;
+    }
+    if (!accessToken || !refreshToken) {
+      setOauthError("Không nhận được token đăng nhập Google.");
+      setView("account");
+      return;
+    }
+
+    saveTokens({
+      accessToken,
+      refreshToken,
+      accessTokenExpiresIn: params.get("accessTokenExpiresIn") ?? "15m",
+      refreshTokenExpiresIn: params.get("refreshTokenExpiresIn") ?? "30d"
+    });
+    setOauthError(null);
+    setView("board");
+    afterAuthChange();
+  }, []);
 
   useEffect(() => {
     if (!canUseAdmin) {
@@ -508,6 +555,9 @@ export function App() {
                   <button className={adminTab === "reports" ? "active" : ""} type="button" onClick={() => setAdminTab("reports")}>
                     <Flag size={18} /> Báo cáo
                   </button>
+                  <button className={adminTab === "config" ? "active" : ""} type="button" onClick={() => setAdminTab("config")}>
+                    <Key size={18} /> Cấu hình
+                  </button>
                 </>
               )}
             </>
@@ -635,6 +685,8 @@ export function App() {
             handoverPoints={adminHandoverQuery.data?.handoverPoints ?? []}
             warehouseItems={adminWarehouseQuery.data?.warehouseItems ?? []}
             reports={adminReportsQuery.data?.reports ?? []}
+            configEntries={adminConfigQuery.data?.entries ?? []}
+            configHistory={adminConfigHistoryQuery.data?.history ?? []}
             totalPosts={adminPostsQuery.data?.total ?? 0}
             onSelectPost={openPost}
           />
@@ -719,6 +771,7 @@ export function App() {
             user={meQuery.data?.user}
             entryMode={authEntryMode}
             entryKey={authEntryKey}
+            oauthError={oauthError}
             imageRules={imageRules}
             onAuthChange={afterAuthChange}
             onSignedIn={() => {
@@ -966,6 +1019,8 @@ function AdminDashboardView(props: {
   handoverPoints: AdminHandoverPoint[];
   warehouseItems: AdminWarehouseItem[];
   reports: AdminReport[];
+  configEntries: AdminConfigEntry[];
+  configHistory: AdminConfigHistoryEntry[];
   totalPosts: number;
   onSelectPost: (postId: string) => void;
 }) {
@@ -991,6 +1046,9 @@ function AdminDashboardView(props: {
         queryClient.invalidateQueries({ queryKey: ["admin-handover"] }),
         queryClient.invalidateQueries({ queryKey: ["admin-warehouse"] }),
         queryClient.invalidateQueries({ queryKey: ["admin-reports"] }),
+        queryClient.invalidateQueries({ queryKey: ["admin-config"] }),
+        queryClient.invalidateQueries({ queryKey: ["admin-config-history"] }),
+        queryClient.invalidateQueries({ queryKey: ["public-config"] }),
         queryClient.invalidateQueries({ queryKey: ["categories"] }),
         queryClient.invalidateQueries({ queryKey: ["areas"] }),
         queryClient.invalidateQueries({ queryKey: ["handover-points"] }),
@@ -1082,7 +1140,136 @@ function AdminDashboardView(props: {
       {props.activeTab === "reports" && props.isAdmin && (
         <AdminReportsPanel reports={props.reports} pending={adminMutation.isPending} onRun={runAdminAction} />
       )}
+      {props.activeTab === "config" && props.isAdmin && (
+        <AdminConfigPanel
+          entries={props.configEntries}
+          history={props.configHistory}
+          pending={adminMutation.isPending}
+          onRun={runAdminAction}
+        />
+      )}
     </div>
+  );
+}
+
+function AdminConfigPanel(props: {
+  entries: AdminConfigEntry[];
+  history: AdminConfigHistoryEntry[];
+  pending: boolean;
+  onRun: AdminActionRunner;
+}) {
+  const importantKeys = new Set([
+    "post.expiration_days",
+    "post.max_images",
+    "post.max_image_size_mb",
+    "post.allowed_image_formats",
+    "matching.threshold",
+    "matching.notification_threshold",
+    "matching.weight_text",
+    "matching.weight_category",
+    "matching.weight_location",
+    "matching.weight_time",
+    "warehouse.capacity_total",
+    "warehouse.capacity_warning_ratio",
+    "email.policy"
+  ]);
+  const sortedEntries = props.entries
+    .slice()
+    .sort((left, right) => Number(importantKeys.has(right.key)) - Number(importantKeys.has(left.key)) || left.key.localeCompare(right.key));
+
+  function valueFromForm(entry: AdminConfigEntry, form: HTMLFormElement) {
+    const formData = new FormData(form);
+    if (entry.valueType === "BOOLEAN") {
+      return formData.get("value") === "on";
+    }
+    const raw = String(formData.get("value") ?? "").trim();
+    if (entry.valueType === "INTEGER") {
+      return Number.parseInt(raw, 10);
+    }
+    if (entry.valueType === "FLOAT") {
+      return Number.parseFloat(raw);
+    }
+    if (entry.valueType === "JSON") {
+      return JSON.parse(raw);
+    }
+    return raw;
+  }
+
+  return (
+    <section className="admin-grid">
+      <article className="admin-panel wide-panel">
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">System rules</span>
+            <h2>Cấu hình vận hành</h2>
+          </div>
+          <Key size={18} />
+        </div>
+        <div className="admin-config-list">
+          {sortedEntries.map((entry) => (
+            <form
+              className="admin-config-row"
+              key={entry.key}
+              onSubmit={(event) => {
+                event.preventDefault();
+                const form = event.currentTarget;
+                props.onRun(() => api.adminUpdateConfig(entry.key, valueFromForm(entry, form)));
+              }}
+            >
+              <div>
+                <strong>{entry.key}</strong>
+                <small>{entry.description ?? "Không có mô tả"}</small>
+              </div>
+              <span className="status-pill">{entry.valueType}</span>
+              {entry.valueType === "BOOLEAN" ? (
+                <label className="switch-row compact">
+                  <input name="value" type="checkbox" defaultChecked={Boolean(entry.value)} />
+                  <span>Bật</span>
+                </label>
+              ) : (
+                <input
+                  name="value"
+                  type={entry.valueType === "INTEGER" || entry.valueType === "FLOAT" ? "number" : "text"}
+                  step={entry.valueType === "FLOAT" ? "0.01" : "1"}
+                  defaultValue={entry.rawValue}
+                />
+              )}
+              <button className="secondary-button" disabled={props.pending} type="submit">
+                Lưu
+              </button>
+            </form>
+          ))}
+          {sortedEntries.length === 0 && <div className="notice">Chưa có cấu hình hệ thống.</div>}
+        </div>
+      </article>
+
+      <article className="admin-panel wide-panel">
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">History</span>
+            <h2>Lịch sử cấu hình</h2>
+          </div>
+          <Clock size={18} />
+        </div>
+        <div className="admin-table">
+          <div className="admin-row head">
+            <span>Key</span>
+            <span>Giá trị cũ</span>
+            <span>Giá trị mới</span>
+            <span>Thời gian</span>
+          </div>
+          {props.history.slice(0, 12).map((item) => (
+            <div className="admin-row" key={item.id}>
+              <strong>{item.key}</strong>
+              <span>{item.oldValue ?? "-"}</span>
+              <span>{item.newValue}</span>
+              <span>{formatDate(item.changedAt)}</span>
+            </div>
+          ))}
+          {props.history.length === 0 && <div className="notice">Chưa có lịch sử thay đổi cấu hình.</div>}
+        </div>
+      </article>
+    </section>
   );
 }
 
@@ -3417,6 +3604,7 @@ function AccountView(props: {
   user?: PublicUser;
   entryMode: AuthEntryMode;
   entryKey: number;
+  oauthError: string | null;
   imageRules: ImageUploadRules;
   onAuthChange: () => void;
   onSignedIn: () => void;
@@ -3582,6 +3770,7 @@ function AccountView(props: {
         </button>
       )}
 
+      {props.oauthError && <div className="notice error">{props.oauthError}</div>}
       {authMessage && <div className="notice success">{authMessage}</div>}
       {mode === "login" && (
         <LoginForm
@@ -3692,6 +3881,11 @@ function LoginForm(props: {
         Mật khẩu
         <input name="password" type="password" required minLength={8} />
       </label>
+      <button className="secondary-button google-login-button" type="button" onClick={() => {
+        window.location.href = api.googleLoginUrl();
+      }}>
+        <UserCircle size={16} /> Đăng nhập với Google
+      </button>
       <button className="text-link auth-forgot-link" type="button" onClick={props.onForgotPassword}>
         Quên mật khẩu?
       </button>
@@ -4323,7 +4517,9 @@ function ClaimAppointmentPanel(props: {
                 </button>
               </form>
             )}
-            {(claim.status === "ACCEPTED" || claim.status === "NEED_MORE_INFO") && <ClaimChatBox claimId={claim.id} />}
+            {(claim.status === "ACCEPTED" || claim.status === "NEED_MORE_INFO") && (
+              <ClaimChatBox claimId={claim.id} currentUserId={props.currentUserId} />
+            )}
           </article>
         ))}
         {acceptedClaims.length === 0 && <small>Chưa có claim nào được accepted để tạo lịch hẹn.</small>}
@@ -4526,10 +4722,13 @@ function ClaimVerificationBadge(props: { claimId: string }) {
   );
 }
 
-function ClaimChatBox(props: { claimId: string }) {
+function ClaimChatBox(props: { claimId: string; currentUserId?: string }) {
   const [messages, setMessages] = useState<ChatMessageView[]>([]);
   const [status, setStatus] = useState<"idle" | "connecting" | "ready" | "error">("idle");
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
   const socketRef = useRef<ReturnType<typeof io> | null>(null);
+  const unreadCount = messages.filter((message) => message.sender.id !== props.currentUserId && !message.isRead).length;
 
   useEffect(() => {
     const token = getStoredAccessToken();
@@ -4544,12 +4743,23 @@ function ClaimChatBox(props: { claimId: string }) {
     });
     socketRef.current = socket;
     socket.on("chat:message", (message: ChatMessageView) => {
+      if (message.sender.id !== props.currentUserId) {
+        socket.emit("chat:seen", { claimId: props.claimId });
+      }
       setMessages((current) => {
         if (current.some((item) => item.id === message.id)) {
           return current;
         }
         return [...current, message];
       });
+    });
+    socket.on("chat:seen", (payload: { readerId?: string }) => {
+      if (!payload.readerId) {
+        return;
+      }
+      setMessages((current) =>
+        current.map((message) => (message.sender.id !== payload.readerId ? { ...message, isRead: true } : message))
+      );
     });
     socket.emit("claim:join", { claimId: props.claimId }, (payload: { ok: boolean; messages?: ChatMessageView[] }) => {
       if (payload.ok) {
@@ -4564,7 +4774,7 @@ function ClaimChatBox(props: { claimId: string }) {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [props.claimId]);
+  }, [props.claimId, props.currentUserId]);
 
   function send(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -4583,27 +4793,41 @@ function ClaimChatBox(props: { claimId: string }) {
     });
   }
 
-  function sendImage(event: FormEvent<HTMLFormElement>) {
+  async function sendImage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
-    const data = new FormData(form);
-    const mediaUrl = String(data.get("mediaUrl") ?? "").trim();
-    if (!mediaUrl || !socketRef.current) {
+    const input = form.elements.namedItem("image") as HTMLInputElement | null;
+    const file = input?.files?.[0];
+    if (!file || !socketRef.current) {
       return;
     }
-    socketRef.current.emit("chat:image", { claimId: props.claimId, mediaUrl }, (payload: { ok: boolean }) => {
-      if (payload.ok) {
-        form.reset();
-      } else {
-        setStatus("error");
-      }
-    });
+    setImageError(null);
+    setImageUploading(true);
+    try {
+      const uploaded = await api.uploadClaimChatImage(props.claimId, file);
+      socketRef.current.emit(
+        "chat:image",
+        { claimId: props.claimId, mediaUrl: uploaded.image.secureUrl, mediaPublicId: uploaded.image.publicId },
+        (payload: { ok: boolean }) => {
+          if (payload.ok) {
+            form.reset();
+          } else {
+            setStatus("error");
+          }
+        }
+      );
+    } catch (error) {
+      setImageError(error instanceof Error ? error.message : "Không thể tải ảnh chat.");
+    } finally {
+      setImageUploading(false);
+    }
   }
 
   return (
     <section className="claim-chat-box">
       <div className="claim-chat-heading">
         <MessageCircle size={15} />
+        {unreadCount > 0 && <span className="chat-unread-badge">{unreadCount} mới</span>}
         <strong>Trao đổi claim</strong>
         <small>{status === "ready" ? "Realtime" : status === "connecting" ? "Đang nối" : "Chưa sẵn sàng"}</small>
       </div>
@@ -4623,11 +4847,12 @@ function ClaimChatBox(props: { claimId: string }) {
         </button>
       </form>
       <form className="claim-chat-form image" onSubmit={sendImage}>
-        <input name="mediaUrl" type="url" placeholder="Dán URL ảnh để gửi" disabled={status !== "ready"} />
-        <button className="secondary-button" disabled={status !== "ready"} type="submit">
+        <input name="image" type="file" accept="image/*" disabled={status !== "ready" || imageUploading} />
+        <button className="secondary-button" disabled={status !== "ready" || imageUploading} type="submit">
           <Upload size={15} /> Ảnh
         </button>
       </form>
+      {imageError && <div className="notice error">{imageError}</div>}
     </section>
   );
 }

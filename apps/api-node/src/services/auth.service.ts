@@ -41,6 +41,21 @@ interface AuthResult {
 }
 
 type OtpPurpose = "REGISTER" | "PASSWORD_RESET";
+const GOOGLE_PROVIDER = "google";
+
+interface GoogleTokenResponse {
+  access_token?: string;
+  error?: string;
+  error_description?: string;
+}
+
+interface GoogleUserInfo {
+  sub?: string;
+  email?: string;
+  email_verified?: boolean;
+  name?: string;
+  picture?: string;
+}
 
 function requireSecret(secret: string | undefined, name: string) {
   if (!isConfigured(secret)) {
@@ -72,6 +87,14 @@ function mysqlDateToUtc(value: string) {
 
 function refreshExpiryDate() {
   return new Date(Date.now() + durationToMs(env.jwtRefreshExpiresIn));
+}
+
+function requireGoogleOAuthConfig() {
+  return {
+    clientId: requireSecret(env.google.clientId, "GOOGLE_CLIENT_ID"),
+    clientSecret: requireSecret(env.google.clientSecret, "GOOGLE_CLIENT_SECRET"),
+    callbackUrl: env.google.callbackUrl
+  };
 }
 
 async function issueOtp(input: {
@@ -174,6 +197,106 @@ async function createTokenPair(user: User, meta: RequestMeta): Promise<TokenPair
 }
 
 export const authService = {
+  googleAuthorizationUrl() {
+    const google = requireGoogleOAuthConfig();
+    const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+    url.searchParams.set("client_id", google.clientId);
+    url.searchParams.set("redirect_uri", google.callbackUrl);
+    url.searchParams.set("response_type", "code");
+    url.searchParams.set("scope", "openid email profile");
+    url.searchParams.set("prompt", "select_account");
+    return url.toString();
+  },
+
+  async loginWithGoogle(code: string, meta: RequestMeta): Promise<AuthResult> {
+    const google = requireGoogleOAuthConfig();
+    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code,
+        client_id: google.clientId,
+        client_secret: google.clientSecret,
+        redirect_uri: google.callbackUrl,
+        grant_type: "authorization_code"
+      })
+    });
+    const tokenPayload = (await tokenResponse.json().catch(() => ({}))) as GoogleTokenResponse;
+    if (!tokenResponse.ok || !tokenPayload.access_token) {
+      throw new HttpError(401, tokenPayload.error_description ?? tokenPayload.error ?? "Google OAuth token exchange failed");
+    }
+
+    const profileResponse = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
+      headers: { Authorization: `Bearer ${tokenPayload.access_token}` }
+    });
+    const profile = (await profileResponse.json().catch(() => ({}))) as GoogleUserInfo;
+    if (!profileResponse.ok || !profile.sub || !profile.email) {
+      throw new HttpError(401, "Google profile lookup failed");
+    }
+    if (!profile.email_verified) {
+      throw new HttpError(403, "Google email is not verified");
+    }
+
+    const normalizedEmail = normalizeEmail(profile.email);
+    const linkedUserId = await userRepository.findOAuthUserId(GOOGLE_PROVIDER, profile.sub);
+    let user = linkedUserId ? await userRepository.findById(linkedUserId) : await userRepository.findByNormalizedEmail(normalizedEmail);
+
+    if (user && user.status !== "ACTIVE") {
+      throw new HttpError(403, "Account is not active");
+    }
+
+    if (!user) {
+      const now = new Date().toISOString();
+      user = await userRepository.create({
+        id: randomUUID(),
+        email: profile.email.trim(),
+        normalizedEmail,
+        passwordHash: null,
+        fullName: profile.name?.trim() || profile.email.split("@")[0],
+        avatarUrl: profile.picture,
+        roles: [],
+        status: "ACTIVE",
+        emailVerifiedAt: now,
+        createdAt: now,
+        updatedAt: now
+      });
+      await userRepository.assignRole(user.id, "USER");
+      await userRepository.assignRole(user.id, "STUDENT");
+      await userRepository.ensureReputationScore(user.id);
+      user = await userRepository.findById(user.id);
+      if (!user) {
+        throw new HttpError(500, "Unable to load Google user");
+      }
+    }
+
+    await userRepository.upsertOAuthAccount({
+      userId: user.id,
+      provider: GOOGLE_PROVIDER,
+      providerUserId: profile.sub,
+      providerEmail: profile.email
+    });
+    await userRepository.updateLastLogin(user.id);
+    await userRepository.createLoginAudit({
+      userId: user.id,
+      normalizedEmail,
+      eventType: "LOGIN_GOOGLE",
+      success: true,
+      ipAddress: meta.ipAddress,
+      userAgent: meta.userAgent
+    });
+    await userRepository.createActivityLog({
+      userId: user.id,
+      action: "GOOGLE_LOGIN",
+      entityType: "USER",
+      entityId: user.id
+    });
+
+    return {
+      user: toPublicUser(user),
+      tokens: await createTokenPair(user, meta)
+    };
+  },
+
   async requestRegistrationOtp(input: RequestRegistrationOtpInput) {
     return sendRegistrationOtp(input.email);
   },

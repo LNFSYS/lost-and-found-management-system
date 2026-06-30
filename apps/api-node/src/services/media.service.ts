@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { AccessTokenPayload } from "../middlewares/auth.middleware.js";
 import { toPublicUser } from "../models/user.model.js";
 import { claimRepository } from "../repositories/claim.repository.js";
+import { chatRepository } from "../repositories/chat.repository.js";
 import { postRepository } from "../repositories/post.repository.js";
 import { userRepository } from "../repositories/user.repository.js";
 import { HttpError } from "../utils/http-error.js";
@@ -259,5 +260,28 @@ export const mediaService = {
     });
 
     return result;
+  },
+
+  async uploadClaimChatImage(auth: AccessTokenPayload, claimId: string, file: Express.Multer.File | undefined) {
+    const image = requireFile(file, "image");
+    await assertImageFile(image);
+
+    if (!(await chatRepository.canAccessClaim(claimId, auth.sub, auth.roles))) {
+      throw new HttpError(403, "You do not have permission to upload chat images for this claim");
+    }
+
+    const uploaded = await cloudinaryService.uploadImage(image.buffer, `lnfs/private/claim-chat/${claimId}`);
+    await userRepository.createActivityLog({
+      userId: auth.sub,
+      action: "CLAIM_CHAT_IMAGE_UPLOADED",
+      entityType: "CLAIM",
+      entityId: claimId,
+      metadata: {
+        publicId: uploaded.publicId,
+        bytes: uploaded.bytes ?? null
+      }
+    });
+
+    return { image: uploaded };
   }
 };

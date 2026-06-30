@@ -51,6 +51,18 @@ export const openApiDocument = {
         responses: { "200": { description: "Token pair issued" } }
       }
     },
+    "/auth/google": {
+      get: {
+        summary: "Start Google OAuth login",
+        responses: { "302": { description: "Redirect to Google OAuth consent" } }
+      }
+    },
+    "/auth/google/callback": {
+      get: {
+        summary: "Google OAuth callback; issues Node JWT tokens and redirects to the web app",
+        responses: { "302": { description: "Redirect to web app with OAuth result in URL fragment" } }
+      }
+    },
     "/auth/forgot-password": {
       post: {
         summary: "Request password reset OTP",
@@ -130,6 +142,27 @@ export const openApiDocument = {
         security: [{ bearerAuth: [] }],
         summary: "Expire overdue posts",
         responses: { "200": { description: "Expired post count" } }
+      }
+    },
+    "/admin/config": {
+      get: {
+        security: [{ bearerAuth: [] }],
+        summary: "Admin list all system configuration entries",
+        responses: { "200": { description: "System config list" } }
+      }
+    },
+    "/admin/config/history": {
+      get: {
+        security: [{ bearerAuth: [] }],
+        summary: "Admin list system configuration change history",
+        responses: { "200": { description: "System config history" } }
+      }
+    },
+    "/admin/config/{key}": {
+      put: {
+        security: [{ bearerAuth: [] }],
+        summary: "Admin update a typed system configuration entry",
+        responses: { "200": { description: "System config updated" } }
       }
     },
     "/admin/users": {
@@ -372,6 +405,13 @@ export const openApiDocument = {
         security: [{ bearerAuth: [] }],
         summary: "Upload claim evidence image",
         responses: { "201": { description: "Claim evidence uploaded" } }
+      }
+    },
+    "/claims/{id}/chat-image": {
+      post: {
+        security: [{ bearerAuth: [] }],
+        summary: "Upload a private image for claim chat before sending a realtime image message",
+        responses: { "201": { description: "Claim chat image uploaded" } }
       }
     },
     "/config/public": {

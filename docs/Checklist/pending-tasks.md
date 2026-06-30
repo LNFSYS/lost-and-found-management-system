@@ -6,19 +6,19 @@ Last audit: 2026-06-30
 
 | Metric | Count |
 | --- | ---: |
-| Completed checklist items | 60 |
-| Open checklist items | 61 |
+| Completed checklist items | 70 |
+| Open checklist items | 51 |
 
-Open work is concentrated in Google OAuth/auth ownership, advanced AI category selection, direct chat file upload, thumbnail optimization, Java/Node ownership hardening, background matching queue, smart notification tiers, configurable warehouse retention/disposition proof, chat unread badge, full web config UI, feedback/negative-feedback review, mobile app, custom AI training/MLOps, and automated hardening tests.
+Open work is concentrated in advanced AI category selection, thumbnail optimization, Java/Node integration tests, background matching queue, smart notification tiers, configurable warehouse retention/disposition proof, config rollback, feedback/negative-feedback review, mobile app, custom AI training/MLOps, and deeper automated hardening tests.
 
 Scope note: the current MVP should be demoed as web + Node backend with Google Vision assisted OCR/tags and rule-based/hybrid matching. Mobile and custom AI training remain future work unless completed later.
 
 
 ## Auth / Account
 
-- [ ] Add Google OAuth login.
-- [ ] Decide clearly whether Node or Java owns auth extensions.
-- [ ] If Java needs its own auth, add email/password/token validation compatible with Node.
+- [x] Add Google OAuth login.
+- [x] Decide Node/Java service boundary for the current MVP and Java extension.
+- [ ] If Java later needs its own auth extension, add email/password/token validation compatible with Node.
 
 ## User Post / Community Feed
 
@@ -34,7 +34,7 @@ Scope note: the current MVP should be demoed as web + Node backend with Google V
 
 ## Media
 
-- [ ] Allow image upload in chat.
+- [x] Allow image upload in chat.
 - [ ] Create thumbnail/optimized images if needed.
 - [x] Allow claim to upload multiple evidence files.
 
@@ -95,9 +95,9 @@ Scope note: the current MVP should be demoed as web + Node backend with Google V
 - [x] Save messages to DB.
 - [x] Receive realtime messages on web.
 - [x] Build chat bubble UI.
-- [x] Send image URL messages in chat.
+- [x] Send image messages in chat.
 - [x] Display seen/read status.
-- [ ] Add realtime unread badge for messages.
+- [x] Add realtime unread badge for messages.
 
 ## Admin Dashboard / Report / Config
 
@@ -107,13 +107,13 @@ Scope note: the current MVP should be demoed as web + Node backend with Google V
 - [x] Add heatmap for high-loss areas.
 - [x] Add top trusted users table.
 - [x] Export report as CSV.
-- [ ] Build full config page on web.
+- [x] Build full config page on web.
 - [ ] Add config rollback.
-- [ ] Add UI for post expiration configuration.
-- [ ] Add UI for matching threshold configuration.
-- [ ] Add UI for matching weight adjustment.
-- [ ] Add UI for notification/email rule configuration.
-- [ ] Complete config history page if deeper operations are needed.
+- [x] Add UI for post expiration configuration.
+- [x] Add UI for matching threshold configuration.
+- [x] Add UI for matching weight adjustment.
+- [x] Add UI for notification/email rule configuration.
+- [x] Complete config history page if deeper operations are needed.
 
 ## Reputation / Feedback
 
@@ -170,10 +170,12 @@ Future enhancement, not current MVP core. Current code uses Google Vision assist
 
 - [ ] Write e2e test for OTP registration, login, post creation, claim.
 - [ ] Write tests for admin CRUD of categories/areas/handover/users/reports.
+- [x] Add role/privacy smoke test for Admin vs Staff permissions.
 - [ ] Write tests for claim transition and race condition.
 - [ ] Write tests for warehouse lifecycle.
 - [ ] Write tests for appointment when implemented.
 - [ ] Write tests for notification/matching threshold.
-- [ ] Standardize demo seed data.
-- [ ] Verify migration from blank DB.
+- [x] Standardize demo seed data.
+- [x] Add migration smoke verification script.
+- [ ] Run migration smoke against a freshly created blank demo DB before final submission.
 - [x] Verify full build before submission.

@@ -6,6 +6,14 @@ import { memoryUpload } from "../middlewares/upload.middleware.js";
 
 export const authRoutes = Router();
 
+authRoutes.get("/google", (request, response, next) => {
+  authController.googleStart(request, response).catch(next);
+});
+
+authRoutes.get("/google/callback", (request, response, next) => {
+  authController.googleCallback(request, response).catch(next);
+});
+
 authRoutes.post("/register", (request, response, next) => {
   authController.register(request, response).catch(next);
 });

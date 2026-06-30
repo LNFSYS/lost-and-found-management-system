@@ -1067,6 +1067,11 @@ img {
   margin-top: -4px;
 }
 
+.google-login-button {
+  justify-content: center;
+  width: 100%;
+}
+
 .auth-submit-row {
   display: flex;
   align-items: center;
@@ -1709,6 +1714,50 @@ label {
   font-weight: 600;
 }
 
+.admin-config-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-config-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.4fr) 92px minmax(180px, 0.9fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fbfdff;
+}
+
+.admin-config-row > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.admin-config-row small {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.switch-row.compact {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 42px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.switch-row.compact input {
+  width: 18px;
+  min-height: 18px;
+  accent-color: var(--fpt-green);
+}
+
 .admin-chip-list {
   display: flex;
   flex-wrap: wrap;
@@ -2329,6 +2378,10 @@ label {
 
   .admin-row {
     grid-template-columns: 82px minmax(0, 1fr);
+  }
+
+  .admin-config-row {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .admin-row span:nth-child(3),
@@ -4569,6 +4622,18 @@ label {
   font-weight: 800;
 }
 
+.chat-unread-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #fff2e8;
+  color: #c25111;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
 .claim-chat-messages {
   display: grid;
   max-height: 180px;
@@ -4615,6 +4680,12 @@ label {
   border: 1px solid #dbe4ef;
   border-radius: 8px;
   padding: 0 12px;
+}
+
+.claim-chat-form input[type="file"] {
+  min-width: 0;
+  padding: 8px 10px;
+  color: #475569;
 }
 
 .reputation-history {

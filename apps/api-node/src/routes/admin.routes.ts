@@ -19,6 +19,16 @@ adminRoutes.post("/jobs/expire-posts", requireStaffOrAdmin, (request, response, 
   adminController.expireOverduePosts(request, response).catch(next);
 });
 
+adminRoutes.get("/config", requireAdmin, (request, response, next) => {
+  adminController.config(request, response).catch(next);
+});
+adminRoutes.get("/config/history", requireAdmin, (request, response, next) => {
+  adminController.configHistory(request, response).catch(next);
+});
+adminRoutes.put("/config/:key", requireAdmin, (request, response, next) => {
+  adminController.updateConfig(request, response).catch(next);
+});
+
 adminRoutes.get("/users", requireAdmin, (request, response, next) => {
   adminController.users(request, response).catch(next);
 });

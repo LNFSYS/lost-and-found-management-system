@@ -7,6 +7,9 @@
     "dev": "tsx watch src/server.ts",
     "check:db": "tsx src/scripts/check-db.ts",
     "e2e:core": "tsx src/scripts/e2e-core-flow.ts",
+    "e2e:roles": "tsx src/scripts/e2e-role-privacy.ts",
+    "seed:demo": "tsx src/scripts/seed-demo.ts",
+    "smoke:migration": "tsx src/scripts/smoke-migration.ts",
     "migrate": "tsx src/migrations/run-migrations.ts",
     "build": "node ../../node_modules/typescript/bin/tsc -p tsconfig.json",
     "start": "node dist/server.js"

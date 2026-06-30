@@ -19,7 +19,7 @@ function authFromSocket(handshakeAuth: unknown): string | null {
 export function setupRealtimeServer(server: HttpServer) {
   const io = new Server(server, {
     cors: {
-      origin: "*"
+      origin: env.socketCorsOrigin
     }
   });
   realtimeIo = io;

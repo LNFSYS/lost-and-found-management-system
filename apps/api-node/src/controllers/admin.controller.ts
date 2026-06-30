@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { env } from "../config/env.js";
 import { adminRepository } from "../repositories/admin.repository.js";
+import { configService } from "../services/config.service.js";
 import { postService } from "../services/post.service.js";
 import { ok } from "../utils/api-response.js";
 import { HttpError } from "../utils/http-error.js";
@@ -96,6 +97,12 @@ const reportHandleSchema = z.object({
   status: z.enum(["REVIEWED", "DISMISSED"]),
   note: z.string().trim().max(500).nullable().optional(),
   actionType: z.enum(["WARN_USER", "HIDE_POST", "DELETE_POST", "BAN_USER", "UNBAN_USER"]).nullable().optional()
+});
+const configUpdateSchema = z.object({
+  value: z.unknown()
+});
+const historyQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(50)
 });
 
 function idParam(request: Request) {
@@ -306,5 +313,19 @@ export const adminController = {
 
   async handleReport(request: Request, response: Response) {
     response.json(ok(await adminRepository.handleReport(idParam(request), request.auth!.sub, reportHandleSchema.parse(request.body))));
+  },
+
+  async config(_request: Request, response: Response) {
+    response.json(ok({ entries: await configService.getAllConfig() }));
+  },
+
+  async updateConfig(request: Request, response: Response) {
+    const input = configUpdateSchema.parse(request.body);
+    response.json(ok(await configService.updateConfig(String(request.params.key), input.value, request.auth!.sub)));
+  },
+
+  async configHistory(request: Request, response: Response) {
+    const input = historyQuerySchema.parse(request.query);
+    response.json(ok({ history: await configService.history(input.limit) }));
   }
 };

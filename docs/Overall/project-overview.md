@@ -1,0 +1,159 @@
+# FPTU Lost & Found System - Project Overview
+
+Last updated: 2026-06-30
+
+## 1. One-Line Summary
+
+FPTU Lost & Found System is a web/backend MVP for managing Lost & Found inside FPT University Da Nang campus. It supports LOST/FOUND posts, rule-based/hybrid matching with Google Vision assisted OCR/tags, claim evidence verification, appointments, handover points, warehouse tracking, realtime chat/notifications, reputation, and Admin/Staff operations.
+
+The current project should be presented as a campus pilot/MVP, not as a full production-ready web + mobile + custom AI training system.
+
+## 2. Product Goal
+
+The system helps Students, Lecturers, Staff and Admins:
+
+- Create LOST or FOUND posts with item information, location and time.
+- Upload public item images and private evidence images where needed.
+- Receive similar-item suggestions from the matching algorithm.
+- Submit claims with ownership evidence.
+- Review evidence with an advisory ownership confidence percentage.
+- Schedule return appointments and use handover points/warehouse tracking.
+- Coordinate through realtime notification and claim chat.
+- Manage campus Lost & Found operations through Staff/Admin dashboards.
+
+AI/OCR and matching are advisory. The system must not automatically approve ownership or return an item without human review and valid evidence.
+
+## 3. Current Roles
+
+| Role | Main capability |
+| --- | --- |
+| Guest | View public board, register, login |
+| Student/Lecturer | Create LOST/FOUND posts, search, claim, upload evidence, chat, manage own posts |
+| Staff | Warehouse-focused dashboard, handover/warehouse operations, selected operational views |
+| Admin | Full governance: users, categories, areas/buildings, handover, warehouse, moderation, reports, config |
+| System | Matching, notifications, expiration jobs, warehouse alerts, appointment reminders |
+
+## 4. Workspace Structure
+
+```text
+apps/
+  api-node/             Node.js core web-facing API, migrations, matching, realtime
+  web/                  React + TypeScript + Vite web app
+  java-admin-service/   Spring Boot business/admin extension
+  mobile/               Planned/future mobile support
+shared/                 Shared TypeScript types
+docs/                   Canonical thesis/project documentation
+```
+
+## 5. Main Commands
+
+| Command | Purpose |
+| --- | --- |
+| `npm install` | Install workspace dependencies |
+| `npm run check:db` | Check Node API database connection |
+| `npm run migrate:api` | Run MySQL migrations |
+| `npm run seed:demo` | Seed demo admin/staff/student accounts and sample handover/warehouse data |
+| `npm run smoke:migration` | Verify important tables/columns after migrations |
+| `npm run dev:api` | Start Node API, default port `3001` |
+| `npm run dev:web` | Start Vite web app, default port `5173` |
+| `npm run build:api` | Compile Node API |
+| `npm run build:web` | Build web app |
+| `npm run lint:web` | Type-check web app |
+| `npm run e2e:roles` | Smoke-check selected Admin vs Staff permission boundaries when API is running |
+
+Fresh clone runbook:
+
+```powershell
+npm install
+Copy-Item .env.example .env
+npm run check:db
+npm run migrate:api
+npm run seed:demo
+npm run smoke:migration
+npm run dev:api
+npm run dev:web
+```
+
+## 6. Service Ownership
+
+| Area | Current responsibility |
+| --- | --- |
+| Web app | Guest/User/Staff/Admin UI |
+| Node API | Current MVP runtime owner: auth, posts, media, matching, claims, appointments, handover, warehouse, admin/staff API, Socket.IO |
+| Java service | Parallel business/admin extension for selected rule-heavy operations when intentionally routed |
+| AI/OCR/evidence support | Google Vision assisted OCR/tags plus rule-based/hybrid matching and evidence confidence support |
+| Mobile app | Future enhancement, not current MVP core |
+
+For detailed Node/Java boundaries, see `node-java-service-boundary.md`.
+
+## 7. Current Implemented Surfaces
+
+| Surface | Current status |
+| --- | --- |
+| Auth | OTP registration, email/password login, Google OAuth MVP, refresh/logout, forgot/reset password |
+| Public board | Search/filter/sort, post cards, detail drawer, gallery |
+| My posts | Owner edit, close and soft-delete |
+| Create post | LOST/FOUND fields, item images, private verification/evidence |
+| Matching | Matching popup on login/open and 10-minute interval, dismiss remembered, manual admin re-run |
+| Claim | Claim creation, evidence upload/view, verification percentage, request info, accept/reject/cancel |
+| Handover | Campus map image, marker coordinates, popup, filters, stored item counts |
+| Warehouse | Status, retention deadline, expiry jobs, capacity warning, overdue processing base |
+| Appointment | Create after accepted claim, accept/reject/reschedule/cancel/complete/reminder |
+| Realtime | Notification toast, claim chat, seen state, unread badge, direct chat image upload |
+| Staff dashboard | Warehouse-focused staff access |
+| Admin dashboard | Charts, moderation, users, categories, locations, handover, warehouse, reports, config |
+| Reputation | Score and user-visible history |
+
+## 8. Main API Groups
+
+| Group | Examples |
+| --- | --- |
+| Auth/Profile | `/auth/register/request-otp`, `/auth/login`, `/auth/google`, `/auth/me`, `/auth/reputation` |
+| Posts | `/posts`, `/posts/my`, `/posts/:id`, `/posts/:id/status`, `/posts/:id/report` |
+| Media | `/posts/:id/media`, `/posts/:id/media/:mediaId`, `/claims/:id/evidence`, `/claims/:id/chat-image` |
+| Matching | `/posts/:id/matches`, `/posts/:id/matches/explanations`, `/posts/:id/matches/re-run` |
+| Claims | `/claims`, `/claims/:id`, `/claims/:id/verification`, `/claims/:id/accept`, `/claims/:id/reject` |
+| Appointments | `/appointments`, `/appointments/:id/reschedule`, `/appointments/:id/complete`, reminder job |
+| Lookup | `/categories`, `/locations/areas`, `/handover-points` |
+| Admin | dashboard, users, categories, locations, handover, warehouse, reports, config, jobs |
+| Realtime | Socket.IO JWT auth, `claim:join`, `chat:message`, `chat:image`, `chat:seen`, `notification:new` |
+
+## 9. Scope Boundaries And Known Gaps
+
+Current MVP scope:
+
+- Responsive web app plus Node.js backend and MySQL schema.
+- Google Vision assisted OCR/tags when configured.
+- Rule-based/hybrid matching, not a self-trained AI model.
+- Realtime notification/chat for MVP, with deeper reconnect/offline/socket-isolation tests still needed.
+- Java service as business/admin extension, not a complete production microservice split.
+
+Known remaining work:
+
+- FPT/university email-domain policy hardening for Google OAuth.
+- Config rollback UI.
+- Smart notification tiers/digest.
+- Handover/return proof image upload.
+- Feedback after successful return and Admin negative-feedback review.
+- Background queue for matching on large datasets.
+- Thumbnail/optimized image pipeline.
+- More automated tests: claim race condition, warehouse lifecycle, appointment, notification/matching, realtime isolation, clean blank-DB verification.
+- Native mobile app.
+- Custom AI training/MLOps pipeline.
+
+## 10. Canonical Documentation Map
+
+| File | Purpose |
+| --- | --- |
+| `docs/README.md` | Documentation index and cleanup policy |
+| `docs/Overall/project-overview.md` | Main product/repository overview |
+| `docs/Overall/architecture.md` | Technical architecture/service/API/migration overview |
+| `docs/Overall/mvp-scope-and-future-work.md` | Scope boundary, AI/mobile/future work |
+| `docs/Overall/node-java-service-boundary.md` | Node.js and Java ownership matrix |
+| `docs/Overall/thesis-defense-guide-2026.md` | Defense script, demo flow, judge Q&A |
+| `docs/Checklist/master-dev-checklist.md` | Canonical UC assignment/status |
+| `docs/Checklist/pending-tasks.md` | Remaining implementation/testing backlog |
+| `docs/Checklist/business-product-qa-issue-audit.md` | Product/business/QA risks and evidence |
+| `docs/Requirements and Business Rules/requirements.md` | FR/NFR requirements |
+| `docs/Requirements and Business Rules/business-rules.md` | Business rules |
+| `docs/Requirements and Business Rules/traceability-matrix.md` | BR/FR/NFR/UC traceability |

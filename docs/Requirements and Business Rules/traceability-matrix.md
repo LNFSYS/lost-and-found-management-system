@@ -1,6 +1,6 @@
 # Traceability Matrix
 
-Last audit: 2026-06-29
+Last audit: 2026-06-30
 
 This document links Business Rules, Requirements, and the canonical 100-UC set in `docs/Checklist/master-dev-checklist.md`. Each UC has exactly one primary owner.
 
@@ -28,7 +28,7 @@ This document links Business Rules, Requirements, and the canonical 100-UC set i
 | BR-20 | FR-WAREHOUSE-02, FR-NOTI-01 | UC-018, UC-019, UC-020 | Partial |
 | BR-21 | FR-APPT-01 | UC-021, UC-022, UC-023, UC-024 | Implemented |
 | BR-22 | FR-RT-01, NFR-RT-01, NFR-SEC-02 | UC-077, UC-078, UC-079 | Implemented |
-| BR-23 | FR-RT-01, NFR-RT-01 | UC-079, UC-080, UC-081, UC-082 | Partial |
+| BR-23 | FR-RT-01, NFR-RT-01 | UC-079, UC-080, UC-081, UC-082 | Implemented |
 | BR-24 | FR-NOTI-01, NFR-PRIV-01 | UC-020, UC-073, UC-083 | Partial |
 | BR-25 | FR-HANDOVER-01, FR-ADMIN-01, NFR-SEC-02 | UC-056, UC-063, UC-064, UC-065, UC-066, UC-067, UC-084, UC-085 | Partial |
 | BR-26 | FR-REP-01, NFR-AI-01 | UC-025, UC-039 | Partial |

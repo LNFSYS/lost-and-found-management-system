@@ -47,7 +47,7 @@ The project focuses on a campus pilot-ready MVP for the complete web/backend flo
 - Add custom AI model only after enough labeled data exists.
 - Add MLOps: dataset labeling, anonymization, model registry, evaluation, deployment, retraining.
 - Add stronger production hardening: monitoring, logs, backup, e2e tests, load tests, role matrix tests.
-- Improve direct chat file upload, unread badges, full config UI, and richer analytics.
+- Improve realtime reconnect/offline hardening, config rollback UI, and richer analytics.
 
 ### Difference From Basic CRUD
 
@@ -90,7 +90,7 @@ In conclusion, our project delivers a realistic campus Lost & Found MVP, not jus
 
 | Step | Demo action | What to say | Judge may ask | Safe answer |
 | --- | --- | --- | --- | --- |
-| 1 | Login as Student/Lecturer | This role can create posts, search, submit claims, and receive notifications. | How do you protect role access? | JWT and role guards are implemented; role matrix tests still need expansion. |
+| 1 | Login as Student/Lecturer | This role can create posts, search, submit claims, and receive notifications. Google OAuth can be shown if credentials are configured. | How do you protect role access? | JWT and role guards are implemented; role/privacy smoke exists, but full role matrix tests still need expansion. |
 | 2 | Create LOST post | LOST post includes description, location, time, contact, and private ownership details. | Why private evidence? | It helps verify ownership without exposing sensitive details publicly. |
 | 3 | Create FOUND post | FOUND post records where the item is held or which handover point is used. | Who can create FOUND posts? | Users can report found items; Staff/Admin can manage storage and handover. |
 | 4 | Show matching result | Matching compares text, category, location, time, and OCR/tag metadata. | Is this AI? | It is hybrid/rule-based matching with Google Vision assisted OCR/tags, not a custom trained model. |
@@ -162,55 +162,58 @@ They make setup repeatable for new machines and keep schema changes traceable.
 ### Node.js And Java Boundary
 
 17. Why are there both Node.js and Java services?  
-Node.js is the current core backend for the web MVP. Java is a business/admin extension and should be explained as such.
+Because the team has both Node.js and Java specializations. Node.js is the current core web-facing backend for the MVP demo. Java/Spring Boot is a parallel business/admin extension for selected rule-heavy operations and future service split work.
 
 18. Is it a complete microservice architecture?  
-Not yet. It should not be presented as production microservices until service ownership and deployment are fully separated.
+Not yet. It should not be presented as production microservices until service ownership, routing, deployment, and integration tests are fully defined.
 
 19. Is there risk of duplicated business logic?  
-Yes, if both services write the same state. The safe direction is to define one owner per flow and add integration tests.
+Yes, if both services write the same state. The project documents Node as the current web MVP runtime owner and Java as a business-service extension. Before production, one writer per flow must be enforced and covered by integration tests.
+
+20. How can two backend members work in parallel safely?
+They work by domain boundary: Node owns the web-facing flow, auth, posts, media, matching, realtime, and current demo orchestration; Java works on selected business/admin extensions such as claim transition rules, handover/storage rules, configuration history, and future policy engine work.
 
 ### Testing
 
-20. What tests are available?  
+21. What tests are available?
 Build/type checks pass, and there is a core e2e smoke script. Full automated coverage still needs expansion.
 
-21. What test gaps remain?  
+22. What test gaps remain?
 Role matrix, claim race condition, warehouse lifecycle, realtime room isolation, blank DB migration, and load testing.
 
-22. How did you verify demo readiness?  
+23. How did you verify demo readiness?
 By running builds/type checks, reviewing core flow, cleaning wording, and documenting known gaps.
 
 ### Realtime/Notification
 
-23. Why use Socket.IO?  
+24. Why use Socket.IO?
 Lost & Found benefits from realtime claim/chat/notification updates so users do not need to refresh manually.
 
-24. What if realtime fails?  
+25. What if realtime fails?
 The MVP can still rely on persisted notifications/API refresh. Production should add reconnect and monitoring tests.
 
 ### Warehouse/Handover
 
-25. Why include warehouse and handover?  
+26. Why include warehouse and handover?
 Because real Lost & Found does not stop at matching; staff must know where the item is stored and when it is returned.
 
-26. How do you prevent wrong handover?  
+27. How do you prevent wrong handover?
 By requiring accepted claim status, evidence review, appointment, and staff/user confirmation.
 
 ### Mobile/Future Work
 
-27. Is the mobile app complete?  
+28. Is the mobile app complete?
 No. Mobile is planned/future scope. The current deliverable is the responsive web/backend MVP.
 
-28. Why not finish mobile now?  
+29. Why not finish mobile now?
 The team prioritized completing the core web/backend workflow first because it is the main business process.
 
 ### Production Readiness
 
-29. What is missing before real deployment?  
+30. What is missing before real deployment?
 Monitoring, backup, audit log hardening, rate limits, e2e coverage, load tests, security review, and operational runbook.
 
-30. Would you deploy this to campus immediately?  
+31. Would you deploy this to campus immediately?
 As a pilot with controlled users and monitoring, yes after final environment checks. For full production, more hardening is needed.
 
 ## 6. Limitation And Future Work
@@ -221,8 +224,8 @@ The current limitation is not a weakness if explained correctly. The project int
 - Custom AI training/MLOps: future work after enough labeled data exists.
 - Matching: currently hybrid/rule-based/OCR-assisted, not a self-trained ML model.
 - Production hardening: needs monitoring, backup, load testing, better audit logs, and stronger e2e test coverage.
-- Testing: needs more role matrix, warehouse lifecycle, claim race condition, realtime isolation, and migration tests.
-- Java/Node boundary: should be made stricter before claiming production microservices.
+- Testing: role/privacy and migration smoke scripts exist; still needs broader warehouse lifecycle, claim race condition, realtime isolation, clean blank-DB, and load tests.
+- Java/Node boundary: documented as Node core web API plus Java business-service extension; production microservices still require stricter routing and integration tests.
 
 ## 7. One-Liner If Judge Says The Scope Is Too Big
 
@@ -250,4 +253,3 @@ Nhóm em có nhiều module, nhưng core deliverable của nhóm là web/backend
 | Limitation | Honest gaps: mobile, custom AI, production hardening | No limitation | Looks immature |
 | Future Work | Mobile, custom AI after data, monitoring, e2e, load test | Everything will be done soon | Unrealistic |
 | Conclusion | Campus MVP beyond CRUD with traceable item return workflow | Revolutionary AI platform | Inflated positioning |
-

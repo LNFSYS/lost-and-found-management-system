@@ -118,7 +118,7 @@ This file is the canonical UC checklist for the project. The old list of nearly 
 | [x] | UC-079 | Create and join chat room by claim | `claim:join` guards claim access and joins `claim:{roomId}` |
 | [x] | UC-080 | Send and receive realtime messages | `chat:message` persists and broadcasts text messages |
 | [x] | UC-081 | Send images in realtime chat | `chat:image` persists image message metadata and broadcasts it |
-| [~] | UC-082 | Display seen status and unread count in realtime | Web chat UI receives messages and `chat:seen` persists read time; full unread badge UI still planned |
+| [x] | UC-082 | Display seen status and unread count in realtime | Web chat UI receives messages, `chat:seen` persists read time, and unread badge is displayed in claim chat |
 | [x] | UC-083 | Send realtime notifications for chat, claim, and appointment | Notification repository emits `notification:new` to user room for matching, claim, appointment, and warehouse alerts |
 | [x] | UC-084 | Export statistics report via API | `GET /admin/dashboard/export.csv` |
 | [x] | UC-085 | Manage system configuration via API | Java `ConfigAdminController`, `ConfigService.update`, config history |

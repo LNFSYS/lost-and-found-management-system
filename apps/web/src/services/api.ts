@@ -195,6 +195,23 @@ export interface PublicConfigEntry {
   description: string | null;
 }
 
+export interface AdminConfigEntry extends PublicConfigEntry {
+  id: string;
+  rawValue: string;
+  isPublic: boolean;
+  updatedBy: string | null;
+  updatedAt: string;
+}
+
+export interface AdminConfigHistoryEntry {
+  id: string;
+  key: string;
+  oldValue: string | null;
+  newValue: string;
+  changedBy: { id: string; fullName: string | null };
+  changedAt: string;
+}
+
 export interface BoardPost {
   id: string;
   userId: string;
@@ -491,6 +508,14 @@ export const api = {
       body: data
     });
   },
+  uploadClaimChatImage(id: string, file: File) {
+    const data = new FormData();
+    data.append("image", file);
+    return request<{ image: { secureUrl: string; publicId: string; bytes?: number } }>(`/claims/${id}/chat-image`, {
+      method: "POST",
+      body: data
+    });
+  },
   claimVerification(id: string) {
     return request<{ verification: ClaimVerification }>(`/claims/${id}/verification`);
   },
@@ -567,6 +592,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify(input)
     });
+  },
+  googleLoginUrl() {
+    return `${API_BASE_URL}/auth/google`;
   },
   forgotPassword(input: Record<string, unknown>) {
     return request<{ otpDelivered: boolean }>("/auth/forgot-password", {
@@ -652,6 +680,18 @@ export const api = {
   },
   adminOverview() {
     return request<{ overview: AdminOverview }>("/admin/dashboard/overview");
+  },
+  adminConfig() {
+    return request<{ entries: AdminConfigEntry[] }>("/admin/config");
+  },
+  adminUpdateConfig(key: string, value: unknown) {
+    return request<{ key: string; value: unknown; rawValue: string }>(`/admin/config/${encodeURIComponent(key)}`, {
+      method: "PUT",
+      body: JSON.stringify({ value })
+    });
+  },
+  adminConfigHistory(limit = 50) {
+    return request<{ history: AdminConfigHistoryEntry[] }>(`/admin/config/history?limit=${limit}`);
   },
   adminDashboardExportUrl() {
     return `${API_BASE_URL}/admin/dashboard/export.csv`;

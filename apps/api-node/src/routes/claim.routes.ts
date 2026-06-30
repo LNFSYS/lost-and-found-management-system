@@ -37,3 +37,7 @@ claimRoutes.patch("/:id/cancel", requireAuth, (request, response, next) => {
 claimRoutes.post("/:id/evidence", requireAuth, memoryUpload.single("evidence"), (request, response, next) => {
   mediaController.claimEvidence(request, response).catch(next);
 });
+
+claimRoutes.post("/:id/chat-image", requireAuth, memoryUpload.single("image"), (request, response, next) => {
+  mediaController.claimChatImage(request, response).catch(next);
+});

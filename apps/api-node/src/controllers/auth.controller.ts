@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { authService } from "../services/auth.service.js";
 import { notificationRepository } from "../repositories/notification.repository.js";
+import { env } from "../config/env.js";
 import { created, ok } from "../utils/api-response.js";
 import {
   forgotPasswordSchema,
@@ -22,6 +23,38 @@ function requestMeta(request: Request) {
 }
 
 export const authController = {
+  async googleStart(_request: Request, response: Response) {
+    response.redirect(authService.googleAuthorizationUrl());
+  },
+
+  async googleCallback(request: Request, response: Response) {
+    const redirectUrl = new URL(env.frontendUrl);
+    redirectUrl.pathname = "/";
+    const code = typeof request.query.code === "string" ? request.query.code : "";
+    if (!code) {
+      redirectUrl.hash = new URLSearchParams({ oauth: "google", error: "Missing Google authorization code" }).toString();
+      response.redirect(redirectUrl.toString());
+      return;
+    }
+
+    try {
+      const result = await authService.loginWithGoogle(code, requestMeta(request));
+      redirectUrl.hash = new URLSearchParams({
+        oauth: "google",
+        accessToken: result.tokens.accessToken,
+        refreshToken: result.tokens.refreshToken,
+        accessTokenExpiresIn: result.tokens.accessTokenExpiresIn,
+        refreshTokenExpiresIn: result.tokens.refreshTokenExpiresIn
+      }).toString();
+    } catch (error) {
+      redirectUrl.hash = new URLSearchParams({
+        oauth: "google",
+        error: error instanceof Error ? error.message : "Google login failed"
+      }).toString();
+    }
+    response.redirect(redirectUrl.toString());
+  },
+
   async register(request: Request, response: Response) {
     const input = registerSchema.parse(request.body);
     const result = await authService.register(input, requestMeta(request));

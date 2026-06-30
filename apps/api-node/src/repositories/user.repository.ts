@@ -28,6 +28,10 @@ interface IdRow extends RowDataPacket {
   id: string;
 }
 
+interface OAuthAccountRow extends RowDataPacket {
+  user_id: string;
+}
+
 interface OtpRow extends RowDataPacket {
   id: string;
   user_id: string | null;
@@ -185,6 +189,33 @@ export const userRepository = {
     }
 
     return mapUser(row, await getRoles(dbPool, row.id));
+  },
+
+  async findOAuthUserId(provider: string, providerUserId: string): Promise<string | null> {
+    const [rows] = await dbPool.query<OAuthAccountRow[]>(
+      "SELECT user_id FROM oauth_accounts WHERE provider = ? AND provider_user_id = ? LIMIT 1",
+      [provider, providerUserId]
+    );
+    return rows[0]?.user_id ?? null;
+  },
+
+  async upsertOAuthAccount(input: {
+    userId: string;
+    provider: string;
+    providerUserId: string;
+    providerEmail: string;
+  }): Promise<void> {
+    await dbPool.execute(
+      `
+        INSERT INTO oauth_accounts (id, user_id, provider, provider_user_id, provider_email, last_used_at)
+        VALUES (?, ?, ?, ?, ?, UTC_TIMESTAMP())
+        ON DUPLICATE KEY UPDATE
+          user_id = VALUES(user_id),
+          provider_email = VALUES(provider_email),
+          last_used_at = UTC_TIMESTAMP()
+      `,
+      [randomUUID(), input.userId, input.provider, input.providerUserId, input.providerEmail]
+    );
   },
 
   async markEmailVerified(userId: string): Promise<void> {

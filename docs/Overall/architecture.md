@@ -9,9 +9,9 @@ Build a campus-first Lost & Found platform for FPT University with public boards
 ```text
 apps/
   web/                  React + TypeScript + Vite web app
-  api-node/             Node.js core API for the current MVP demo flow
+  api-node/             Node.js core web-facing API for the current MVP demo flow
   mobile/               Planned React Native/mobile support
-  java-admin-service/   Spring Boot service for admin/business modules
+  java-admin-service/   Spring Boot business/admin extension
 shared/                 Shared TypeScript models and constants
 docs/
   Overall/              System architecture, MVP scope and team boundaries
@@ -23,11 +23,13 @@ docs/
 | --- | --- | --- |
 | Web App | VQ-supported implementation surface | Guest/User/Staff/Admin UI currently lives in the React web app; no dedicated UI owner is assigned in the canonical UC checklist |
 | Mobile App | AK | Planned/future mobile support; not part of the current MVP demo deliverable |
-| Node API | VQ | Core REST API, auth, user profile, posts, Cloudinary, claim base, admin/staff API, matching, Socket.IO, chat history |
+| Node API | VQ | Core web-facing REST API, auth, user profile, posts, Cloudinary, claim base, admin/staff API, matching, Socket.IO, chat history, and current web demo orchestration |
 | AI / Evidence / Warehouse Algorithm | QD | Vision/OCR, auto tags, evidence verification, ownership confidence percentage, overdue warehouse processing, disposal/donation algorithm |
-| Java Admin Service | TL | Spring Boot extension for selected admin/business rules; not presented as a complete production microservice split until flow ownership is single-source |
+| Java Admin Service | TL | Parallel Spring Boot business/admin extension for selected rule-heavy operations; not presented as a complete production microservice split until flow ownership is single-source |
 
-For demo positioning, the React web app talks primarily to the Node API. Java should be described as an extension/business-service layer unless a specific demo flow is intentionally routed through Java.
+For demo positioning, the React web app talks primarily to the Node API. Java should be described as a business-service extension unless a specific demo flow is intentionally routed through Java.
+
+Detailed Node/Java ownership is documented in [node-java-service-boundary.md](node-java-service-boundary.md). The short version is: Node owns the current web MVP runtime; Java can run in parallel for selected business/admin rules and future service split work.
 
 ## Backend API Foundation
 
@@ -91,6 +93,9 @@ Current Node API endpoints:
 | `GET` | `/api/posts/:id/claims` | List claims for a post owner, staff or admin |
 | `POST/PATCH/GET` | `/api/appointments...` | Create, accept, reject, cancel, reschedule, complete and remind return appointments |
 | `GET` | `/api/config/public` | Return public config entries for web/mobile validation |
+| `GET` | `/api/admin/config` | Admin-only config list for operational settings |
+| `PUT` | `/api/admin/config/:key` | Admin-only typed config update with history |
+| `GET` | `/api/admin/config/history` | Admin-only config history |
 | `GET` | `/api/categories` | Return active item categories |
 | `GET` | `/api/locations/areas` | Return active campus areas |
 | `GET` | `/api/locations/areas/:id/buildings` | Return active buildings in an area |
@@ -171,7 +176,7 @@ The matching engine runs after post create/update and after post image tags are 
 
 `apps/java-admin-service` now uses Spring Boot Security with JWT bearer tokens signed by the Node API `JWT_ACCESS_SECRET`. Implemented admin APIs cover claim state transitions, handover point management, storage logs, and typed configuration updates/history. The service maps directly to the MySQL tables created by the Node migrations and keeps Hibernate `ddl-auto=none`.
 
-Because Node currently also implements several demo-critical APIs, do not claim a production-grade microservice architecture without an integration contract that prevents double-writing the same claim, appointment, handover, warehouse, or config state.
+Because Node currently also implements several demo-critical APIs, including admin config for the web demo, the Java service should be presented as a parallel extension/business-service layer. Do not claim a production-grade microservice architecture without an integration contract that prevents double-writing the same claim, appointment, handover, warehouse, or config state.
 
 ## Core Data Modules
 
@@ -190,8 +195,9 @@ Because Node currently also implements several demo-critical APIs, do not claim 
 
 | Module | Status | Document |
 | --- | --- | --- |
-| Project Overview | Clean product overview | [lost-found-system-overview.md](lost-found-system-overview.md) |
+| Project Overview | Main product/repository overview | [project-overview.md](project-overview.md) |
 | MVP Scope | Current deliverable and future work boundary | [mvp-scope-and-future-work.md](mvp-scope-and-future-work.md) |
+| Node/Java Boundary | Service ownership and safe thesis explanation | [node-java-service-boundary.md](node-java-service-boundary.md) |
 | Master Dev Checklist | Canonical 100-UC checklist | [../Checklist/master-dev-checklist.md](../Checklist/master-dev-checklist.md) |
 | Pending Tasks | Granular open task list | [../Checklist/pending-tasks.md](../Checklist/pending-tasks.md) |
 | Requirements | FR/NFR status | [../Requirements and Business Rules/requirements.md](../Requirements%20and%20Business%20Rules/requirements.md) |

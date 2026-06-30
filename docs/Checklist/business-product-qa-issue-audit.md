@@ -1,7 +1,7 @@
 # Business/Product/QA Issue Audit - FPTU Lost & Found System
 
 Date created: 2026-06-25
-Last updated: 2026-06-29
+Last updated: 2026-06-30
 Audit roles: Project Manager, Scrum Master, Quality Assurance, Product Owner
 Scope: Web, Node API, Java Admin Service, database, business flows, user experience, and real-world campus operations at FPTU Da Nang.
 
@@ -35,8 +35,24 @@ The system currently has a solid foundation: OTP auth, LOST/FOUND posts, claims,
 - Staff dashboard focuses on warehouse but permissions need retesting after recent changes.
 - Report/moderation does not yet have a clear user-facing report UI and lacks complete real-world actions.
 - Matching/AI is functional but lacks queue mechanism, explainability, threshold UI, and retry.
-- Node API and Java Admin Service both own some admin/claim/handover flows, risking rule divergence if ownership is not clearly defined.
-- Mobile, realtime chat, realtime notification, reputation, and feedback remain planned and are not ready for real operations.
+- Node API and Java Admin Service both touch some admin/claim/handover tables; ownership is now documented, but integration tests and routing hardening are still needed before production microservice claims.
+- Mobile, custom AI training/MLOps, feedback, deeper analytics, and production hardening remain planned. Realtime chat/notification exists for MVP, but still needs reconnect/offline/isolation tests before production.
+
+### Latest QA Evidence
+
+The older one-off QA session note has been merged here to keep documentation small.
+
+| Date | Evidence | Result |
+| --- | --- | --- |
+| 2026-06-29 | DB connection check against local MySQL `fptu_lost_found` | Passed |
+| 2026-06-29 | Core E2E smoke: login, LOST post, FOUND post, matching, claim, appointment guard | Passed |
+| 2026-06-29 | Web visual/layout check on desktop and mobile after responsive fixes | Passed |
+| 2026-06-29 | Manual matching flow with FOUND/LOST wallet scenario | Passed; suggestion shown at about 82% match |
+| 2026-06-29 | Admin dashboard navigation and moderation/category/location/handover/warehouse/users/report surfaces | Passed visually |
+| 2026-06-30 | Role/privacy smoke for Admin vs Staff sensitive routes | Passed |
+| 2026-06-30 | Migration smoke for important tables/columns after migrations | Passed on local DB |
+
+Remaining QA focus: warehouse lifecycle tests, claim race-condition tests, appointment edge cases, realtime reconnect/offline/socket room isolation, upload validation, and clean blank-DB verification before final submission.
 
 ### Processing Status as of 2026-06-29
 
@@ -50,7 +66,11 @@ The system currently has a solid foundation: OTP auth, LOST/FOUND posts, claims,
 - [x] BIZ-CHAT-01/BIZ-CHAT-02: Claim chat room, auth guard, realtime text/media URL messaging and seen state are implemented.
 - [x] BIZ-DASH-02/BIZ-DASH-03/BIZ-DASH-04: Admin dashboard has LOST/FOUND trend, return rate, category ranking, high-loss area ranking and trusted user ranking.
 - [x] BIZ-REP-01/BIZ-REP-04: Reputation scoring and user-visible reputation history are implemented.
-- [~] BIZ-CHAT-03/BIZ-CHAT-04: Chat unread badge and direct chat file upload are still incomplete.
+- [x] BIZ-ARCH-01: Added Node/Java ownership matrix in `docs/Overall/node-java-service-boundary.md`.
+- [x] BIZ-AUTH-01: Added Google OAuth MVP login flow using Google userinfo and Node JWT issuance; FPT domain policy remains a separate hardening task.
+- [x] BIZ-CHAT-03/BIZ-CHAT-04: Added realtime unread badge and direct private chat image upload through `/api/claims/:id/chat-image`.
+- [x] BIZ-QA-02/BIZ-QA-05: Added role/privacy smoke script and idempotent demo seed script.
+- [x] BIZ-ARCH-04: Added migration smoke verification script for expected tables/columns after migrations.
 - [~] BIZ-WH-04/BIZ-WH-11: Overdue processing exists, but full disposition/proof-image reporting remains incomplete.
 
 ## 4. Consolidated Issue and Risk Table by Module
@@ -59,7 +79,7 @@ The system currently has a solid foundation: OTP auth, LOST/FOUND posts, claims,
 
 | ID | Severity | User Group | Issue/Risk | Product Impact | Remediation | Acceptance Criteria |
 | --- | --- | --- | --- | --- | --- | --- |
-| BIZ-AUTH-01 | High | Student, Lecturer | No Google OAuth/default university SSO yet | FPTU users are accustomed to Google/university email login; manual registration reduces adoption | Complete OAuth or FPT email domain verification | User can login via Google FPT; account maps to correct role |
+| BIZ-AUTH-01 | Done | Student, Lecturer | Google OAuth MVP is implemented; strict FPT domain enforcement is still separate | FPTU users can use Google login for demo while university-domain policy remains hardening | Added Google OAuth start/callback flow and Node JWT issuance | User can login via Google; new Google users get USER + STUDENT by default |
 | BIZ-AUTH-02 | Critical | All | No mandatory university email domain policy | Outsiders can register if they have a personal email OTP | Validate email domain for student/lecturer/staff | Non-valid domain emails are blocked or require admin approval |
 | BIZ-AUTH-03 | High | Admin | Admin/staff user creation lacks strong approval/audit | Risk of incorrect privilege assignment | Add audit log and confirmation for sensitive role assignments | Every role change has actor, timestamp, before/after |
 | BIZ-AUTH-04 | High | Staff | Newly expanded staff permissions need regression testing | Staff may see data they shouldn't or get 403 when using warehouse | Write role matrix tests for admin routes and UI | STAFF can use warehouse, cannot use sensitive user/report/category CRUD |
@@ -171,8 +191,8 @@ The system currently has a solid foundation: OTP auth, LOST/FOUND posts, claims,
 | --- | --- | --- | --- | --- | --- | --- |
 | BIZ-CHAT-01 | High | Claimant, Owner | No chat after claim/accepted | User must communicate outside the system, losing audit trail | Implement chat room per claim | Only related users can join room |
 | BIZ-CHAT-02 | High | Security | Chat needs strict auth and room guard | Info leaks if wrong room is joined | Socket auth + DB permission | Users outside the claim cannot join |
-| BIZ-CHAT-03 | Medium | User | No realtime unread badge | Missed messages | Add unread count | Badge updates when new message arrives |
-| BIZ-CHAT-04 | Medium | User | No image upload in chat | Hard to send supplementary evidence | Upload images in private chat | Chat images are only in the room |
+| BIZ-CHAT-03 | Done | User | Realtime unread badge is implemented for claim chat | Users can see unread message count while chat is open | Added unread count from unread DB state and socket updates | Badge updates when new message arrives |
+| BIZ-CHAT-04 | Done | User | Private chat image upload is implemented | Users can send supplementary evidence without pasting external URLs | Added REST upload then socket image message | Chat image upload checks claim-room authorization |
 | BIZ-CHAT-05 | Medium | QA | No test for realtime reconnect/offline | Mobile/web disconnections cause errors easily | Test reconnect/retry | Reconnect does not lose messages |
 
 ### 4.10 Report, Moderation, Governance
@@ -233,10 +253,10 @@ The system currently has a solid foundation: OTP auth, LOST/FOUND posts, claims,
 
 | ID | Severity | User Group | Issue/Risk | Product Impact | Remediation | Acceptance Criteria |
 | --- | --- | --- | --- | --- | --- | --- |
-| BIZ-ARCH-01 | Critical | Engineering | Node and Java share DB; service ownership must be clear | Two services updating same tables causes rule divergence | Create ownership matrix | Each table/flow has an owner service |
-| BIZ-ARCH-02 | High | Engineering | Claim transition is owned by Java but Node still has claim endpoints | Easy to update incorrectly | Node creates/reads/evidence; Java transitions | Test that Node does not transition claims |
-| BIZ-ARCH-03 | High | Engineering | Handover/warehouse logic exists in both Node and Java | Receive/store/return rules may diverge | Choose 1 service owner for storage lifecycle | API docs state owner and deprecate duplicate endpoints |
-| BIZ-ARCH-04 | High | Engineering | Migration from blank DB needs verification after map/staff changes | New clones may 500 if not migrated | Add smoke test for migration | New DB migrates and builds/runs API OK |
+| BIZ-ARCH-01 | Done | Engineering | Node and Java share DB; service ownership needed to be clear | Two services updating same tables causes rule divergence | Added ownership matrix in `docs/Overall/node-java-service-boundary.md` | Each table/flow has a documented current MVP owner and Java extension role |
+| BIZ-ARCH-02 | High | Engineering | Claim transition exists in both Node demo flow and Java extension | Easy to update incorrectly if both are routed at once | Use one runtime writer per deployment and add integration tests | Demo states whether Node-only flow or Java extension flow is used |
+| BIZ-ARCH-03 | High | Engineering | Handover/warehouse logic exists in both Node and Java | Receive/store/return rules may diverge | Follow ownership matrix and route only one writer per flow | API docs state owner and duplicate writes are not used in one deployment |
+| BIZ-ARCH-04 | Partial | Engineering | Migration from blank DB needs verification after map/staff changes | New clones may 500 if not migrated | Added migration smoke script; still run it on a clean DB before final submission | `npm run smoke:migration` verifies expected schema after migrations |
 | BIZ-ARCH-05 | Medium | Engineering | Some queries need indexes when data grows | Feed/warehouse/admin becomes slow | Review query plans | Hot queries have indexes and pagination |
 | BIZ-ARCH-06 | Medium | Engineering | /handover-points response may be very large if map is base64 | Slow web, high bandwidth | Store map as URL image | Response list is lightweight, images load via static/CDN |
 | BIZ-ARCH-07 | Medium | Engineering | Shared package has few types; web/api have their own types | Type drift between FE/BE | Increase shared DTOs or OpenAPI generation | Important types are not duplicated |
@@ -246,10 +266,10 @@ The system currently has a solid foundation: OTP auth, LOST/FOUND posts, claims,
 | ID | Severity | User Group | Issue/Risk | Product Impact | Remediation | Acceptance Criteria |
 | --- | --- | --- | --- | --- | --- | --- |
 | BIZ-QA-01 | Done | Team | Smoke/e2e for core flow post -> claim -> appointment guard is implemented | Demo/release has basic automated verification | Added API smoke/e2e script | Core happy path runs with `npm run e2e:core` when test env is available |
-| BIZ-QA-02 | Critical | Team | Missing role matrix tests for Admin/Staff/User | Easy permission regression | API tests for each route/role | Sensitive routes return correct 401/403/200 |
+| BIZ-QA-02 | Partial | Team | Role matrix coverage is started but not exhaustive | Easy permission regression | Added role/privacy smoke script; still needs broader automated tests | `npm run e2e:roles` checks Admin vs Staff sensitive routes |
 | BIZ-QA-03 | High | Team | Missing warehouse lifecycle tests | Warehouse is a critical flow but status changes are error-prone | Unit/API transition tests | Invalid status transitions are blocked |
 | BIZ-QA-04 | High | Team | Missing claim race condition tests | Claim may be accepted/rejected simultaneously | Concurrency test for Java service | Only 1 transition succeeds |
-| BIZ-QA-05 | Medium | Team | Missing stable demo seed | Demo depends on local DB | Create demo seed | One command seeds accounts/posts/warehouse/demo |
+| BIZ-QA-05 | Done | Team | Stable demo seed is available | Demo no longer depends on manual local DB setup for accounts/basic stock | Added idempotent demo seed script | `npm run seed:demo` seeds admin/staff/student users, handover points and warehouse items |
 | BIZ-QA-06 | Medium | Team | No release checklist | Easy to forget migrate/build/env | Add release checklist | Each release checks build, migrate, smoke, role |
 | BIZ-QA-07 | Medium | Team | API error logging is not user-friendly enough | 500 errors are hard to debug | Log request id and safe error | Client receives clear message, server has trace |
 | BIZ-QA-08 | Medium | Team | No monitoring/job health | Cron expire/matching failures go unnoticed | Add health/log for jobs | Job failures have log/alert |
@@ -282,7 +302,7 @@ The system currently has a solid foundation: OTP auth, LOST/FOUND posts, claims,
 2. User doesn't know whether to hold the item or bring it to which handover point.
 3. Contact info may be overly public.
 4. When a claim arrives, finder/owner can process it, but reviewer guidance/checklist can be clearer.
-5. In-system chat/appointment exists after accepted claim, but unread badge and no-show handling remain incomplete.
+5. In-system chat/appointment exists after accepted claim; reconnect/offline chat tests and no-show handling remain incomplete.
 
 ### 5.3 Warehouse Staff
 
@@ -367,7 +387,7 @@ A feature should only be considered done when:
 | Warehouse loses track of items | Critical | No code/QR/timeline/disposition reports | Storage code, storage logs, proof images |
 | Staff granted excessive permissions | High | Staff dashboard/API recently expanded | Role matrix tests and UI guards |
 | API slow with large data | Medium | Synchronous matching, base64 map images, feed queries | Queue, URL images, indexes |
-| Node/Java business logic divergence | High | Two services touch claim/handover | Ownership matrix and deprecate duplicate flows |
+| Node/Java business logic divergence | Medium | Ownership matrix now exists, but integration tests/routing are still needed | One runtime writer per flow, JWT compatibility tests, service contract tests |
 | Demo failure due to DB/migration | Medium | New clones forget to migrate or schema drifts | Runbook, smoke migration, demo seed |
 
 ## 9. PO/QA Conclusion

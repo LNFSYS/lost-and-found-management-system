@@ -53,5 +53,11 @@ export const mediaController = {
     const body = claimEvidenceBodySchema.parse(request.body);
     const result = await mediaService.uploadClaimEvidence(request.auth!, claimId, request.file, body);
     response.status(201).json(created(result, "Claim evidence uploaded"));
+  },
+
+  async claimChatImage(request: Request, response: Response) {
+    const claimId = requireStringParam(request.params.id, "id");
+    const result = await mediaService.uploadClaimChatImage(request.auth!, claimId, request.file);
+    response.status(201).json(created(result, "Claim chat image uploaded"));
   }
 };

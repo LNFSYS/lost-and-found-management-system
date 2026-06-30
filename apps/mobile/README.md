@@ -1,8 +1,8 @@
 # Mobile App
 
-React Native app placeholder owned by DEV 2.
+This folder is reserved for planned React Native/mobile support. It is not part of the current MVP demo deliverable.
 
-Primary flows:
+Future target flows:
 
 - Register/login with FPT email
 - Create LOST/FOUND posts with image upload

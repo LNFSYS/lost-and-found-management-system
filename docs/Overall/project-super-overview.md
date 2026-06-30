@@ -15,7 +15,7 @@ apps/
   api-node/             Node.js REST API, migrations, matching, realtime
   web/                  React + TypeScript + Vite web app
   java-admin-service/   Spring Boot business/admin extension
-  mobile/               React Native placeholder
+  mobile/               Planned/future mobile support
 shared/                 Shared TypeScript types
 docs/                   Architecture, requirements, business rules, checklists
 ```
@@ -38,9 +38,9 @@ docs/                   Architecture, requirements, business rules, checklists
 | Area | Owner | Current responsibility |
 | --- | --- | --- |
 | Web app | Implementation surface, no separate UC owner | Guest/User/Staff/Admin UI |
-| Mobile app | AK | Planned React Native flows |
+| Mobile app | AK | Planned/future mobile support, not current MVP core |
 | Node API | VQ | Auth, posts, media, claim base, matching, realtime, admin/staff API |
-| Java service | TL | Java business modules, claim/handover/config where used |
+| Java service | TL | Spring Boot business/admin extension where intentionally routed |
 | AI/OCR/evidence/warehouse algorithm | QD | Vision/OCR, ownership confidence, warehouse disposition logic |
 
 ## 5. Database And Migrations
@@ -99,6 +99,8 @@ These are intentionally not hidden in overview because they affect project plann
 
 - Mobile app is still planned.
 - AI training/MLOps is still planned.
+- Current MVP uses Google Vision assisted OCR/tags plus rule-based/hybrid matching. It should not be described as a custom trained AI model.
+- Java is an extension/business-service layer. The web demo primarily uses Node APIs unless a flow is explicitly routed through Java.
 - Google OAuth is not implemented.
 - Chat can send image URLs, but direct chat file upload is not complete.
 - Chat unread badge is still partial.
@@ -120,6 +122,7 @@ These are intentionally not hidden in overview because they affect project plann
 | `docs/Requirements and Business Rules/traceability-matrix.md` | BR/FR/NFR/UC mapping |
 | `docs/Overall/architecture.md` | Architecture/service boundaries |
 | `docs/Overall/lost-found-system-overview.md` | Clean product overview |
+| `docs/Overall/mvp-scope-and-future-work.md` | Current MVP scope and future work boundary |
 
 ## 10. Runbook For A Fresh Clone
 

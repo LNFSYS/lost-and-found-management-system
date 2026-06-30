@@ -1,6 +1,6 @@
 # FPTU Lost & Found System Overview
 
-Last updated: 2026-06-29
+Last updated: 2026-06-30
 
 ## 1. Mục Tiêu Sản Phẩm
 
@@ -55,7 +55,7 @@ AI/OCR và matching chỉ đóng vai trò hỗ trợ quyết định. Việc tr�
 | Java Service | Spring Boot, Spring Security, JPA | Business service mở rộng: claim transition, handover/config theo Java |
 | Database | MySQL 8 | Dữ liệu quan hệ, migration từ Node |
 | Media/AI | Cloudinary, Google Vision | Lưu ảnh, OCR/tag/category suggestion |
-| Mobile | React Native | Planned |
+| Mobile | React Native | Future enhancement, not current MVP core |
 
 ## 5. Quy Tắc Nghiệp Vụ Cốt Lõi
 
@@ -81,6 +81,7 @@ Các tài liệu sau là nguồn chính, tránh tạo thêm checklist trùng:
 - `docs/Requirements and Business Rules/traceability-matrix.md`
 - `docs/Overall/architecture.md`
 - `docs/Overall/project-super-overview.md`
+- `docs/Overall/mvp-scope-and-future-work.md`
 
 ## 7. Phần Còn Lại Ngoài AI Training Và Mobile
 

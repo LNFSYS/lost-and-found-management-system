@@ -233,8 +233,8 @@ export const claimService = {
     await notifyClaimUsers(
       detail.claim,
       "CLAIM_ACCEPTED",
-      "Claim da duoc chap nhan",
-      "Claim da duoc chap nhan. Hai ben co the tao lich hen ban giao."
+      "Claim đã được chấp nhận",
+      "Claim đã được chấp nhận. Hai bên có thể tạo lịch hẹn bàn giao."
     );
     await chatRepository.getOrCreateRoom(claimId);
     return result;
@@ -258,7 +258,7 @@ export const claimService = {
     if (!result) {
       throw new HttpError(404, "Claim not found");
     }
-    await notifyClaimUsers(detail.claim, "CLAIM_REJECTED", "Claim bi tu choi", reason.trim());
+    await notifyClaimUsers(detail.claim, "CLAIM_REJECTED", "Claim bị từ chối", reason.trim());
     const rejectedCount = await claimRepository.countRejectedClaimsForUser(detail.claim.claimant.id);
     if (rejectedCount >= 3) {
       await userRepository.addReputation({
@@ -289,7 +289,7 @@ export const claimService = {
     if (!result) {
       throw new HttpError(404, "Claim not found");
     }
-    await notifyClaimUsers(detail.claim, "CLAIM_CANCELLED", "Claim da bi huy", reason.trim());
+    await notifyClaimUsers(detail.claim, "CLAIM_CANCELLED", "Claim đã bị hủy", reason.trim());
     return result;
   },
 

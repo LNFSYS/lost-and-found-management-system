@@ -31,8 +31,8 @@ export const features: Feature[] = [
     tone: "blue"
   },
   {
-    title: "AI gợi ý đối sánh",
-    description: "OCR, auto tag và matching score giúp nối đúng người mất với người nhặt.",
+    title: "OCR và matching hỗ trợ",
+    description: "Google Vision assisted OCR/tag và điểm matching giúp gợi ý đồ tương tự để người dùng tự xác minh.",
     icon: Sparkles,
     tone: "green"
   },
@@ -90,7 +90,7 @@ export const flowSteps = [
   },
   {
     title: "2. Hệ thống phân tích",
-    text: "AI tag, OCR và matching engine chấm điểm các tin liên quan theo text, category, location, time."
+    text: "OCR/tag và matching engine chấm điểm các tin liên quan theo mô tả, danh mục, vị trí và thời gian."
   },
   {
     title: "3. Xác minh chủ sở hữu",
@@ -103,7 +103,7 @@ export const flowSteps = [
 ];
 
 export const stats = [
-  { value: "172", label: "use case đã phân rã" },
+  { value: "100", label: "use case đã chuẩn hóa" },
   { value: "13", label: "nhóm nghiệp vụ" },
   { value: "5", label: "vai trò dev rõ ràng" },
   { value: "24/7", label: "public board sẵn sàng" }

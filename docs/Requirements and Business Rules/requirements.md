@@ -1,6 +1,6 @@
 # Functional and Non-Functional Requirements
 
-Last audit: 2026-06-29
+Last audit: 2026-06-30
 
 This document uses the canonical 100-UC set from `docs/Checklist/master-dev-checklist.md`. Each UC has exactly one primary owner and the set is grouped by current team member assignment: TL, VQ, QD, and AK.
 
@@ -26,7 +26,7 @@ This document uses the canonical 100-UC set from `docs/Checklist/master-dev-chec
 | FR-POST-01 | Logged-in users must be able to create/update/close/soft-delete LOST/FOUND posts with valid required data. | UC-040, UC-041, UC-042, UC-043 | P0 | Implemented |
 | FR-MEDIA-01 | The system must upload, validate, store, display, and delete item images, evidence images, and avatars. | UC-038, UC-048, UC-049, UC-050, UC-087 | P0 | Partial |
 | FR-AI-01 | The system must call Vision/OCR, store AI tags, suggest categories, and provide AI metadata for matching. | UC-086, UC-087, UC-088, UC-091 | P1 | Partial |
-| FR-AI-02 | The team must prepare an AI training pipeline with collection, labeling, anonymization, training, evaluation, and versioning. | UC-026, UC-027, UC-028, UC-029, UC-030 | P2 | Planned |
+| FR-AI-02 | Future custom AI work should prepare a training pipeline with collection, labeling, anonymization, training, evaluation, and versioning before any custom model is claimed. | UC-026, UC-027, UC-028, UC-029, UC-030 | P2 | Planned |
 | FR-MATCH-01 | The system must run matching after create/update/upload, compute scores, save results, return suggestions, explain match reasons, and allow manual re-run. Background queue processing remains a hardening backlog item. | UC-068, UC-069, UC-070, UC-071, UC-072, UC-074, UC-075, UC-076 | P0 | Implemented |
 | FR-NOTI-01 | The system must send matching notifications and support realtime notifications for chat, claims, and appointments; polling is only a fallback. | UC-073, UC-074, UC-083, UC-020 | P1 | Partial |
 | FR-CLAIM-01 | Claimants must be able to submit claims for FOUND posts with ownership descriptions/evidence, and the system must prevent duplicate claims. | UC-049, UC-052, UC-053 | P0 | Implemented |
@@ -40,7 +40,7 @@ This document uses the canonical 100-UC set from `docs/Checklist/master-dev-chec
 | FR-ADMIN-01 | Admin/Staff APIs and web UI must support users, categories, locations, moderation, reports, dashboard overview/charts, CSV statistics export, and system configuration. Full web config management remains partial. | UC-063, UC-064, UC-065, UC-066, UC-067, UC-084, UC-085 | P1 | Partial |
 | FR-REP-01 | The system must compute reputation scores after valid business events and expose reputation score/history data to users. | UC-025, UC-039 | P2 | Implemented |
 | FR-DEMO-01 | The system must have seed/demo data and demo accounts sufficient for presenting the core flow. Standardized one-command seed and blank-DB verification remain open. | UC-031, UC-032, UC-040, UC-041, UC-059 | P1 | Partial |
-| FR-MOBILE-01 | The mobile app must support auth/profile, board/post/upload/search, claim/handover/appointment/chat/notification. | UC-093, UC-094, UC-095, UC-096, UC-097, UC-098, UC-099, UC-100 | P1 | Planned |
+| FR-MOBILE-01 | Future mobile support should cover auth/profile, board/post/upload/search, claim/handover/appointment/chat/notification. | UC-093, UC-094, UC-095, UC-096, UC-097, UC-098, UC-099, UC-100 | P2 | Planned |
 
 ## Non-Functional Requirements
 
@@ -60,3 +60,4 @@ This document uses the canonical 100-UC set from `docs/Checklist/master-dev-chec
 - The canonical UC set currently has exactly 100 UCs: `UC-001` through `UC-100`.
 - Do not create UCs above `UC-100` unless the master checklist is intentionally re-baselined.
 - Do not assign UCs to Tran Nguyen Phong as he has left the team.
+- Current MVP wording should use "Google Vision assisted OCR/tags" and "rule-based/hybrid matching", not "custom trained AI model".

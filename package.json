@@ -2,7 +2,7 @@
   "name": "fptu-lost-found-system",
   "private": true,
   "version": "0.1.0",
-  "description": "AI-powered Lost & Found Management System for FPT University campus.",
+  "description": "AI-assisted Lost & Found MVP for FPT University Da Nang campus.",
   "scripts": {
     "dev": "concurrently -n API,WEB -c blue,green \"npm run dev:api\" \"npm run dev:web\"",
     "dev:all": "concurrently -n API,WEB,JAVA -c blue,green,yellow \"npm run dev:api\" \"npm run dev:web\" \"npm run dev:java\"",

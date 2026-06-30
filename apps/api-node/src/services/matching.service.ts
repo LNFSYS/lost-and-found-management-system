@@ -173,10 +173,10 @@ function explainScore(match: MatchRunResult) {
     `time ${percent(match.timeScore)}`
   ];
   const strongest = [
-    { label: "mo ta", score: match.textScore },
-    { label: "danh muc", score: match.categoryScore },
-    { label: "vi tri", score: match.locationScore },
-    { label: "thoi gian", score: match.timeScore }
+    { label: "mô tả", score: match.textScore },
+    { label: "danh mục", score: match.categoryScore },
+    { label: "vị trí", score: match.locationScore },
+    { label: "thời gian", score: match.timeScore }
   ]
     .sort((left, right) => right.score - left.score)
     .slice(0, 2)

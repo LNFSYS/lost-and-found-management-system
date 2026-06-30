@@ -1,6 +1,6 @@
 # Pending Task Checklist
 
-Last audit: 2026-06-29
+Last audit: 2026-06-30
 
 ## Current Audit Summary
 
@@ -9,7 +9,9 @@ Last audit: 2026-06-29
 | Completed checklist items | 60 |
 | Open checklist items | 61 |
 
-Open work is concentrated in Google OAuth/auth ownership, advanced AI category selection, direct chat file upload, thumbnail optimization, Java evidence ownership guard, background matching queue, smart notification tiers, configurable warehouse retention/disposition proof, chat unread badge, full web config UI, feedback/negative-feedback review, mobile app, AI training/MLOps, and automated hardening tests.
+Open work is concentrated in Google OAuth/auth ownership, advanced AI category selection, direct chat file upload, thumbnail optimization, Java/Node ownership hardening, background matching queue, smart notification tiers, configurable warehouse retention/disposition proof, chat unread badge, full web config UI, feedback/negative-feedback review, mobile app, custom AI training/MLOps, and automated hardening tests.
+
+Scope note: the current MVP should be demoed as web + Node backend with Google Vision assisted OCR/tags and rule-based/hybrid matching. Mobile and custom AI training remain future work unless completed later.
 
 
 ## Auth / Account
@@ -126,6 +128,8 @@ Open work is concentrated in Google OAuth/auth ownership, advanced AI category s
 
 ## Mobile App
 
+Future enhancement, not current MVP core.
+
 - [ ] Build mobile auth: register, OTP, login, logout.
 - [ ] Build mobile profile/edit profile/avatar.
 - [ ] Build mobile LOST/FOUND feed.
@@ -140,7 +144,9 @@ Open work is concentrated in Google OAuth/auth ownership, advanced AI category s
 - [ ] Store mobile token using secure storage.
 - [ ] Add retry/offline handling for mobile.
 
-## AI Model Training / MLOps
+## Custom AI Model Training / MLOps
+
+Future enhancement, not current MVP core. Current code uses Google Vision assisted OCR/tags plus rule-based/hybrid matching.
 
 - [ ] Collect training data from posts, images, AI tags, matches, and feedback.
 - [ ] Build admin tool for labeling category/tag/match correct/incorrect.

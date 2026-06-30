@@ -9,12 +9,12 @@ Build a campus-first Lost & Found platform for FPT University with public boards
 ```text
 apps/
   web/                  React + TypeScript + Vite web app
-  api-node/             Node.js API for auth, migrations, posts, uploads and claims
-  mobile/               React Native app placeholder
+  api-node/             Node.js core API for the current MVP demo flow
+  mobile/               Planned React Native/mobile support
   java-admin-service/   Spring Boot service for admin/business modules
 shared/                 Shared TypeScript models and constants
 docs/
-  architecture.md       System architecture and team boundaries
+  Overall/              System architecture, MVP scope and team boundaries
 ```
 
 ## Service Boundaries
@@ -22,10 +22,12 @@ docs/
 | Area | Owner | Responsibility |
 | --- | --- | --- |
 | Web App | VQ-supported implementation surface | Guest/User/Staff/Admin UI currently lives in the React web app; no dedicated UI owner is assigned in the canonical UC checklist |
-| Mobile App | AK | User mobile flows: auth, posts, claims, chat, appointments |
+| Mobile App | AK | Planned/future mobile support; not part of the current MVP demo deliverable |
 | Node API | VQ | Core REST API, auth, user profile, posts, Cloudinary, claim base, admin/staff API, matching, Socket.IO, chat history |
 | AI / Evidence / Warehouse Algorithm | QD | Vision/OCR, auto tags, evidence verification, ownership confidence percentage, overdue warehouse processing, disposal/donation algorithm |
-| Java Admin Service | TL | Java business rules, claim transitions, handover lifecycle, appointments, reputation, scheduled tasks, AI training pipeline |
+| Java Admin Service | TL | Spring Boot extension for selected admin/business rules; not presented as a complete production microservice split until flow ownership is single-source |
+
+For demo positioning, the React web app talks primarily to the Node API. Java should be described as an extension/business-service layer unless a specific demo flow is intentionally routed through Java.
 
 ## Backend API Foundation
 
@@ -154,7 +156,7 @@ Security and integrity notes:
 - Password and LOST-post secret verification values are stored with bcrypt; default salt rounds are 12.
 - Password reset revokes all active refresh tokens for that user.
 - A user can submit only one claim per post, enforced by both service validation and a database unique key.
-- After initial claim creation, claim status transitions are owned by the Java Admin Service so row locks and status guards are centralized.
+- Claim status transitions must have one runtime owner in the selected deployment. The current web MVP primarily uses Node endpoints; Java implementations are treated as extension/business-service coverage unless routed explicitly.
 - Sensitive admin management endpoints require `ADMIN`; `STAFF` can access only the overview-style admin surface.
 - Category administration is limited to two levels: main groups and concrete categories. The API rejects nested child categories and rejects moving a group that already has children under another group.
 - The Node API verifies the configured MySQL connection before listening so DB configuration failures fail fast.
@@ -168,6 +170,8 @@ The matching engine runs after post create/update and after post image tags are 
 ## Java Admin Service Foundation
 
 `apps/java-admin-service` now uses Spring Boot Security with JWT bearer tokens signed by the Node API `JWT_ACCESS_SECRET`. Implemented admin APIs cover claim state transitions, handover point management, storage logs, and typed configuration updates/history. The service maps directly to the MySQL tables created by the Node migrations and keeps Hibernate `ddl-auto=none`.
+
+Because Node currently also implements several demo-critical APIs, do not claim a production-grade microservice architecture without an integration contract that prevents double-writing the same claim, appointment, handover, warehouse, or config state.
 
 ## Core Data Modules
 
@@ -187,6 +191,7 @@ The matching engine runs after post create/update and after post image tags are 
 | Module | Status | Document |
 | --- | --- | --- |
 | Project Overview | Clean product overview | [lost-found-system-overview.md](lost-found-system-overview.md) |
+| MVP Scope | Current deliverable and future work boundary | [mvp-scope-and-future-work.md](mvp-scope-and-future-work.md) |
 | Master Dev Checklist | Canonical 100-UC checklist | [../Checklist/master-dev-checklist.md](../Checklist/master-dev-checklist.md) |
 | Pending Tasks | Granular open task list | [../Checklist/pending-tasks.md](../Checklist/pending-tasks.md) |
 | Requirements | FR/NFR status | [../Requirements and Business Rules/requirements.md](../Requirements%20and%20Business%20Rules/requirements.md) |

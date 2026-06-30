@@ -870,8 +870,8 @@ export const postRepository = {
       rows.map((post) => ({
         userId: post.user_id,
         type: "POST_EXPIRED",
-        title: "Bai dang da het han",
-        body: `"${post.title}" da duoc chuyen sang trang thai het han.`,
+        title: "Bài đăng đã hết hạn",
+        body: `"${post.title}" đã được chuyển sang trạng thái hết hạn.`,
         entityType: "POST",
         entityId: post.id
       }))

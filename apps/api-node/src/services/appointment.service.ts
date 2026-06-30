@@ -88,8 +88,8 @@ export const appointmentService = {
         id: appointment.id
       },
       "APPOINTMENT_CREATED",
-      "Lich hen ban giao moi",
-      "Mot lich hen ban giao vua duoc tao. Hay kiem tra va xac nhan thoi gian phu hop."
+      "Lịch hẹn bàn giao mới",
+      "Một lịch hẹn bàn giao vừa được tạo. Hãy kiểm tra và xác nhận thời gian phù hợp."
     );
     return { appointment };
   },
@@ -115,8 +115,8 @@ export const appointmentService = {
     await notifyAppointmentUsers(
       { ...appointment, id: appointmentId },
       "APPOINTMENT_ACCEPTED",
-      "Lich hen da duoc xac nhan",
-      "Lich hen ban giao da duoc xac nhan. Vui long den dung thoi gian va dia diem da hen."
+      "Lịch hẹn đã được xác nhận",
+      "Lịch hẹn bàn giao đã được xác nhận. Vui lòng đến đúng thời gian và địa điểm đã hẹn."
     );
     return { appointment: updated };
   },
@@ -131,7 +131,7 @@ export const appointmentService = {
     await notifyAppointmentUsers(
       { ...appointment, id: appointmentId },
       "APPOINTMENT_REJECTED",
-      "Lich hen bi tu choi",
+      "Lịch hẹn bị từ chối",
       reason.trim()
     );
     return { appointment: updated };
@@ -147,7 +147,7 @@ export const appointmentService = {
     await notifyAppointmentUsers(
       { ...appointment, id: appointmentId },
       "APPOINTMENT_CANCELLED",
-      "Lich hen da bi huy",
+      "Lịch hẹn đã bị hủy",
       reason.trim()
     );
     return { appointment: updated };
@@ -176,8 +176,8 @@ export const appointmentService = {
     await notifyAppointmentUsers(
       { ...appointment, id: appointmentId },
       "APPOINTMENT_RESCHEDULED",
-      "Lich hen da duoc doi",
-      "Lich hen ban giao vua duoc de xuat lai. Hay kiem tra va xac nhan neu thoi gian phu hop."
+      "Lịch hẹn đã được đổi",
+      "Lịch hẹn bàn giao vừa được đề xuất lại. Hãy kiểm tra và xác nhận nếu thời gian phù hợp."
     );
     return { appointment: updated };
   },
@@ -207,7 +207,7 @@ export const appointmentService = {
       { ...appointment, id: appointmentId },
       "APPOINTMENT_COMPLETED",
       "Ban giao da hoan tat",
-      "Lich hen ban giao da hoan tat. Bai dang va kho duoc cap nhat theo trang thai moi."
+      "Lịch hẹn bàn giao đã hoàn tất. Bài đăng và kho được cập nhật theo trạng thái mới."
     );
     return { appointment: completed };
   },
@@ -222,8 +222,8 @@ export const appointmentService = {
           post_owner_id: appointment.post_owner_id
         },
         "APPOINTMENT_REMINDER",
-        "Sap den lich ban giao",
-        `Lich ban giao sap dien ra vao ${appointment.proposed_at}. Hay kiem tra lai dia diem va mang theo bang chung can thiet.`
+        "Sắp đến lịch bàn giao",
+        `Lịch bàn giao sắp diễn ra vào ${appointment.proposed_at}. Hãy kiểm tra lại địa điểm và mang theo bằng chứng cần thiết.`
       );
     }
     return { reminded: targets.length };

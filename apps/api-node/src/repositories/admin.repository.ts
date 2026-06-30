@@ -921,7 +921,7 @@ export const adminRepository = {
       users.map((user) => ({
         userId: user.user_id,
         type: "WAREHOUSE_CAPACITY_WARNING",
-        title: "Kho sap day",
+        title: "Kho sắp đầy",
         body: `Kho dang luu ${snapshot.activeItems}/${snapshot.capacity} vat pham. Hay xu ly, chuyen giao hoac mo rong suc chua.`,
         entityType: "WAREHOUSE",
         entityId: "capacity"
@@ -971,8 +971,8 @@ export const adminRepository = {
         items.map((item) => ({
           userId: user.user_id,
           type: "WAREHOUSE_NEAR_EXPIRY",
-          title: "Vat pham sap het han luu kho",
-          body: `"${item.item_name}" se het han luu kho vao ${item.retention_deadline}.`,
+          title: "Vật phẩm sắp hết hạn lưu kho",
+          body: `"${item.item_name}" sẽ hết hạn lưu kho vào ${item.retention_deadline}.`,
           entityType: "WAREHOUSE_ITEM",
           entityId: item.id
         }))

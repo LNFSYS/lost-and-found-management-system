@@ -1108,7 +1108,7 @@ function AdminOverviewPanel(props: { posts: BoardPost[]; users: AdminUser[]; rep
   }, [props.posts]);
   const areaStats = useMemo(() => {
     const buckets = new Map<string, number>();
-    props.posts.forEach((post) => buckets.set(post.location.areaName ?? post.location.buildingName ?? "Chua ro", (buckets.get(post.location.areaName ?? post.location.buildingName ?? "Chua ro") ?? 0) + 1));
+    props.posts.forEach((post) => buckets.set(post.location.areaName ?? post.location.buildingName ?? "Chưa rõ", (buckets.get(post.location.areaName ?? post.location.buildingName ?? "Chưa rõ") ?? 0) + 1));
     return Array.from(buckets.entries()).sort((a, b) => b[1] - a[1]).slice(0, 6);
   }, [props.posts]);
   const resolvedCount = props.posts.filter((post) => post.status === "RESOLVED").length;
@@ -1142,7 +1142,7 @@ function AdminOverviewPanel(props: { posts: BoardPost[]; users: AdminUser[]; rep
               </div>
             );
           })}
-          {postsByDate.length === 0 && <small>Chua co du lieu.</small>}
+          {postsByDate.length === 0 && <small>Chưa có dữ liệu.</small>}
         </div>
       </article>
 
@@ -1164,7 +1164,7 @@ function AdminOverviewPanel(props: { posts: BoardPost[]; users: AdminUser[]; rep
         <div className="panel-heading">
           <div>
             <span className="eyebrow">Category</span>
-            <h2>Thong ke danh muc</h2>
+            <h2>Thống kê danh mục</h2>
           </div>
           <Boxes size={18} />
         </div>
@@ -1197,7 +1197,7 @@ function AdminOverviewPanel(props: { posts: BoardPost[]; users: AdminUser[]; rep
               <span>{user.reputationPoints} diem - {user.reputationLevel}</span>
             </div>
           ))}
-          {trustedUsers.length === 0 && <small>Chua co user active.</small>}
+          {trustedUsers.length === 0 && <small>Chưa có người dùng hoạt động.</small>}
         </div>
       </article>
 
@@ -1246,7 +1246,7 @@ function DashboardRankList(props: { items: Array<[string, number]> }) {
           <i style={{ width: `${Math.max(8, (total / max) * 100)}%` }} />
         </div>
       ))}
-      {props.items.length === 0 && <small>Chua co du lieu.</small>}
+      {props.items.length === 0 && <small>Chưa có dữ liệu.</small>}
     </div>
   );
 }
@@ -2931,7 +2931,7 @@ function BoardView(props: {
           </div>
         </div>
 
-        {props.error instanceof Error && <div className="notice error">API chưa sẵn sàng: {props.error.message}</div>}
+        {props.error instanceof Error && <div className="notice error">Chưa tải được bảng tin: {props.error.message}</div>}
         {props.loading && <div className="notice">Đang tải bảng tin...</div>}
 
         <div className="feed-post-grid">
@@ -3466,7 +3466,7 @@ function AccountView(props: {
       return api.requestRegistrationOtp({ email });
     },
     onSuccess: () => {
-      setAuthMessage("Đã gửi mã OTP đăng ký. Kiểm tra email hoặc terminal API nếu SMTP chưa cấu hình.");
+      setAuthMessage("Đã gửi mã OTP đăng ký. Vui lòng kiểm tra email hoặc liên hệ quản trị viên nếu chưa nhận được mã.");
     }
   });
   const forgotMutation = useMutation({
@@ -3537,7 +3537,7 @@ function AccountView(props: {
           <div className="panel-heading compact">
             <div>
               <span className="eyebrow">Reputation</span>
-              <h2>Lich su diem</h2>
+              <h2>Lịch sử điểm</h2>
             </div>
             <ShieldCheck size={18} />
           </div>
@@ -3550,7 +3550,7 @@ function AccountView(props: {
               <small>{formatDate(entry.createdAt)}</small>
             </div>
           ))}
-          {(reputationQuery.data?.reputation.recentLogs ?? []).length === 0 && <small>Chua co lich su diem.</small>}
+          {(reputationQuery.data?.reputation.recentLogs ?? []).length === 0 && <small>Chưa có lịch sử điểm.</small>}
         </div>
         <button className="secondary-button" type="button" onClick={() => logoutMutation.mutate()}>
           <LogOut size={18} /> Đăng xuất
@@ -3902,14 +3902,14 @@ function PostDrawer(props: {
   const reportMutation = useMutation({
     mutationFn: (input: Record<string, unknown>) => api.reportPost(post!.id, input),
     onSuccess: () => {
-      setReportMessage("Da gui bao cao. Admin se kiem tra noi dung nay.");
+      setReportMessage("Đã gửi báo cáo. Admin sẽ kiểm tra nội dung này.");
       setReportOpen(false);
     }
   });
   const editMutation = useMutation({
     mutationFn: (input: Record<string, unknown>) => api.updatePost(post!.id, input),
     onSuccess: async () => {
-      setActionMessage("Da cap nhat bai viet.");
+      setActionMessage("Đã cập nhật bài viết.");
       setEditOpen(false);
       await queryClient.invalidateQueries({ queryKey: ["post", post?.id] });
       await queryClient.invalidateQueries({ queryKey: ["posts"] });
@@ -3930,7 +3930,7 @@ function PostDrawer(props: {
       if (action === "delete") {
         props.onClose();
       } else {
-        setActionMessage("Da dong bai viet.");
+        setActionMessage("Đã đóng bài viết.");
       }
     }
   });
@@ -4228,24 +4228,24 @@ function PostDrawer(props: {
               </div>
               {editOpen && (
                 <form className="post-edit-form" onSubmit={submitEdit}>
-                  <input name="title" required minLength={3} maxLength={255} defaultValue={post.title} placeholder="Tieu de" />
-                  <textarea name="description" required minLength={10} rows={4} defaultValue={post.description} placeholder="Mo ta" />
-                  <input name="contactInfo" defaultValue={post.contactInfo ?? ""} placeholder="Thong tin lien he" />
+                  <input name="title" required minLength={3} maxLength={255} defaultValue={post.title} placeholder="Tiêu đề" />
+                  <textarea name="description" required minLength={10} rows={4} defaultValue={post.description} placeholder="Mô tả" />
+                  <input name="contactInfo" defaultValue={post.contactInfo ?? ""} placeholder="Thông tin liên hệ" />
                   <div className="post-edit-grid">
-                    <input name="roomText" defaultValue={post.location.roomText ?? ""} placeholder="Phong/khu vuc cu the" />
-                    <input name="customLocation" defaultValue={post.location.customLocation ?? ""} placeholder="Vi tri tuy chinh" />
+                    <input name="roomText" defaultValue={post.location.roomText ?? ""} placeholder="Phòng/khu vực cụ thể" />
+                    <input name="customLocation" defaultValue={post.location.customLocation ?? ""} placeholder="Vị trí tùy chỉnh" />
                   </div>
                   <button className="primary-button" disabled={editMutation.isPending} type="submit">
-                    Luu thay doi
+                    Lưu thay đổi
                   </button>
                 </form>
               )}
               {reportOpen && (
                 <form className="post-report-form" onSubmit={submitReport}>
-                  <input name="reason" required minLength={3} maxLength={255} placeholder="Ly do bao cao" />
-                  <textarea name="details" rows={3} maxLength={2000} placeholder="Mo ta them cho admin" />
+                  <input name="reason" required minLength={3} maxLength={255} placeholder="Lý do báo cáo" />
+                  <textarea name="details" rows={3} maxLength={2000} placeholder="Mô tả thêm cho quản trị viên" />
                   <button className="primary-button" disabled={reportMutation.isPending} type="submit">
-                    Gui bao cao
+                    Gửi báo cáo
                   </button>
                 </form>
               )}
@@ -4367,7 +4367,7 @@ function ClaimExtraActions(props: { claim: PostClaimSummary; currentUserId?: str
     },
     onSuccess: async (_result, input) => {
       setActionForm(null);
-      setMessage(input.action === "accept" ? "Da chap nhan claim." : "Da cap nhat trang thai claim.");
+      setMessage(input.action === "accept" ? "Đã chấp nhận claim." : "Đã cập nhật trạng thái claim.");
       await queryClient.invalidateQueries({ queryKey: ["post-claims", claim.postId] });
       await queryClient.invalidateQueries({ queryKey: ["claim-detail", claim.id] });
       await queryClient.invalidateQueries({ queryKey: ["claim-verification", claim.id] });
@@ -4382,7 +4382,7 @@ function ClaimExtraActions(props: { claim: PostClaimSummary; currentUserId?: str
       return { uploaded: input.files.length };
     },
     onSuccess: async (result) => {
-      setMessage(`Da tai ${result.uploaded} bang chung.`);
+      setMessage(`Đã tải ${result.uploaded} bằng chứng.`);
       setDetailOpen(true);
       await queryClient.invalidateQueries({ queryKey: ["claim-detail", claim.id] });
       await queryClient.invalidateQueries({ queryKey: ["claim-verification", claim.id] });
@@ -4407,7 +4407,7 @@ function ClaimExtraActions(props: { claim: PostClaimSummary; currentUserId?: str
     const input = event.currentTarget.elements.namedItem("evidence") as HTMLInputElement | null;
     const files = Array.from(input?.files ?? []);
     if (files.length === 0) {
-      setMessage("Chon it nhat 1 file bang chung.");
+      setMessage("Chọn ít nhất 1 file bằng chứng.");
       return;
     }
     evidenceMutation.mutate({
@@ -4421,11 +4421,11 @@ function ClaimExtraActions(props: { claim: PostClaimSummary; currentUserId?: str
 
   return (
     <div className="claim-extra-actions">
-      {claim.moreInfoRequest && <small>Yeu cau bo sung: {claim.moreInfoRequest}</small>}
-      {claim.rejectionReason && <small>Ly do tu choi: {claim.rejectionReason}</small>}
+      {claim.moreInfoRequest && <small>Yêu cầu bổ sung: {claim.moreInfoRequest}</small>}
+      {claim.rejectionReason && <small>Lý do từ chối: {claim.rejectionReason}</small>}
       <div className="claim-action-row">
         <button className="secondary-button" type="button" onClick={() => setDetailOpen((value) => !value)}>
-          <Eye size={15} /> {detailOpen ? "An bang chung" : "Xem bang chung"}
+          <Eye size={15} /> {detailOpen ? "Ẩn bằng chứng" : "Xem bằng chứng"}
         </button>
         {canReview && (claim.status === "PENDING" || claim.status === "NEED_MORE_INFO") && (
           <>
@@ -4435,19 +4435,19 @@ function ClaimExtraActions(props: { claim: PostClaimSummary; currentUserId?: str
               type="button"
               onClick={() => actionMutation.mutate({ action: "accept" })}
             >
-              Chap nhan
+              Chấp nhận
             </button>
             <button className="secondary-button" type="button" onClick={() => setActionForm("more-info")}>
-              Yeu cau them
+              Yêu cầu thêm
             </button>
             <button className="secondary-button danger" type="button" onClick={() => setActionForm("reject")}>
-              Tu choi
+              Từ chối
             </button>
           </>
         )}
         {canCancel && claim.status !== "ACCEPTED" && claim.status !== "REJECTED" && claim.status !== "CANCELLED" && (
           <button className="secondary-button danger" type="button" onClick={() => setActionForm("cancel")}>
-            Huy claim
+            Hủy claim
           </button>
         )}
       </div>
@@ -4459,10 +4459,10 @@ function ClaimExtraActions(props: { claim: PostClaimSummary; currentUserId?: str
             required
             rows={3}
             minLength={3}
-            placeholder={actionForm === "more-info" ? "Can bo sung thong tin gi?" : "Nhap ly do"}
+            placeholder={actionForm === "more-info" ? "Cần bổ sung thông tin gì?" : "Nhập lý do"}
           />
           <button className="primary-button" disabled={actionMutation.isPending} type="submit">
-            Luu
+            Lưu
           </button>
         </form>
       )}
@@ -4470,20 +4470,20 @@ function ClaimExtraActions(props: { claim: PostClaimSummary; currentUserId?: str
       {canUploadEvidence && (
         <form className="claim-evidence-upload" onSubmit={submitEvidence}>
           <select name="evidenceType" defaultValue="OWNERSHIP_PROOF">
-            <option value="OWNERSHIP_PROOF">Bang chung so huu</option>
-            <option value="ADDITIONAL_DOC">Tai lieu bo sung</option>
-            <option value="PHOTO">Anh bo sung</option>
+            <option value="OWNERSHIP_PROOF">Bằng chứng sở hữu</option>
+            <option value="ADDITIONAL_DOC">Tài liệu bổ sung</option>
+            <option value="PHOTO">Ảnh bổ sung</option>
           </select>
           <input name="evidence" type="file" accept="image/*" multiple />
           <button className="secondary-button" disabled={evidenceMutation.isPending} type="submit">
-            <Upload size={15} /> Tai bang chung
+            <Upload size={15} /> Tải bằng chứng
           </button>
         </form>
       )}
 
       {detailOpen && (
         <div className="claim-evidence-panel">
-          {detailQuery.isLoading && <small>Dang tai bang chung...</small>}
+          {detailQuery.isLoading && <small>Đang tải bằng chứng...</small>}
           {detail?.claim.description && <p>{detail.claim.description}</p>}
           {detail?.evidence.map((item) => (
             <figure key={item.id}>
@@ -4491,7 +4491,7 @@ function ClaimExtraActions(props: { claim: PostClaimSummary; currentUserId?: str
               <figcaption>{item.evidenceType}{item.description ? ` - ${item.description}` : ""}</figcaption>
             </figure>
           ))}
-          {detail && detail.evidence.length === 0 && <small>Claim chua co file bang chung.</small>}
+          {detail && detail.evidence.length === 0 && <small>Claim chưa có file bằng chứng.</small>}
           {detailQuery.error instanceof Error && <div className="notice error">{detailQuery.error.message}</div>}
         </div>
       )}
@@ -4513,7 +4513,7 @@ function ClaimVerificationBadge(props: { claimId: string }) {
   const verification = verificationQuery.data?.verification;
 
   if (verificationQuery.isLoading) {
-    return <small>Dang tinh xac thuc...</small>;
+    return <small>Đang tính xác thực...</small>;
   }
   if (!verification) {
     return null;
@@ -4521,7 +4521,7 @@ function ClaimVerificationBadge(props: { claimId: string }) {
 
   return (
     <small className={`claim-verification-badge level-${verification.level.toLowerCase()}`}>
-      Xac thuc he thong: {verification.ownershipConfidence}% - match {verification.breakdown.matchScore}% - bang chung {verification.breakdown.evidenceScore}%
+      Xác thực hệ thống: {verification.ownershipConfidence}% - match {verification.breakdown.matchScore}% - bằng chứng {verification.breakdown.evidenceScore}%
     </small>
   );
 }
@@ -4623,9 +4623,9 @@ function ClaimChatBox(props: { claimId: string }) {
         </button>
       </form>
       <form className="claim-chat-form image" onSubmit={sendImage}>
-        <input name="mediaUrl" type="url" placeholder="Dan URL anh de gui" disabled={status !== "ready"} />
+        <input name="mediaUrl" type="url" placeholder="Dán URL ảnh để gửi" disabled={status !== "ready"} />
         <button className="secondary-button" disabled={status !== "ready"} type="submit">
-          <Upload size={15} /> Anh
+          <Upload size={15} /> Ảnh
         </button>
       </form>
     </section>

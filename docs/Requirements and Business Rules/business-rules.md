@@ -1,6 +1,6 @@
 # Business Rules
 
-Last audit: 2026-06-29
+Last audit: 2026-06-30
 
 Business rules are grouped by major business area and trace back to the canonical 100-UC set in `docs/Checklist/master-dev-checklist.md`. Each UC has exactly one primary owner.
 
@@ -32,8 +32,8 @@ Business rules are grouped by major business area and trace back to the canonica
 | BR-24 | Realtime notifications belong to individual users and may cover matching, chat, claims, appointments, and warehouse alerts. | UC-020, UC-073, UC-083 | Partial |
 | BR-25 | Admins manage users, roles, categories, campus locations, handover points, moderation, reports, dashboard metrics, export, and configuration. | UC-056, UC-063, UC-064, UC-065, UC-066, UC-067, UC-084, UC-085 | Partial |
 | BR-26 | Reputation changes only after valid business events and is visible to users through score/history; feedback and reputation must not automatically determine item returns. Feedback collection remains planned. | UC-025, UC-039 | Partial |
-| BR-27 | AI training data must be collected, labeled, anonymized, trained, evaluated, and versioned before any custom model is trusted. | UC-026, UC-027, UC-028, UC-029, UC-030 | Planned |
-| BR-28 | The mobile app must share auth, validation, privacy, handover, appointment, chat, and notification contracts with the web/backend. | UC-093, UC-094, UC-095, UC-096, UC-097, UC-098, UC-099, UC-100 | Planned |
+| BR-27 | Future custom AI training data must be collected, labeled, anonymized, trained, evaluated, and versioned before any custom model is trusted or advertised. | UC-026, UC-027, UC-028, UC-029, UC-030 | Planned |
+| BR-28 | Future mobile support must share auth, validation, privacy, handover, appointment, chat, and notification contracts with the web/backend. | UC-093, UC-094, UC-095, UC-096, UC-097, UC-098, UC-099, UC-100 | Planned |
 | BR-29 | Demo data must include accounts and data sufficient for core demo purposes but must not contain real sensitive information. | UC-031, UC-032, UC-040, UC-041, UC-059 | Implemented |
 | BR-30 | Testing/hardening must cover claim transitions, warehouse lifecycle, matching thresholds, realtime room isolation, evidence privacy, and migration from a blank DB. | UC-007, UC-015, UC-054, UC-071, UC-078, UC-089 | Partial |
 
@@ -42,3 +42,4 @@ Business rules are grouped by major business area and trace back to the canonica
 - The canonical UC set currently has exactly 100 UCs: `UC-001` through `UC-100`.
 - Do not assign UCs to Tran Nguyen Phong as he has left the team.
 - If a minor rule arises, add it to an existing BR group instead of creating a new micro-UC.
+- Current MVP uses Google Vision assisted OCR/tags plus rule-based/hybrid matching; custom AI training and native mobile remain planned scope.

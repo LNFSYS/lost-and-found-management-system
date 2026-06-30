@@ -95,7 +95,7 @@ Following the initial layout fixes, an end-to-end manual verification was conduc
 1. **Sign-In (User 1 - Finder):** Logged in to a student account (`vochieuquan@gmail.com`).
 2. **Post FOUND Item:** Created a found item post:
    - **Title:** "Vi da ca sau mau nau"
-   - **Description:** "Nhat duoc chiec vi da ca sau mau nau tai toa Alpha, ben trong co mot it tien va the sinh vien."
+   - **Description:** "Nhặt được chiếc ví da cá sấu màu nâu tại tòa Alpha, bên trong có một ít tiền và thẻ sinh viên."
    - **Category:** "Túi ví & phụ kiện"
    - **Location:** "Khu vực: Tòa nhà Alpha, phòng A101"
    - **Status:** Post created successfully.

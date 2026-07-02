@@ -1,6 +1,6 @@
 # Documentation Index
 
-Last updated: 2026-06-30
+Last updated: 2026-07-02
 
 This folder is intentionally kept small. Use these files as the canonical documentation set for the thesis/demo.
 
@@ -23,11 +23,20 @@ This folder is intentionally kept small. Use these files as the canonical docume
 | `Requirements and Business Rules/traceability-matrix.md` | BR/FR/NFR/UC traceability |
 | `Checklist/master-dev-checklist.md` | Canonical UC assignment/status |
 | `Checklist/pending-tasks.md` | Remaining work and backlog |
-| `Checklist/business-product-qa-issue-audit.md` | Product/QA/business risk audit |
+| `Checklist/release-checklist.md` | Pre-demo/pre-release technical and product checks |
+
+## Archived Evidence
+
+| File | Purpose |
+| --- | --- |
+| `Archive/2026-07-02/business-product-qa-issue-audit.md` | Product/QA/business risk audit evidence |
+| `Archive/2026-07-02/documentation-cleanup-audit-2026-07-02.md` | Dated documentation cleanup/audit report |
+| `Archive/2026-07-02/project-architecture-code-review-2026-07-02.md` | Dated architecture/code review report |
 
 ## Cleanup Policy
 
 - Do not create another overview/checklist unless it replaces one of the canonical files above.
-- Put one-time QA findings into `Checklist/business-product-qa-issue-audit.md`.
+- Put one-time QA findings into `Archive/<date>/...` after they are converted into `Checklist/pending-tasks.md` or `Checklist/release-checklist.md`.
 - Put future AI/mobile ideas into `Overall/mvp-scope-and-future-work.md` or `Checklist/pending-tasks.md`, not into separate claim-heavy documents.
 - Do not describe mobile or custom AI training as current MVP unless implemented and verified.
+- Keep dated audit reports as evidence during thesis defense, but do not use them as the primary reading path.

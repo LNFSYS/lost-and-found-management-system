@@ -137,10 +137,11 @@ All Node API responses use `{ success, data?, error?, message? }`.
 | `008_seed_item_categories.sql` | Seed two-level item categories |
 | `009_seed_campus_locations.sql` | Seed campus areas and concrete locations |
 | `010_notifications_and_warehouse.sql` | Add match notification threshold config and `warehouse_items` |
-| `011_media_kind_and_match_threshold.sql` | Add `post_media.media_kind` and keep notification threshold at `0.8` |
+| `011_media_kind_and_match_threshold.sql` | Add `post_media.media_kind` and normalize matching notification threshold |
 | `012_indexes_and_warehouse_lifecycle.sql` | Add feed/matching/notification/log indexes and expand warehouse lifecycle statuses |
 | `013_handover_map_location.sql` | Add `handover_points.map_image_url`, `map_position_x`, and `map_position_y` for campus map placement |
 | `014_warehouse_retention_and_appointments.sql` | Add warehouse retention, return appointments, and chat/realtime lifecycle support |
+| `015_matching_and_warehouse_policy.sql` | Add matching score tiers, image/OCR weights, auto-match safety flag, and warehouse retention/disposition policy config |
 
 Run migrations with:
 
@@ -170,7 +171,9 @@ Security and integrity notes:
 
 Post item image upload sends each Cloudinary `secure_url` through Google Vision when Vision is configured. Claim/post evidence images also run OCR where supported so evidence verification can use extracted text, but evidence remains private and AI remains advisory. The Node API stores label/object/OCR tags in `ai_tags`, returns suggested categories in the upload response, and falls back to empty tags/OCR text if Vision is not configured or fails.
 
-The matching engine runs after post create/update and after post image tags are saved. It builds TF-IDF vectors from normalized title, description and AI tags, calculates cosine text score plus category/location/time scores, applies weights from `config_entries`, and upserts rows into `match_results` when the total score passes `matching.threshold`. When `total_score >= matching.notification_threshold`, it marks the pair as `MATCHED`, persists `MATCH_FOUND` notifications for both users, marks the match as notified, and returns match suggestions to the UI for LOST posts.
+The matching engine runs after post create/update and after post image tags are saved. It builds TF-IDF vectors from normalized title, description, Vision/image tags and OCR text, then combines text, category, location, time, image-tag and OCR/serial-like scores. Config keys define score tiers: weak candidate, user suggestion, notification, and high-confidence advisory. The system saves match results and returns explanation details such as matched tokens, matched image/OCR terms, location reason, time difference and score caps/penalties. High scores notify users, but they do not automatically approve ownership or return an item. Automatic `MATCHED` status changes are disabled by default and require `matching.auto_mark_matched_enabled=1`.
+
+Warehouse retention now uses policy defaults from config: general items 60 days, electronics/high-value items 90 days, documents/cards 120 days, and perishable/hygiene/unsafe items 1-7 days depending on configuration. Disposal/donation/transfer is blocked while related claims or return appointments are pending/accepted, and document/card items must be transferred rather than donated or disposed.
 
 ## Java Admin Service Foundation
 

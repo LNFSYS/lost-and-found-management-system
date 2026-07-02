@@ -28,12 +28,12 @@ This file is the canonical UC checklist for the project. The old list of nearly 
 
 | Code | Member | Primary Scope |
 | --- | --- | --- |
-| TL | Tran The Luong | Java/Spring Boot business service and planned custom AI training pipeline |
+| TL | Tran The Luong | Java/Spring Boot business service and future custom AI training scope |
 | VQ | Vo Chieu Quan | Node.js API, DB migration, auth, post, media, claim base, admin/staff API, matching algorithm, realtime Socket.IO, chat |
 | QD | Truong Quang Dat | AI/OCR/tag extraction, evidence verification, ownership confidence score, overdue warehouse algorithm, disposal/donation workflow, notification strategy |
 | AK | Pham Nguyen Anh Khoa | React Native mobile app |
 
-## TL - Tran The Luong - Java / Spring Boot + Planned Custom AI Training
+## TL - Tran The Luong - Java / Spring Boot + Future Custom AI Training Scope
 
 | Done | UC | Use case | Evidence / note |
 | --- | --- | --- | --- |
@@ -106,13 +106,13 @@ This file is the canonical UC checklist for the project. The old list of nearly 
 | [x] | UC-067 | Provide admin dashboard overview data | `/admin/dashboard/overview` |
 | [x] | UC-068 | Run matching after post create or update | post create/update/media upload |
 | [x] | UC-069 | Normalize Vietnamese text for matching algorithm | `normalize-text.ts` |
-| [x] | UC-070 | Calculate match score by text, category, location, and time | matching service |
+| [x] | UC-070 | Calculate tiered match score by text, category, location, time, image tags, and OCR | `matchingService.runForPost`, image/OCR score support |
 | [x] | UC-071 | Save matching results | `upsertMatchResult` |
 | [x] | UC-072 | Return similar item suggestions | `buildSuggestions`, match suggestion API |
 | [x] | UC-073 | Send notification when new match found | `MATCH_FOUND` notifications |
 | [x] | UC-074 | Check match suggestions on 10-minute cycle | `my-match-suggestions` polling plus realtime notification invalidation |
 | [x] | UC-075 | Re-run matching manually for admin | `POST /posts/:id/matches/re-run`, `matchingService.runForPost` |
-| [x] | UC-076 | Explain why two posts match | `GET /posts/:id/matches/explanations` returns score summary and reasons |
+| [x] | UC-076 | Explain why two posts match | `GET /posts/:id/matches/explanations` returns score tier, matched tokens, image/OCR terms, location/time reasons, and penalties |
 | [x] | UC-077 | Set up Socket.IO server | `setupRealtimeServer(server)` attached to Node HTTP server |
 | [x] | UC-078 | Authenticate socket via JWT | Socket middleware verifies access token and joins `user:{id}` room |
 | [x] | UC-079 | Create and join chat room by claim | `claim:join` guards claim access and joins `claim:{roomId}` |
@@ -128,17 +128,17 @@ This file is the canonical UC checklist for the project. The old list of nearly 
 | Done | UC | Use case | Evidence / note |
 | --- | --- | --- | --- |
 | [x] | UC-016 | Check warehouse item retention deadline | `POST /admin/warehouse-items/expire-overdue` checks `retention_deadline` |
-| [x] | UC-017 | Determine eligibility for overdue item processing | Active warehouse statuses transition to `EXPIRED` when overdue |
-| [x] | UC-018 | Create overdue item disposal order | `POST /admin/warehouse-items/:id/process` supports `DISPOSED` with note |
-| [x] | UC-019 | Create donation batch for items | `POST /admin/warehouse-items/:id/process` supports `DONATED` with note |
+| [x] | UC-017 | Determine eligibility for overdue item processing | Active warehouse statuses transition to `EXPIRED`; processing checks grace period, document policy, active claims and appointments |
+| [x] | UC-018 | Create overdue item disposal order | `POST /admin/warehouse-items/:id/process` supports `DISPOSED` with policy guards and note |
+| [x] | UC-019 | Create donation batch for items | `POST /admin/warehouse-items/:id/process` supports `DONATED` with policy guards and note |
 | [x] | UC-020 | Send warehouse alerts to staff/admin | Overdue expiration creates `WAREHOUSE_OVERDUE` notifications |
 | [x] | UC-086 | Analyze item images with Google Vision | `vision.service.analyzeImageUrl` runs for `ITEM` post media |
 | [x] | UC-087 | Extract OCR from evidence images | Vision OCR now runs for post evidence and claim evidence uploads |
 | [x] | UC-088 | Suggest tags and categories from item images | `uniqueTags`, `suggestCategoriesFromTags` |
 | [x] | UC-089 | Verify claim evidence uploaded by claimant | `GET /claims/:id/verification` combines evidence, match, text, location, time |
-| [x] | UC-090 | Calculate ownership verification percentage | Claim verification returns `ownershipConfidence` and breakdown |
+| [x] | UC-090 | Calculate ownership review confidence percentage | Claim verification returns `ownershipConfidence`, `reviewConfidenceTier`, private-signal breakdown and advisory note |
 | [x] | UC-091 | Use AI tags as metadata for matching | `findMatchPostById` tag text |
-| [x] | UC-092 | Display verification percentage to finder | Web claim panel shows system verification percentage |
+| [x] | UC-092 | Display review confidence percentage to finder/staff | Web claim panel uses “Mức hỗ trợ xác thực” wording; no automatic ownership verification |
 
 ## AK - Pham Nguyen Anh Khoa - React Native Mobile
 

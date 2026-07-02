@@ -31,7 +31,11 @@ export const env = {
     port: numberFromEnv("DB_PORT", 3306),
     name: process.env.DB_NAME ?? "fptu_lost_found",
     user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD
+    password: process.env.DB_PASSWORD,
+    ssl: process.env.DB_SSL === "true" || process.env.DB_SSL === "1",
+    sslRejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== "false",
+    sslCaPath: process.env.DB_SSL_CA_PATH,
+    sslCa: process.env.DB_SSL_CA
   },
   jwtAccessSecret: process.env.JWT_ACCESS_SECRET,
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET,

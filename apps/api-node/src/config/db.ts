@@ -1,5 +1,6 @@
 import mysql from "mysql2/promise";
 import { env } from "./env.js";
+import { mysqlSslOptions } from "./mysql-ssl.js";
 
 export const dbPool = mysql.createPool({
   host: env.db.host,
@@ -7,6 +8,7 @@ export const dbPool = mysql.createPool({
   database: env.db.name,
   user: env.db.user,
   password: env.db.password,
+  ssl: mysqlSslOptions(),
   charset: "utf8mb4",
   dateStrings: true,
   timezone: "Z",

@@ -4,7 +4,7 @@ This folder is reserved for planned React Native/mobile support. It is not part 
 
 Future target flows:
 
-- Register/login with FPT email
+- Register/login with the same email/OTP policy as the web MVP. FPT/edu email must not be mandatory unless the university account policy changes.
 - Create LOST/FOUND posts with image upload
 - Search public board
 - Submit claim evidence

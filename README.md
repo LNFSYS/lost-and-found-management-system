@@ -1,6 +1,6 @@
 # FPTU Lost & Found System
 
-Campus Lost & Found MVP for FPT University Da Nang with LOST/FOUND posts, rule-based/hybrid matching, Google Vision assisted OCR/tagging, claim evidence verification, handover points, warehouse tracking, appointments, and realtime notifications/chat.
+Campus Lost & Found MVP for FPT University Da Nang with LOST/FOUND posts, rule-based/hybrid matching, Google Vision assisted OCR/tagging, evidence review confidence, handover points, warehouse tracking, appointments, and realtime notifications/chat.
 
 ## Structure
 
@@ -33,7 +33,8 @@ Copy `.env.example` to `.env` and fill local database/JWT/SMTP values before run
 - The Node API checks the configured MySQL connection before starting.
 - The community board displays the first uploaded post image as the feed cover image.
 - LOST post creation asks for ownership-proof details such as private marks, serials, invoice clues or other convincing evidence.
-- Matching is rule-based/hybrid: text, category, location, time and Vision/OCR metadata support the decision, but do not automatically approve ownership.
+- Matching is rule-based/hybrid: text, category, location, time, image tags and OCR metadata support tiered suggestions, but do not automatically approve ownership or return an item.
+- Warehouse retention uses policy defaults for documents/cards, electronics/high-value items, general items and perishable/hygiene/unsafe items.
 - Google Vision/OCR is an assisted recognition feature. The repo does not claim a custom trained AI model as part of the current MVP.
 - Google OAuth MVP login is available when `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_CALLBACK_URL` are configured.
 - `npm run seed:demo` creates demo admin/staff/student accounts plus sample handover/warehouse data.

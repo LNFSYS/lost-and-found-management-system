@@ -2,13 +2,16 @@ import { Router } from "express";
 import { claimController } from "../controllers/claim.controller.js";
 import { mediaController } from "../controllers/media.controller.js";
 import { postController } from "../controllers/post.controller.js";
-import { requireAnyRole, requireAuth } from "../middlewares/auth.middleware.js";
+import { optionalAuth, requireAnyRole, requireAuth } from "../middlewares/auth.middleware.js";
+import { rateLimit } from "../middlewares/rate-limit.middleware.js";
 import { memoryUpload } from "../middlewares/upload.middleware.js";
 
 export const postRoutes = Router();
 export const searchRoutes = Router();
+const postWriteLimit = rateLimit({ keyPrefix: "post-write", windowMs: 10 * 60 * 1000, max: 30 });
+const postUploadLimit = rateLimit({ keyPrefix: "post-upload", windowMs: 10 * 60 * 1000, max: 15 });
 
-postRoutes.post("/", requireAuth, (request, response, next) => {
+postRoutes.post("/", requireAuth, postWriteLimit, (request, response, next) => {
   postController.create(request, response).catch(next);
 });
 
@@ -40,15 +43,15 @@ postRoutes.post("/:id/matches/re-run", requireAuth, requireAnyRole(["ADMIN"]), (
   postController.rerunMatches(request, response).catch(next);
 });
 
-postRoutes.get("/:id", (request, response, next) => {
+postRoutes.get("/:id", optionalAuth, (request, response, next) => {
   postController.detail(request, response).catch(next);
 });
 
-postRoutes.put("/:id", requireAuth, (request, response, next) => {
+postRoutes.put("/:id", requireAuth, postWriteLimit, (request, response, next) => {
   postController.update(request, response).catch(next);
 });
 
-postRoutes.patch("/:id/status", requireAuth, (request, response, next) => {
+postRoutes.patch("/:id/status", requireAuth, postWriteLimit, (request, response, next) => {
   postController.updateStatus(request, response).catch(next);
 });
 
@@ -59,6 +62,7 @@ postRoutes.post("/:id/report", requireAuth, (request, response, next) => {
 postRoutes.post(
   "/:id/media",
   requireAuth,
+  postUploadLimit,
   memoryUpload.fields([
     { name: "images", maxCount: 5 },
     { name: "evidenceImages", maxCount: 5 }

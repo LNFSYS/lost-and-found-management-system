@@ -75,9 +75,12 @@ interface MatchPostRow extends RowDataPacket {
   user_id: string;
   type: PostType;
   title: string;
+  status: PostStatus;
   title_normalized: string;
   description_normalized: string;
   ai_tag_text: string | null;
+  image_tag_text: string | null;
+  ocr_tag_text: string | null;
   category_id: string | null;
   parent_category_id: string | null;
   area_id: string | null;
@@ -118,7 +121,10 @@ export interface MatchCandidatePost {
   userId: string;
   type: PostType;
   title: string;
+  status: PostStatus;
   text: string;
+  imageText: string;
+  ocrText: string;
   categoryId: string | null;
   parentCategoryId: string | null;
   areaId: string | null;
@@ -273,7 +279,10 @@ function mapMatchPost(row: MatchPostRow): MatchCandidatePost {
     userId: row.user_id,
     type: row.type,
     title: row.title,
-    text: `${row.title_normalized} ${row.description_normalized} ${row.room_text ?? ""} ${row.ai_tag_text ?? ""}`.trim(),
+    status: row.status,
+    text: `${row.title_normalized} ${row.description_normalized} ${row.room_text ?? ""}`.trim(),
+    imageText: row.image_tag_text ?? "",
+    ocrText: row.ocr_tag_text ?? "",
     categoryId: row.category_id,
     parentCategoryId: row.parent_category_id,
     areaId: row.area_id,
@@ -572,19 +581,24 @@ export const postRepository = {
     const [rows] = await dbPool.query<MatchPostRow[]>(
       `
         SELECT
-          p.id, p.user_id, p.type, p.title, p.title_normalized, p.description_normalized, tags.ai_tag_text,
+          p.id, p.user_id, p.type, p.status, p.title, p.title_normalized, p.description_normalized,
+          tags.ai_tag_text, tags.image_tag_text, tags.ocr_tag_text,
           p.category_id, c.parent_id AS parent_category_id,
           p.area_id, p.building_id, p.room_text, p.lost_found_at
         FROM posts p
         LEFT JOIN item_categories c ON c.id = p.category_id
         LEFT JOIN (
-          SELECT post_id, GROUP_CONCAT(tag SEPARATOR ' ') AS ai_tag_text
+          SELECT
+            post_id,
+            GROUP_CONCAT(tag SEPARATOR ' ') AS ai_tag_text,
+            GROUP_CONCAT(CASE WHEN source IN ('VISION_LABEL', 'VISION_OBJECT', 'MANUAL') THEN tag END SEPARATOR ' ') AS image_tag_text,
+            GROUP_CONCAT(CASE WHEN source = 'OCR' THEN tag END SEPARATOR ' ') AS ocr_tag_text
           FROM ai_tags
           GROUP BY post_id
         ) tags ON tags.post_id = p.id
         WHERE p.id = ?
           AND p.deleted_at IS NULL
-          AND p.status = 'OPEN'
+          AND p.status IN ('OPEN', 'MATCHED')
         LIMIT 1
       `,
       [postId]
@@ -599,19 +613,24 @@ export const postRepository = {
     const [rows] = await dbPool.query<MatchPostRow[]>(
       `
         SELECT
-          p.id, p.user_id, p.type, p.title, p.title_normalized, p.description_normalized, tags.ai_tag_text,
+          p.id, p.user_id, p.type, p.status, p.title, p.title_normalized, p.description_normalized,
+          tags.ai_tag_text, tags.image_tag_text, tags.ocr_tag_text,
           p.category_id, c.parent_id AS parent_category_id,
           p.area_id, p.building_id, p.room_text, p.lost_found_at
         FROM posts p
         LEFT JOIN item_categories c ON c.id = p.category_id
         LEFT JOIN (
-          SELECT post_id, GROUP_CONCAT(tag SEPARATOR ' ') AS ai_tag_text
+          SELECT
+            post_id,
+            GROUP_CONCAT(tag SEPARATOR ' ') AS ai_tag_text,
+            GROUP_CONCAT(CASE WHEN source IN ('VISION_LABEL', 'VISION_OBJECT', 'MANUAL') THEN tag END SEPARATOR ' ') AS image_tag_text,
+            GROUP_CONCAT(CASE WHEN source = 'OCR' THEN tag END SEPARATOR ' ') AS ocr_tag_text
           FROM ai_tags
           GROUP BY post_id
         ) tags ON tags.post_id = p.id
         WHERE p.type = ?
           AND p.id <> ?
-          AND p.status = 'OPEN'
+          AND p.status IN ('OPEN', 'MATCHED')
           AND p.deleted_at IS NULL
       `,
       [oppositeType, excludePostId]
@@ -675,7 +694,18 @@ export const postRepository = {
   },
 
   async markMatchNotified(matchId: string) {
-    await dbPool.execute("UPDATE match_results SET is_notified = TRUE WHERE id = ?", [matchId]);
+    const [result] = await dbPool.execute<ResultSetHeader>(
+      "UPDATE match_results SET is_notified = TRUE WHERE id = ? AND is_notified = FALSE",
+      [matchId]
+    );
+    return result.affectedRows > 0;
+  },
+
+  async deleteMatchPair(lostPostId: string, foundPostId: string) {
+    await dbPool.execute("DELETE FROM match_results WHERE lost_post_id = ? AND found_post_id = ?", [
+      lostPostId,
+      foundPostId
+    ]);
   },
 
   async markPairMatched(lostPostId: string, foundPostId: string) {

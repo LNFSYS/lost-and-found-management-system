@@ -1,15 +1,15 @@
 # Pending Task Checklist
 
-Last audit: 2026-06-30
+Last audit: 2026-07-02
 
 ## Current Audit Summary
 
 | Metric | Count |
 | --- | ---: |
-| Completed checklist items | 70 |
-| Open checklist items | 51 |
+| Completed checklist items | 74 |
+| Open checklist items | 47 |
 
-Open work is concentrated in advanced AI category selection, thumbnail optimization, Java/Node integration tests, background matching queue, smart notification tiers, configurable warehouse retention/disposition proof, config rollback, feedback/negative-feedback review, mobile app, custom AI training/MLOps, and deeper automated hardening tests.
+Open work is concentrated in advanced AI category selection, thumbnail optimization, Java/Node integration tests, background matching queue, notification digest/anti-noise tuning, disposition proof images/forms, config rollback, feedback/negative-feedback review, mobile app, custom AI training/MLOps, and deeper automated hardening tests.
 
 Scope note: the current MVP should be demoed as web + Node backend with Google Vision assisted OCR/tags and rule-based/hybrid matching. Mobile and custom AI training remain future work unless completed later.
 
@@ -54,16 +54,18 @@ Scope note: the current MVP should be demoed as web + Node backend with Google V
 - [x] Add realtime toast when a good match is found.
 - [x] Add notification when a new claim is submitted.
 - [x] Add notification when claim is accepted/rejected.
-- [ ] Add smart notification by score tier or digest.
+- [x] Add score-tiered matching notification thresholds.
+- [ ] Add digest/anti-noise notification batching if campus traffic grows.
 
 ## Handover / Warehouse
 
 - [x] Add job to mark overdue warehouse items.
-- [ ] Add configurable retention period by item type/value.
+- [x] Add configurable retention period by item type/policy.
 - [x] Alert for items nearing expiry.
 - [x] Build overdue item management screen.
 - [ ] Build overdue item disposition report form.
 - [x] Allow overdue processing: dispose, donate, transfer, extend.
+- [x] Block overdue disposal/donation/transfer while active claims or accepted/pending appointments exist.
 - [x] Add warehouse capacity management.
 - [x] Alert when warehouse reaches 80% capacity.
 - [x] Block selecting a full warehouse or suggest alternatives.
@@ -174,7 +176,7 @@ Future enhancement, not current MVP core. Current code uses Google Vision assist
 - [ ] Write tests for claim transition and race condition.
 - [ ] Write tests for warehouse lifecycle.
 - [ ] Write tests for appointment when implemented.
-- [ ] Write tests for notification/matching threshold.
+- [ ] Write tests for notification/matching threshold and score tiers.
 - [x] Standardize demo seed data.
 - [x] Add migration smoke verification script.
 - [ ] Run migration smoke against a freshly created blank demo DB before final submission.

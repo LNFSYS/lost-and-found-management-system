@@ -1,10 +1,10 @@
 # FPTU Lost & Found System - Project Overview
 
-Last updated: 2026-06-30
+Last updated: 2026-07-02
 
 ## 1. One-Line Summary
 
-FPTU Lost & Found System is a web/backend MVP for managing Lost & Found inside FPT University Da Nang campus. It supports LOST/FOUND posts, rule-based/hybrid matching with Google Vision assisted OCR/tags, claim evidence verification, appointments, handover points, warehouse tracking, realtime chat/notifications, reputation, and Admin/Staff operations.
+FPTU Lost & Found System is a web/backend MVP for managing Lost & Found inside FPT University Da Nang campus. It supports LOST/FOUND posts, rule-based/hybrid matching with Google Vision assisted OCR/tags, evidence review confidence, appointments, handover points, warehouse tracking, realtime chat/notifications, reputation, and Admin/Staff operations.
 
 The current project should be presented as a campus pilot/MVP, not as a full production-ready web + mobile + custom AI training system.
 
@@ -16,7 +16,7 @@ The system helps Students, Lecturers, Staff and Admins:
 - Upload public item images and private evidence images where needed.
 - Receive similar-item suggestions from the matching algorithm.
 - Submit claims with ownership evidence.
-- Review evidence with an advisory ownership confidence percentage.
+- Review evidence with an advisory review confidence percentage.
 - Schedule return appointments and use handover points/warehouse tracking.
 - Coordinate through realtime notification and claim chat.
 - Manage campus Lost & Found operations through Staff/Admin dashboards.
@@ -81,7 +81,7 @@ npm run dev:web
 | Web app | Guest/User/Staff/Admin UI |
 | Node API | Current MVP runtime owner: auth, posts, media, matching, claims, appointments, handover, warehouse, admin/staff API, Socket.IO |
 | Java service | Parallel business/admin extension for selected rule-heavy operations when intentionally routed |
-| AI/OCR/evidence support | Google Vision assisted OCR/tags plus rule-based/hybrid matching and evidence confidence support |
+| AI/OCR/evidence support | Google Vision assisted OCR/tags plus rule-based/hybrid matching and evidence review confidence support |
 | Mobile app | Future enhancement, not current MVP core |
 
 For detailed Node/Java boundaries, see `node-java-service-boundary.md`.
@@ -94,10 +94,10 @@ For detailed Node/Java boundaries, see `node-java-service-boundary.md`.
 | Public board | Search/filter/sort, post cards, detail drawer, gallery |
 | My posts | Owner edit, close and soft-delete |
 | Create post | LOST/FOUND fields, item images, private verification/evidence |
-| Matching | Matching popup on login/open and 10-minute interval, dismiss remembered, manual admin re-run |
-| Claim | Claim creation, evidence upload/view, verification percentage, request info, accept/reject/cancel |
+| Matching | Tiered matching score, image/OCR score support, explanation reasons, matching popup on login/open and 10-minute interval, dismiss remembered, manual admin re-run |
+| Claim | Claim creation, evidence upload/view, review confidence percentage, request info, accept/reject/cancel |
 | Handover | Campus map image, marker coordinates, popup, filters, stored item counts |
-| Warehouse | Status, retention deadline, expiry jobs, capacity warning, overdue processing base |
+| Warehouse | Status, policy-based retention deadline, expiry jobs, capacity warning, overdue processing guards, dispose/donate/transfer base |
 | Appointment | Create after accepted claim, accept/reject/reschedule/cancel/complete/reminder |
 | Realtime | Notification toast, claim chat, seen state, unread badge, direct chat image upload |
 | Staff dashboard | Warehouse-focused staff access |
@@ -130,9 +130,9 @@ Current MVP scope:
 
 Known remaining work:
 
-- FPT/university email-domain policy hardening for Google OAuth.
+- Stronger enrollment verification can be added later through student-code/admin approval, but FPT/edu email must not be mandatory for current students.
 - Config rollback UI.
-- Smart notification tiers/digest.
+- Notification digest and anti-noise tuning beyond current score tiers.
 - Handover/return proof image upload.
 - Feedback after successful return and Admin negative-feedback review.
 - Background queue for matching on large datasets.
@@ -153,7 +153,8 @@ Known remaining work:
 | `docs/Overall/thesis-defense-guide-2026.md` | Defense script, demo flow, judge Q&A |
 | `docs/Checklist/master-dev-checklist.md` | Canonical UC assignment/status |
 | `docs/Checklist/pending-tasks.md` | Remaining implementation/testing backlog |
-| `docs/Checklist/business-product-qa-issue-audit.md` | Product/business/QA risks and evidence |
+| `docs/Checklist/release-checklist.md` | Pre-demo/pre-release technical and product checks |
+| `docs/Archive/2026-07-02/business-product-qa-issue-audit.md` | Archived product/business/QA risk evidence |
 | `docs/Requirements and Business Rules/requirements.md` | FR/NFR requirements |
 | `docs/Requirements and Business Rules/business-rules.md` | Business rules |
 | `docs/Requirements and Business Rules/traceability-matrix.md` | BR/FR/NFR/UC traceability |

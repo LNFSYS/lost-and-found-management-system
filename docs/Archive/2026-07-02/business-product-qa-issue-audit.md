@@ -31,10 +31,10 @@ These are not just technical bugs. Each item is reviewed from 4 perspectives:
 The system currently has a solid foundation: OTP auth, LOST/FOUND posts, claims, matching, notifications, handover points, warehouse, admin dashboard, and staff dashboard. However, to operate as an actual product on campus, several business gaps remain:
 
 - Claim and return flow does not yet have a full end-to-end lifecycle: no complete appointment flow, no handover receipt, no return confirmation.
-- Warehouse lacks real operational logic: missing retention deadlines, expiry handling, capacity management, processing history, and proof images.
+- Warehouse has retention deadlines, expiry handling, capacity management and processing history; remaining product gap is disposition proof images/forms and deeper lifecycle tests.
 - Staff dashboard focuses on warehouse but permissions need retesting after recent changes.
 - Report/moderation does not yet have a clear user-facing report UI and lacks complete real-world actions.
-- Matching/AI is functional but lacks queue mechanism, explainability, threshold UI, and retry.
+- Matching/AI is functional with score tiers and explanations; remaining hardening gaps are background queueing, digest/noise control, retry, and larger-data tests.
 - Node API and Java Admin Service both touch some admin/claim/handover tables; ownership is now documented, but integration tests and routing hardening are still needed before production microservice claims.
 - Mobile, custom AI training/MLOps, feedback, deeper analytics, and production hardening remain planned. Realtime chat/notification exists for MVP, but still needs reconnect/offline/isolation tests before production.
 
@@ -56,22 +56,30 @@ Remaining QA focus: warehouse lifecycle tests, claim race-condition tests, appoi
 
 ### Processing Status as of 2026-06-29
 
-- [x] BIZ-WH-01: Added retention deadline `retention_deadline` for warehouse items, defaulting to 60 days if not specified, displayed and editable on Staff/Admin warehouse UI.
+- [x] BIZ-WH-01: Added retention deadline `retention_deadline` for warehouse items, with policy defaults for documents/cards, electronics/high-value items, general items, and perishable/hygiene/unsafe items.
 - [x] BIZ-APT-01: Added API to create return appointment after claim reaches `ACCEPTED` status, with appointment creation UI in FOUND post detail for authorized claim viewers.
 - [x] BIZ-QA-01: Added smoke/e2e core flow script `npm run e2e:core` to test login, create LOST/FOUND, claim, and appointment guard/appointment accepted claim.
 - [x] BIZ-POST-01/BIZ-POST-02: User post edit, close and soft-delete actions are available from post detail for the post owner.
 - [x] BIZ-MOD-01: User-facing post report action is available from post detail.
 - [x] BIZ-MATCH-02/BIZ-MATCH-04/BIZ-MATCH-05: Matching explainability, manual re-run and realtime notification/polling UX are implemented.
+- [x] BIZ-MATCH-06: Matching now uses score tiers, image/OCR score support, and cap/penalty explanations; it does not auto-approve ownership.
 - [x] BIZ-CLAIM-01/BIZ-CLAIM-02/BIZ-CLAIM-03: Claim evidence view, multiple evidence upload, request info, accept, reject and cancel actions are implemented.
 - [x] BIZ-CHAT-01/BIZ-CHAT-02: Claim chat room, auth guard, realtime text/media URL messaging and seen state are implemented.
 - [x] BIZ-DASH-02/BIZ-DASH-03/BIZ-DASH-04: Admin dashboard has LOST/FOUND trend, return rate, category ranking, high-loss area ranking and trusted user ranking.
 - [x] BIZ-REP-01/BIZ-REP-04: Reputation scoring and user-visible reputation history are implemented.
 - [x] BIZ-ARCH-01: Added Node/Java ownership matrix in `docs/Overall/node-java-service-boundary.md`.
-- [x] BIZ-AUTH-01: Added Google OAuth MVP login flow using Google userinfo and Node JWT issuance; FPT domain policy remains a separate hardening task.
+- [x] BIZ-AUTH-01: Added Google OAuth MVP login flow using Google userinfo and Node JWT issuance; strict FPT/edu domain policy is intentionally not required for students.
 - [x] BIZ-CHAT-03/BIZ-CHAT-04: Added realtime unread badge and direct private chat image upload through `/api/claims/:id/chat-image`.
 - [x] BIZ-QA-02/BIZ-QA-05: Added role/privacy smoke script and idempotent demo seed script.
 - [x] BIZ-ARCH-04: Added migration smoke verification script for expected tables/columns after migrations.
 - [~] BIZ-WH-04/BIZ-WH-11: Overdue processing exists, but full disposition/proof-image reporting remains incomplete.
+- [x] BIZ-AUTH-02: Product decision updated: self-registration accepts any valid email with OTP because FPTU students may not have FPT/edu email accounts.
+- [x] BIZ-AUTH-03: Admin user status/role creation changes now write actor and before/after metadata to activity audit logs.
+- [x] BIZ-POST-09/BIZ-SEC-02: Public post list/detail now masks contact info unless the viewer is the owner, Staff, or Admin.
+- [x] BIZ-CLAIM-10: Claim detail access logs evidence views with actor, claim id, and evidence count.
+- [x] BIZ-WH-12: Warehouse updates now enforce allowed state transitions and log create/update/status/process/delete operations.
+- [x] BIZ-SEC-03: Added API-side in-memory rate limits for auth, OTP, post/claim writes, and media uploads. Production shared-store rate limit remains hardening.
+- [x] BIZ-QA-06: Added a release checklist covering env, migrate, seed, build, smoke, role/privacy, and demo checks.
 
 ## 4. Consolidated Issue and Risk Table by Module
 
@@ -79,9 +87,9 @@ Remaining QA focus: warehouse lifecycle tests, claim race-condition tests, appoi
 
 | ID | Severity | User Group | Issue/Risk | Product Impact | Remediation | Acceptance Criteria |
 | --- | --- | --- | --- | --- | --- | --- |
-| BIZ-AUTH-01 | Done | Student, Lecturer | Google OAuth MVP is implemented; strict FPT domain enforcement is still separate | FPTU users can use Google login for demo while university-domain policy remains hardening | Added Google OAuth start/callback flow and Node JWT issuance | User can login via Google; new Google users get USER + STUDENT by default |
-| BIZ-AUTH-02 | Critical | All | No mandatory university email domain policy | Outsiders can register if they have a personal email OTP | Validate email domain for student/lecturer/staff | Non-valid domain emails are blocked or require admin approval |
-| BIZ-AUTH-03 | High | Admin | Admin/staff user creation lacks strong approval/audit | Risk of incorrect privilege assignment | Add audit log and confirmation for sensitive role assignments | Every role change has actor, timestamp, before/after |
+| BIZ-AUTH-01 | Done | Student, Lecturer | Google OAuth MVP is implemented without strict FPT/edu domain enforcement | FPTU users can use Google login even when they use personal email accounts | Added Google OAuth start/callback flow and Node JWT issuance | User can login via Google; new Google users get USER + STUDENT by default |
+| BIZ-AUTH-02 | Done | All | Mandatory university email domain policy is intentionally not required | Avoids blocking real FPTU students who do not have FPT/edu mail accounts | Keep OTP validation, duplicate-email blocking, admin moderation, and account status controls | Gmail/personal email can register if OTP is verified; active duplicate email remains blocked |
+| BIZ-AUTH-03 | Done | Admin | Admin/staff user creation and role/status changes now write audit metadata | Privilege assignment can be traced during QA/demo | Keep UI confirmation as a UX polish task | Every role/status change has actor, timestamp, before/after metadata |
 | BIZ-AUTH-04 | High | Staff | Newly expanded staff permissions need regression testing | Staff may see data they shouldn't or get 403 when using warehouse | Write role matrix tests for admin routes and UI | STAFF can use warehouse, cannot use sensitive user/report/category CRUD |
 | BIZ-AUTH-05 | Medium | User | OTP/login error messages may not be user-friendly enough | User doesn't know if OTP is wrong, expired, or request is rate-limited | Standardize error messages per case | UI shows clear reason and next action |
 | BIZ-AUTH-06 | Medium | User | No clear resend limit/rate-limit UI | Easy to spam OTP or user clicks multiple times | Add countdown, rate limit, and clear copy | Resend button is disabled with timer, API has rate limit |
@@ -99,7 +107,7 @@ Remaining QA focus: warehouse lifecycle tests, claim race-condition tests, appoi
 | BIZ-POST-06 | Medium | User | Search/filter may not be sufficient for real campus use | Users struggle to search by zone, time, category | Add clear filters with state persistence | User can filter by LOST/FOUND, category, area/building, time |
 | BIZ-POST-07 | Medium | User | Single category selection may not suffice for multi-type items | E.g., "student ID inside a wallet" is hard to categorize | Consider multi-tag/secondary category | Post has primary category and optional secondary tags |
 | BIZ-POST-08 | Medium | User | Missing empty state and guidance for low-data feeds | New users don't know what to do | Add empty state with CTA to post/find handover points | When no posts exist, UI provides next action |
-| BIZ-POST-09 | High | User | Contact info may be overly exposed to public | Exposes student phone/email | Hide/mask contact; only show after valid claim or owner permission | Public feed does not expose sensitive contact by default |
+| BIZ-POST-09 | Done | User | Public contact info is masked for non-authorized viewers | Reduces phone/email exposure on public feed/detail | Continue product review for when to reveal contact after claim | Public feed/detail does not expose contact by default |
 | BIZ-POST-10 | Medium | User | No flow to report incorrect post information | Spam/false posts lack a report path | Add public report button | User can report a post with reason and evidence |
 
 ### 4.3 Media, Evidence, Cloudinary, Privacy
@@ -119,11 +127,11 @@ Remaining QA focus: warehouse lifecycle tests, claim race-condition tests, appoi
 | ID | Severity | User Group | Issue/Risk | Product Impact | Remediation | Acceptance Criteria |
 | --- | --- | --- | --- | --- | --- | --- |
 | BIZ-MATCH-01 | High | User | Matching runs synchronously after create/upload, may be slow with large data | User waits long, request timeout | Move heavy matching to background queue | Posting is not delayed; matching processes async and notifies later |
-| BIZ-MATCH-02 | High | User | Match score lacks explainability | User doesn't understand why they got a suggestion | Show match reasons: category, area, time, tags | Match card shows 2-4 clear reasons |
-| BIZ-MATCH-03 | Medium | Admin | No UI to adjust matching threshold/weight | PO/Admin cannot tune sensitivity | Add config UI for threshold/weight | Admin can adjust threshold and changes have history |
-| BIZ-MATCH-04 | Medium | Admin | No manual re-run matching | Cannot recalculate after post edits/config changes | Add re-run matching action | Admin can re-run for a single post or batch |
-| BIZ-MATCH-05 | High | User | Match notification may be polling only, not realtime | User misses items if they don't refresh | Realtime notification or better refetch | User receives timely notification for high-score matches |
-| BIZ-MATCH-06 | Medium | Product | No complete smart notification tiers | User may be spammed or miss medium matches | Apply tiers: high immediate, medium digest | Notification follows score tiers |
+| BIZ-MATCH-02 | Done | User | Match score has explanation support | User can understand why a suggestion appeared | Show match reasons: category, area, time, tags, OCR/tokens | Explanation endpoint returns clear reasons |
+| BIZ-MATCH-03 | Done | Admin | Matching threshold/weight config UI exists for MVP tuning | PO/Admin can tune sensitivity | Add config UI for threshold/weight | Admin can adjust threshold/weight and review history |
+| BIZ-MATCH-04 | Done | Admin | Manual re-run matching exists | Admin can recalculate after post edits/config changes | Add re-run matching action | Admin can re-run for a single post |
+| BIZ-MATCH-05 | Done | User | Realtime/polling UX exists for matching notifications | User can receive timely updates | Realtime notification plus refetch | User receives timely notification for high-score matches |
+| BIZ-MATCH-06 | Partial | Product | Score-tier notification exists, but digest/noise policy is still backlog | User may still receive too many individual notifications at larger scale | Add digest/anti-noise batching later | Notification follows score tiers now; digest remains future hardening |
 | BIZ-MATCH-07 | Critical | Product/QA | AI is advisory only, must not auto-decide claims | Risk of returning item to wrong person | Clearly state rule in UI/flow | Match never auto-accepts a claim |
 | BIZ-MATCH-08 | Medium | MLOps | No dataset/model version/feedback loop | AI is hard to improve and explain | Add separate MLOps backlog | Each model has version, metrics, approval status |
 
@@ -140,7 +148,7 @@ Remaining QA focus: warehouse lifecycle tests, claim race-condition tests, appoi
 | BIZ-CLAIM-07 | Critical | User | Accepted claim is not linked to chat/appointment/return | After accept, there is still no return step | Create next step after accept | After accept, appointment/chat/return guidance is available |
 | BIZ-CLAIM-08 | High | QA | No e2e test for duplicate claim/race condition | Easy to create duplicate claims | Write service + DB unique tests | 2 concurrent requests create only 1 claim |
 | BIZ-CLAIM-09 | Medium | Product | No evidence verification guidelines | Staff/owner decisions are subjective | Create claim verification checklist | UI has checklist for serial/description/time/location/image |
-| BIZ-CLAIM-10 | Critical | Security | Evidence access may not be audited | Need to know who viewed sensitive evidence | Add audit for evidence access if needed | Evidence access is logged |
+| BIZ-CLAIM-10 | Done | Security | Evidence access is audited on claim detail views | Sensitive evidence access can be traced | Tune log volume later if needed | Evidence access is logged with actor and evidence count |
 
 ### 4.6 Handover Point and Campus Map
 
@@ -158,9 +166,9 @@ Remaining QA focus: warehouse lifecycle tests, claim race-condition tests, appoi
 
 | ID | Severity | User Group | Issue/Risk | Product Impact | Remediation | Acceptance Criteria |
 | --- | --- | --- | --- | --- | --- | --- |
-| BIZ-WH-01 | Done | Staff/Admin | Item retention deadline is now implemented | Warehouse knows when to process old items | Added retentionDeadline per warehouse item | Each item has a retention deadline shown on warehouse UI |
-| BIZ-WH-02 | Critical | Staff/Admin | No job to mark items as EXPIRED | Overdue items remain STORED | Add cron to expire warehouse items | Overdue items automatically transition to EXPIRED |
-| BIZ-WH-03 | Critical | Staff/Admin | No overdue processing: dispose/donate/transfer/extend | Does not follow campus procedures | Add expired processing flow | EXPIRED items have actions and logs |
+| BIZ-WH-01 | Done | Staff/Admin | Item retention deadline and policy defaults are implemented | Warehouse knows when to process old items by item type | Added retentionDeadline and policy config | Each item has a retention deadline shown on warehouse UI |
+| BIZ-WH-02 | Done | Staff/Admin | Job to mark items as EXPIRED exists | Overdue items do not remain stored indefinitely | Add cron to expire warehouse items | Overdue items automatically transition to EXPIRED |
+| BIZ-WH-03 | Done | Staff/Admin | Overdue processing supports dispose/donate/transfer/extend base flow | Campus procedures have a basic operational path | Add expired processing flow | EXPIRED items have guarded actions and logs |
 | BIZ-WH-04 | Critical | Staff/Admin | No disposition report for overdue items | Lacks evidence if disputed | Add disposition record + optional image | Each dispose/donate/transfer has actor, reason, image |
 | BIZ-WH-05 | High | Staff/Admin | No warehouse/handover point capacity | Overloaded point still accepts items | Add capacity and 80/100% warning | 80% shows warning, 100% blocks or redirects |
 | BIZ-WH-06 | High | Staff | Staff dashboard lacks advanced warehouse filter/search | Warehouse with many items is hard to operate | Add search by code, status, handover, category, date | Staff can filter items needing attention |
@@ -169,7 +177,7 @@ Remaining QA focus: warehouse lifecycle tests, claim race-condition tests, appoi
 | BIZ-WH-09 | High | Staff | No complete storage_logs on Node warehouse UI | Warehouse has no movement history | Show item timeline | Staff can view receive, store, claim, return, processing history |
 | BIZ-WH-10 | Medium | Staff | Staff may delete items if UI/route is incorrect | Loses warehouse tracking | Delete is Admin-only; staff cannot see delete button | STAFF delete request returns 403 |
 | BIZ-WH-11 | Medium | Staff | No proof image for receive/return | Disputes are hard to resolve | Upload proof image for receive/return | Each return has optional proof |
-| BIZ-WH-12 | High | PO | Warehouse has many statuses but no clear state machine | Staff transitions status arbitrarily | Define allowed transitions | API only allows valid transitions |
+| BIZ-WH-12 | Done | PO | Warehouse state machine is enforced in update/status APIs | Staff cannot arbitrarily jump between lifecycle states | Add automated transition tests | API only allows valid transitions |
 | BIZ-WH-13 | Medium | Staff | No dashboard organized by shift | Staff doesn't know today's tasks | Staff dashboard queue by approaching expiry, claimed, pending | Dashboard shows prioritized queue |
 | BIZ-WH-14 | Medium | Admin | No warehouse CSV/PDF report | End-of-term reports are done manually | Export warehouse report | Admin can export by time/status/handover |
 
@@ -242,10 +250,10 @@ Remaining QA focus: warehouse lifecycle tests, claim race-condition tests, appoi
 | ID | Severity | User Group | Issue/Risk | Product Impact | Remediation | Acceptance Criteria |
 | --- | --- | --- | --- | --- | --- | --- |
 | BIZ-SEC-01 | Blocker | All | .env/.env.example may contain real secrets | Credential exposure | Check, rotate, replace with placeholders | No real secrets in repo |
-| BIZ-SEC-02 | Critical | User | Contact info and evidence need clear privacy rules | Phone/email/evidence exposure | Data classification and UI masking | Public views don't show private fields |
-| BIZ-SEC-03 | High | IT | Missing rate limit for auth/upload/claim | OTP spam, claim spam, upload abuse | Add rate limits | Sensitive APIs have limits |
+| BIZ-SEC-02 | Partial | User | Contact info masking and evidence guards exist; final privacy wording/policy still needs review | Phone/email/evidence exposure is reduced | Finish data classification copy and privacy policy | Public views don't show contact fields; evidence remains role-guarded |
+| BIZ-SEC-03 | Done | IT | Sensitive API rate limits are added with an in-memory limiter | OTP/login/upload/claim spam is reduced for MVP/demo | Use Redis/shared limiter before scaled production | Sensitive APIs have limits |
 | BIZ-SEC-04 | High | IT | CORS/JWT between Java and Node needs synchronization | Token valid in one service, fails in the other | Shared JWT config and testing | Same token works per valid role |
-| BIZ-SEC-05 | High | Admin | Audit log does not cover all sensitive operations | Hard to trace back during disputes | Log role, moderation, warehouse, evidence access | Audit can trace actor/action/time |
+| BIZ-SEC-05 | Partial | Admin | Audit covers config, role/status, warehouse, claim transitions, and evidence views; moderation/export depth can improve | Most demo-critical disputes are traceable | Add fuller moderation/export audit later | Audit can trace actor/action/time for core sensitive operations |
 | BIZ-SEC-06 | Medium | IT | No data retention/privacy policy | Old data stored indefinitely | Define retention for post/media/evidence | Policy exists with corresponding jobs/ops |
 | BIZ-SEC-07 | Medium | IT | File upload needs virus/content scanning for production | Risk of malicious files/inappropriate images | At minimum validate MIME and size; add moderation | Wrong MIME is blocked |
 
@@ -270,7 +278,7 @@ Remaining QA focus: warehouse lifecycle tests, claim race-condition tests, appoi
 | BIZ-QA-03 | High | Team | Missing warehouse lifecycle tests | Warehouse is a critical flow but status changes are error-prone | Unit/API transition tests | Invalid status transitions are blocked |
 | BIZ-QA-04 | High | Team | Missing claim race condition tests | Claim may be accepted/rejected simultaneously | Concurrency test for Java service | Only 1 transition succeeds |
 | BIZ-QA-05 | Done | Team | Stable demo seed is available | Demo no longer depends on manual local DB setup for accounts/basic stock | Added idempotent demo seed script | `npm run seed:demo` seeds admin/staff/student users, handover points and warehouse items |
-| BIZ-QA-06 | Medium | Team | No release checklist | Easy to forget migrate/build/env | Add release checklist | Each release checks build, migrate, smoke, role |
+| BIZ-QA-06 | Done | Team | Release checklist is documented | Reduces missed migrate/build/env/demo steps | Keep checklist updated per release | Each release checks build, migrate, smoke, role |
 | BIZ-QA-07 | Medium | Team | API error logging is not user-friendly enough | 500 errors are hard to debug | Log request id and safe error | Client receives clear message, server has trace |
 | BIZ-QA-08 | Medium | Team | No monitoring/job health | Cron expire/matching failures go unnoticed | Add health/log for jobs | Job failures have log/alert |
 
@@ -289,7 +297,7 @@ Remaining QA focus: warehouse lifecycle tests, claim race-condition tests, appoi
 
 ### 5.1 Student Who Lost an Item
 
-1. Registration/login may not enforce FPT domain.
+1. Registration accepts any valid email after OTP; FPT/edu email is not mandatory because not all students receive campus email accounts.
 2. LOST post risks exposing verification info if UI doesn't separate private/public.
 3. After system suggests a match, user doesn't understand the match reason.
 4. After submitting a claim for a FOUND post, there is still no dedicated "my claims" tracking page.
@@ -300,7 +308,7 @@ Remaining QA focus: warehouse lifecycle tests, claim race-condition tests, appoi
 
 1. FOUND post may lack item holding location if validation is not strict.
 2. User doesn't know whether to hold the item or bring it to which handover point.
-3. Contact info may be overly public.
+3. Public contact info is masked by default; product still needs to decide when to reveal it after a valid claim.
 4. When a claim arrives, finder/owner can process it, but reviewer guidance/checklist can be clearer.
 5. In-system chat/appointment exists after accepted claim; reconnect/offline chat tests and no-show handling remain incomplete.
 
@@ -311,7 +319,7 @@ Remaining QA focus: warehouse lifecycle tests, claim race-condition tests, appoi
 3. Handover point/warehouse capacity management exists, but capacity policy UI can be improved.
 4. No item identifier code/QR for physical matching.
 5. No receipt/return/overdue processing report with images.
-6. No state machine to prevent arbitrary status transitions.
+6. Warehouse state machine now blocks arbitrary status transitions; automated lifecycle tests are still needed.
 
 ### 5.4 Admin/PO
 
@@ -332,8 +340,8 @@ Remaining QA focus: warehouse lifecycle tests, claim race-condition tests, appoi
 - [x] BIZ-WH-02/BIZ-WH-03: Expire job and overdue processing.
 - BIZ-WH-04: Full disposition report/proof image remains open.
 - [x] BIZ-QA-01: Smoke/e2e core flow.
-- BIZ-QA-02: Role matrix.
-- BIZ-SEC-01, BIZ-SEC-02: Secret/privacy/contact/evidence.
+- [~] BIZ-QA-02: Role matrix started; expand endpoint coverage.
+- [~] BIZ-SEC-01, BIZ-SEC-02: Secret/privacy/contact/evidence hardening is improved; final privacy policy remains.
 
 ### Priority Sprint 2 - Stabilize Campus Operations
 
@@ -342,15 +350,16 @@ Remaining QA focus: warehouse lifecycle tests, claim race-condition tests, appoi
 - [x] BIZ-MOD-01: Public report action.
 - BIZ-MOD-02 through BIZ-MOD-04: Moderation history/session invalidation still need hardening.
 - [x] BIZ-POST-01/BIZ-POST-02/BIZ-POST-04: Edit/close/delete post and FOUND holding validation.
-- BIZ-POST-03/BIZ-POST-09: Public/private copy and contact masking still need product review.
+- [x] BIZ-POST-09: Public contact masking implemented.
+- BIZ-POST-03: Public/private copy still needs product review.
 - BIZ-HAND-02, BIZ-HAND-05: Map image URL and version markers.
 
 ### Priority Sprint 3 - Enhance Experience and Trust
 
 - [x] BIZ-MATCH-02/BIZ-MATCH-04/BIZ-MATCH-05: Explainability, manual re-run and realtime notification UX.
-- BIZ-MATCH-01/BIZ-MATCH-03/BIZ-MATCH-06: Queue, config UI and notification tiers remain open.
+- BIZ-MATCH-01/BIZ-MATCH-06: Background queue and digest/anti-noise notification policy remain open.
 - [x] BIZ-CHAT-01/BIZ-CHAT-02: Chat per claim and room guard.
-- BIZ-CHAT-03/BIZ-CHAT-04: Unread badge and direct file upload remain open.
+- [x] BIZ-CHAT-03/BIZ-CHAT-04: Unread badge and direct file upload are implemented; reconnect/offline tests remain open.
 - [x] BIZ-REP-01/BIZ-REP-04: Reputation scoring/history.
 - BIZ-REP-02/BIZ-REP-03: Feedback and risk review remain open.
 - [x] BIZ-DASH-02/BIZ-DASH-04: Core charts and trusted users.

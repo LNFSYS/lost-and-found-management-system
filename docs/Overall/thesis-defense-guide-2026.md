@@ -6,7 +6,7 @@ Last updated: 2026-06-30
 
 ### Short Project Description
 
-FPTU Lost & Found Management System is a web/backend MVP for managing the Lost & Found process inside FPT University Da Nang campus. The system supports LOST/FOUND posts, hybrid/rule-based matching with Google Vision assisted OCR/tags, claim evidence verification, appointment scheduling, warehouse/handover point management, realtime notifications/chat, and admin/staff dashboards.
+FPTU Lost & Found Management System is a web/backend MVP for managing the Lost & Found process inside FPT University Da Nang campus. The system supports LOST/FOUND posts, hybrid/rule-based matching with Google Vision assisted OCR/tags, claim evidence review confidence, appointment scheduling, warehouse/handover point management, realtime notifications/chat, and admin/staff dashboards.
 
 Mobile support and custom AI training/MLOps are treated as future extensions, not the core deliverable of the current project.
 
@@ -28,8 +28,8 @@ The project focuses on a campus pilot-ready MVP for the complete web/backend flo
 - Node.js backend API, MySQL schema/migrations, auth and role guard.
 - LOST/FOUND post creation, search, filter, detail, update/close/delete where allowed.
 - Google Vision assisted OCR/tags when configured.
-- Hybrid/rule-based matching using text, category, location, time, and OCR/tag metadata.
-- Claim submission with evidence and ownership confidence support.
+- Hybrid/rule-based matching using text, category, location, time, image tags, OCR/tag metadata, and score tiers.
+- Claim submission with evidence and advisory review confidence support.
 - Appointment, handover point, warehouse item, dashboard, notification, and realtime chat flows.
 - Requirements, business rules, traceability, checklist, and QA/product audit documentation.
 
@@ -58,12 +58,12 @@ This project is not only CRUD because it models a full real campus workflow: mat
 | Risky wording | Safer wording |
 | --- | --- |
 | AI training | Google Vision assisted OCR/tagging, future custom AI training |
-| AI model | Hybrid/rule-based matching with OCR/tag support |
+| AI model | Hybrid/rule-based matching with image/OCR tag support |
 | AI-powered system | AI-assisted Lost & Found MVP |
 | Production-ready | MVP-ready, campus pilot-ready |
 | Mobile app completed | Mobile extension planned / mobile prototype, verify in code |
 | Complete microservices | Node.js core backend plus Java business-service extension, verify integration boundary |
-| Automatic ownership decision | Evidence confidence is advisory; staff/user decision is still required |
+| Automatic ownership decision | Evidence review confidence is advisory; staff/user decision is still required |
 | Fully secure | Role-based access and JWT guards are implemented; production hardening remains future work |
 
 ## 3. Presentation Script 5-7 Minutes
@@ -76,9 +76,9 @@ Our target users are Student, Lecturer, Staff, and Admin. Students and lecturers
 
 Our solution is a web/backend MVP for the campus Lost & Found workflow. The core flow is: a user creates a LOST or FOUND post, the system suggests similar items, the owner submits a claim with evidence, staff or the post owner verifies the claim, then the system supports appointment scheduling, handover point selection, warehouse tracking, realtime notification, and dashboard monitoring.
 
-Technically, the current MVP uses a React TypeScript web app, a Node.js API, MySQL database with migrations, JWT authentication, Socket.IO for realtime features, Cloudinary for media, and Google Vision assisted OCR/tags when configured. The matching is hybrid/rule-based. It uses text similarity, category, location, time, and OCR/tag metadata. We do not claim that this is a custom trained AI model in the current version.
+Technically, the current MVP uses a React TypeScript web app, a Node.js API, MySQL database with migrations, JWT authentication, Socket.IO for realtime features, Cloudinary for media, and Google Vision assisted OCR/tags when configured. The matching is hybrid/rule-based. It uses text similarity, category, location, time, image tags, OCR/tag metadata, and score tiers. We do not claim that this is a custom trained AI model in the current version.
 
-The key features are role-based access, LOST/FOUND post management, matching suggestions, claim evidence upload, ownership confidence support, appointment and handover, warehouse management, realtime chat/notification, and admin/staff dashboard.
+The key features are role-based access, LOST/FOUND post management, matching suggestions, claim evidence upload, review confidence support, appointment and handover, warehouse management, realtime chat/notification, and admin/staff dashboard.
 
 In the demo, we will first log in as a user, create a lost post, then create a found post. Next, we show matching suggestions. After that, we submit a claim with evidence, review the claim as staff/admin, create an appointment, and show the handover/warehouse and dashboard views. If realtime is running, we also show notification or chat updates.
 
@@ -93,11 +93,11 @@ In conclusion, our project delivers a realistic campus Lost & Found MVP, not jus
 | 1 | Login as Student/Lecturer | This role can create posts, search, submit claims, and receive notifications. Google OAuth can be shown if credentials are configured. | How do you protect role access? | JWT and role guards are implemented; role/privacy smoke exists, but full role matrix tests still need expansion. |
 | 2 | Create LOST post | LOST post includes description, location, time, contact, and private ownership details. | Why private evidence? | It helps verify ownership without exposing sensitive details publicly. |
 | 3 | Create FOUND post | FOUND post records where the item is held or which handover point is used. | Who can create FOUND posts? | Users can report found items; Staff/Admin can manage storage and handover. |
-| 4 | Show matching result | Matching compares text, category, location, time, and OCR/tag metadata. | Is this AI? | It is hybrid/rule-based matching with Google Vision assisted OCR/tags, not a custom trained model. |
+| 4 | Show matching result | Matching compares text, category, location, time, image tags, OCR/tag metadata, and score tiers. | Is this AI? | It is hybrid/rule-based matching with Google Vision assisted OCR/tags, not a custom trained model. |
 | 5 | Owner submits claim evidence | Claim requires ownership description and optional evidence images. | Can anyone claim anything? | Duplicate/self-claim and permission rules are guarded; evidence is reviewed before return. |
-| 6 | Staff/Admin verifies claim | The system shows evidence and ownership confidence as decision support. | Does the system auto-approve? | No. Confidence is advisory; human review is still required. |
+| 6 | Staff/Admin verifies claim | The system shows evidence and review confidence as decision support. | Does the system auto-approve? | No. Confidence is advisory; human review is still required. |
 | 7 | Create appointment/handover | Accepted claim can proceed to appointment and return location. | Why appointment after claim? | It avoids handing items to unverified users and keeps custody traceable. |
-| 8 | Warehouse/handover point | Staff tracks where the item is stored, retention, and item status. | What happens to overdue items? | The system supports retention/overdue processing; detailed campus policy can be extended. |
+| 8 | Warehouse/handover point | Staff tracks where the item is stored, retention, and item status. | What happens to overdue items? | The system supports policy-based retention and guarded overdue processing; proof forms can be extended. |
 | 9 | Admin dashboard | Admin sees overview, moderation, reports, users, categories, locations, handover, warehouse. | Is Staff same as Admin? | No. Staff has narrower warehouse/handover-oriented access. |
 | 10 | Realtime notification/chat | Socket.IO supports realtime notification/chat for claim coordination. | Is it reliable in production? | It is MVP-ready; production needs monitoring, reconnect testing, and load testing. |
 
@@ -126,7 +126,7 @@ No. Current implementation uses Google Vision assisted OCR/tags and hybrid/rule-
 Because Google Vision can extract labels/tags/OCR, but ownership decisions are still rule-based and human-reviewed.
 
 7. How does matching work?  
-It compares normalized text, category, location, time, and OCR/tag metadata, then returns a score and suggestions.
+It compares normalized text, category, location, time, image tags and OCR/tag metadata, then returns a tiered score, suggestions and explanation reasons.
 
 8. Can matching be wrong?  
 Yes. It is only a suggestion, so claim evidence and human verification are required.
@@ -222,7 +222,7 @@ The current limitation is not a weakness if explained correctly. The project int
 
 - Mobile app: planned extension, not current core.
 - Custom AI training/MLOps: future work after enough labeled data exists.
-- Matching: currently hybrid/rule-based/OCR-assisted, not a self-trained ML model.
+- Matching: currently hybrid/rule-based/OCR-assisted with score tiers, not a self-trained ML model.
 - Production hardening: needs monitoring, backup, load testing, better audit logs, and stronger e2e test coverage.
 - Testing: role/privacy and migration smoke scripts exist; still needs broader warehouse lifecycle, claim race condition, realtime isolation, clean blank-DB, and load tests.
 - Java/Node boundary: documented as Node core web API plus Java business-service extension; production microservices still require stricter routing and integration tests.
@@ -245,8 +245,8 @@ Nhóm em có nhiều module, nhưng core deliverable của nhóm là web/backend
 | Architecture | React web, Node API, MySQL, Socket.IO, Cloudinary, Google Vision, Java extension | Fully production microservices | Boundary challenge |
 | Database Overview | Main entities and relationships | Every column in detail | Too long, low value |
 | Matching/OCR | Rule-based/hybrid matching with OCR/tag support | Custom trained AI model | False claim risk |
-| Claim Verification | Evidence plus confidence support, human decision required | System proves owner automatically | Legal/business risk |
-| Warehouse/Handover | Tracks custody, handover points, retention/status | Fully automated campus logistics | Overclaim |
+| Claim Verification | Evidence plus review confidence support, human decision required | System proves owner automatically | Legal/business risk |
+| Warehouse/Handover | Tracks custody, handover points, policy retention/status | Fully automated campus logistics | Overclaim |
 | Dashboard | Admin/Staff overview, reports, moderation, warehouse | Enterprise BI analytics | Overclaim |
 | Demo Scenario | One clear happy path with prepared data | Random live exploration | Demo failure risk |
 | Testing/QA | Build/type checks, smoke flow, QA audit, known gaps | Full coverage | Judge may ask test evidence |

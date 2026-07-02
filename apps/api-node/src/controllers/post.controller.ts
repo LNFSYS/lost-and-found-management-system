@@ -50,7 +50,7 @@ export const postController = {
   },
 
   async detail(request: Request, response: Response) {
-    const detail = await postService.getPostDetail(requireStringParam(request.params.id, "id"));
+    const detail = await postService.getPostDetail(requireStringParam(request.params.id, "id"), request.auth);
     response.json(ok(detail));
   },
 

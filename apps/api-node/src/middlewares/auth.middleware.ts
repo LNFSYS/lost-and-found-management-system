@@ -39,6 +39,29 @@ export function requireAuth(request: Request, _response: Response, next: NextFun
   }
 }
 
+export function optionalAuth(request: Request, _response: Response, next: NextFunction) {
+  const authHeader = request.header("authorization");
+  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
+
+  if (!token) {
+    next();
+    return;
+  }
+
+  const accessSecret = env.jwtAccessSecret;
+  if (!isConfigured(accessSecret)) {
+    next(new HttpError(500, "JWT_ACCESS_SECRET is not configured"));
+    return;
+  }
+
+  try {
+    request.auth = jwt.verify(token, accessSecret) as AccessTokenPayload;
+    next();
+  } catch {
+    next(new HttpError(401, "Invalid or expired token"));
+  }
+}
+
 export function requireAnyRole(roles: string[]) {
   return (request: Request, _response: Response, next: NextFunction) => {
     const userRoles = request.auth?.roles ?? [];

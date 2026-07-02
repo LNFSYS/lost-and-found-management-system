@@ -4,6 +4,7 @@ build/
 .env
 .env.*
 !.env.example
+*.pem
 .DS_Store
 coverage/
 target/

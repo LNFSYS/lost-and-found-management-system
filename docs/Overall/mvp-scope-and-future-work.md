@@ -1,6 +1,6 @@
 # MVP Scope And Future Work
 
-Last updated: 2026-06-30
+Last updated: 2026-07-02
 
 ## Current MVP Positioning
 
@@ -10,7 +10,7 @@ The core demo deliverable is the React web app plus the Node.js backend and MySQ
 
 1. Create LOST or FOUND post.
 2. Upload item images and private evidence where needed.
-3. Run rule-based/hybrid matching using title, description, category, location, time, and Google Vision assisted metadata.
+3. Run rule-based/hybrid matching using title, description, category, location, time, image tags, and OCR/serial-like metadata.
 4. Notify users about likely matches.
 5. Submit claim with ownership evidence.
 6. Review evidence and show ownership confidence as decision support.
@@ -24,8 +24,8 @@ The core demo deliverable is the React web app plus the Node.js backend and MySQ
 Implemented scope:
 
 - Google Vision assisted labels/tags/OCR when configured.
-- Rule-based/hybrid matching with text similarity, category, location, time, and Vision/OCR metadata.
-- Evidence verification percentage as advisory support for finder/staff review.
+- Rule-based/hybrid matching with text similarity, category, location, time, Vision/image tags, OCR text, score tiers, and explanation reasons.
+- Evidence review confidence as advisory support for finder/staff review.
 
 Not claimed as current MVP:
 
@@ -41,23 +41,35 @@ The project can be explained with a three-layer verification model, but only Lay
 
 | Layer | Current status | Explanation |
 | --- | --- | --- |
-| Layer 1 - Rule-based/hybrid matching | Implemented | TF-IDF/cosine text similarity plus category, location, time, Vision tags/OCR and configurable weights |
+| Layer 1 - Rule-based/hybrid matching | Implemented | TF-IDF/cosine text similarity plus category, location, time, Vision/image tags, OCR/serial-like tokens, configurable weights, score tiers, and explanation reasons |
 | Layer 2 - Custom trained AI model | Future work | Would require labeled data, model registry, evaluation metrics, inference endpoint and fallback strategy |
-| Layer 3 - Human evidence verification | Implemented as decision support | Claim evidence and ownership confidence support reviewer decisions; the system must not auto-approve ownership |
+| Layer 3 - Human evidence verification | Implemented as decision support | Claim evidence and review confidence support reviewer decisions; the system must not auto-approve ownership |
 
-Current Layer 1 scoring uses:
+Current Layer 1 scoring uses configurable defaults:
 
 | Component | Default weight |
 | --- | ---: |
-| Text/title/description/OCR tags | 40% |
-| Category | 30% |
-| Location | 20% |
+| Text/title/description | 30% |
+| Category | 20% |
+| Location | 15% |
 | Time proximity | 10% |
+| Vision/image tags | 15% |
+| OCR/serial-like text | 10% |
+
+Current score tiers:
+
+| Score | Behavior |
+| --- | --- |
+| `< 45%` | Ignored; stale match rows are removed on re-run |
+| `45-59%` | Saved as weak internal candidate |
+| `60-74%` | Shown as user suggestion |
+| `75-84%` | Sends lightweight match notification |
+| `>= 85%` | High-confidence advisory match; still not ownership approval |
 
 Important defense wording:
 
 - "The system suggests likely matches; it does not decide ownership automatically."
-- "The verification percentage is advisory and must be reviewed with claimant evidence."
+- "The review confidence percentage is advisory and must be reviewed with claimant evidence."
 - "Custom AI training is future work after enough labeled campus data is collected."
 
 ## Mobile Scope
@@ -79,9 +91,9 @@ See [node-java-service-boundary.md](node-java-service-boundary.md) for the owner
 ## Known Future Work
 
 - Config rollback UI.
-- FPT/university email-domain policy hardening for Google OAuth.
+- Stronger enrollment verification can be added later through student-code/admin approval, but FPT/edu email must not be mandatory for current students.
 - Realtime chat reconnect/offline/socket-room isolation hardening.
-- Smart notification tiers/digest.
+- Notification digest and anti-noise tuning beyond current score tiers.
 - Handover proof image upload.
 - Feedback after successful return and negative-feedback review.
 - Background matching queue for large data.

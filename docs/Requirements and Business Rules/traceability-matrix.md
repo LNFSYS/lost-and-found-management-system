@@ -1,6 +1,6 @@
 # Traceability Matrix
 
-Last audit: 2026-06-30
+Last audit: 2026-07-02
 
 This document links Business Rules, Requirements, and the canonical 100-UC set in `docs/Checklist/master-dev-checklist.md`. Each UC has exactly one primary owner.
 
@@ -16,7 +16,7 @@ This document links Business Rules, Requirements, and the canonical 100-UC set i
 | BR-08 | FR-POST-01, FR-HANDOVER-01 | UC-040, UC-041, UC-055, UC-058 | Implemented |
 | BR-09 | FR-MEDIA-01, NFR-PRIV-01 | UC-048, UC-049, UC-050, UC-051, UC-087 | Partial |
 | BR-10 | FR-MEDIA-01, FR-CLAIM-01, NFR-PRIV-01, NFR-RT-01 | UC-049, UC-054, UC-078, UC-079, UC-083 | Partial |
-| BR-11 | FR-AI-01, FR-AI-02, FR-CLAIM-03, NFR-AI-01 | UC-070, UC-076, UC-089, UC-090, UC-092 | Partial |
+| BR-11 | FR-AI-01, FR-AI-02, FR-CLAIM-03, NFR-AI-01 | UC-070, UC-076, UC-089, UC-090, UC-092 | Implemented |
 | BR-12 | FR-MATCH-01, FR-NOTI-01, NFR-PERF-01 | UC-068, UC-069, UC-070, UC-071, UC-072, UC-073, UC-076 | Implemented |
 | BR-13 | FR-MATCH-01, FR-NOTI-01 | UC-073, UC-074, UC-083 | Implemented |
 | BR-14 | FR-CLAIM-01 | UC-052, UC-053 | Implemented |
@@ -24,7 +24,7 @@ This document links Business Rules, Requirements, and the canonical 100-UC set i
 | BR-16 | FR-CLAIM-03, NFR-AI-01 | UC-089, UC-090, UC-092 | Implemented |
 | BR-17 | FR-HANDOVER-01 | UC-008, UC-009, UC-010, UC-055, UC-056, UC-057, UC-058 | Implemented |
 | BR-18 | FR-WAREHOUSE-01, NFR-DATA-01, NFR-AUDIT-01 | UC-011, UC-012, UC-013, UC-014, UC-015, UC-059, UC-060 | Implemented |
-| BR-19 | FR-WAREHOUSE-01, FR-WAREHOUSE-02 | UC-016, UC-017, UC-061 | Partial |
+| BR-19 | FR-WAREHOUSE-01, FR-WAREHOUSE-02 | UC-016, UC-017, UC-061 | Implemented |
 | BR-20 | FR-WAREHOUSE-02, FR-NOTI-01 | UC-018, UC-019, UC-020 | Partial |
 | BR-21 | FR-APPT-01 | UC-021, UC-022, UC-023, UC-024 | Implemented |
 | BR-22 | FR-RT-01, NFR-RT-01, NFR-SEC-02 | UC-077, UC-078, UC-079 | Implemented |

@@ -65,6 +65,16 @@ function overlapScore(left: string | null | undefined, right: string | null | un
   return Math.min(1, overlap / Math.min(leftTokens.size, rightTokens.size));
 }
 
+function privateSignalScore(value: string) {
+  const normalized = normalizeText(value);
+  const patterns = [
+    /\b(serial|imei|ma so|ma may|so seri|hoa don|receipt|bill|scratch|vet xuoc|phu kien|op lung|sticker)\b/,
+    /\b[a-z]{2,}\d{3,}\b/,
+    /\b\d{6,}\b/
+  ];
+  return patterns.some((pattern) => pattern.test(normalized)) ? 1 : 0;
+}
+
 function timeConfidence(claimTime: string | null | undefined, postTime: string | null | undefined) {
   if (!claimTime || !postTime) {
     return 0;
@@ -169,6 +179,20 @@ export const claimService = {
 
     if (auth.sub !== result.claim.claimant.id && !canReviewClaims(auth, result.claim.postOwnerId)) {
       throw new HttpError(403, "You do not have permission to view this claim");
+    }
+
+    if (result.evidence.length > 0) {
+      await userRepository.createActivityLog({
+        userId: auth.sub,
+        action: "CLAIM_EVIDENCE_VIEWED",
+        entityType: "CLAIM",
+        entityId: claimId,
+        metadata: {
+          evidenceCount: result.evidence.length,
+          claimantId: result.claim.claimant.id,
+          postOwnerId: result.claim.postOwnerId
+        }
+      });
     }
 
     return result;
@@ -321,36 +345,55 @@ export const claimService = {
     ].filter(Boolean).join(" ");
 
     const textScore = overlapScore(claimText, postText);
-    const evidenceScore = evidenceText.trim() ? Math.max(0.2, overlapScore(evidenceText, postText)) : 0;
+    const privateSignal = privateSignalScore(claimText);
+    const evidenceScore = evidenceText.trim()
+      ? Math.max(privateSignal > 0 ? 0.35 : 0, overlapScore(evidenceText, postText), privateSignal)
+      : 0;
     const locationScore = overlapScore(detail.claim.approximateLocation, postLocation);
     const timeScore = timeConfidence(detail.claim.approximateLostAt, post.lostFoundAt);
     const matchScore = claimantMatch?.totalScore ?? 0;
+    const consistencyScore = Math.min(1, (textScore + locationScore + timeScore) / 3 + (privateSignal > 0 ? 0.15 : 0));
 
     const ownershipScore =
-      0.35 * matchScore +
-      0.25 * textScore +
+      0.25 * matchScore +
+      0.2 * textScore +
       0.15 * locationScore +
-      0.15 * timeScore +
-      0.1 * evidenceScore;
-    const ownershipConfidence = Math.round(Math.max(0, Math.min(1, ownershipScore)) * 100);
+      0.1 * timeScore +
+      0.2 * evidenceScore +
+      0.1 * consistencyScore;
+    const cappedOwnershipScore =
+      privateSignal === 0 && !claimantMatch ? Math.min(ownershipScore, 0.65) : ownershipScore;
+    const ownershipConfidence = Math.round(Math.max(0, Math.min(1, cappedOwnershipScore)) * 100);
+    const reviewConfidenceTier =
+      ownershipConfidence >= 85
+        ? "STRONG_REVIEW"
+        : ownershipConfidence >= 70
+          ? "HIGH_REVIEW"
+          : ownershipConfidence >= 45
+            ? "MEDIUM"
+            : "LOW";
 
     return {
       claimId,
       ownershipConfidence,
-      level: ownershipConfidence >= 75 ? "HIGH" : ownershipConfidence >= 45 ? "MEDIUM" : "LOW",
-      isSystemVerified: ownershipConfidence >= 75,
-      note: "AI/matching score is advisory only. Staff or the post owner must still verify evidence before returning the item.",
+      level: ownershipConfidence >= 70 ? "HIGH" : ownershipConfidence >= 45 ? "MEDIUM" : "LOW",
+      reviewConfidenceTier,
+      isSystemVerified: false,
+      note: "Muc ho tro xac thuc chi la diem tham khao. Staff hoac chu bai FOUND phai doi chieu bang chung rieng truoc khi tra do.",
       breakdown: {
         matchScore: Math.round(matchScore * 100),
         textScore: Math.round(textScore * 100),
         locationScore: Math.round(locationScore * 100),
         timeScore: Math.round(timeScore * 100),
-        evidenceScore: Math.round(evidenceScore * 100)
+        evidenceScore: Math.round(evidenceScore * 100),
+        privateSignalScore: Math.round(privateSignal * 100),
+        consistencyScore: Math.round(consistencyScore * 100)
       },
       signals: {
         hasClaimantMatchedLostPost: Boolean(claimantMatch),
         evidenceCount: detail.evidence.length,
         hasEvidenceOcrText: detail.evidence.some((item) => item.description?.includes("OCR:")),
+        hasPrivateSignal: privateSignal > 0,
         hasApproximateLostTime: Boolean(detail.claim.approximateLostAt),
         hasApproximateLocation: Boolean(detail.claim.approximateLocation)
       }

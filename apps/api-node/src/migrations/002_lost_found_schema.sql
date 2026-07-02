@@ -340,4 +340,4 @@ INSERT INTO config_entries (id, config_key, config_value, value_type, descriptio
   (UUID(), 'matching.weight_category',  '0.3',        'FLOAT',  'Trọng số category match',                           FALSE),
   (UUID(), 'matching.weight_location',  '0.2',        'FLOAT',  'Trọng số location match',                           FALSE),
   (UUID(), 'matching.weight_time',      '0.1',        'FLOAT',  'Trọng số time proximity',                           FALSE),
-  (UUID(), 'email.policy',             'any',        'STRING',  'Chính sách email: any | fpt | custom_domains',       TRUE);
+  (UUID(), 'email.policy',             'any',        'STRING',  'Chính sách email MVP: any valid email with OTP',       TRUE);

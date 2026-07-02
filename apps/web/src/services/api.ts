@@ -285,6 +285,7 @@ export interface ClaimVerification {
   claimId: string;
   ownershipConfidence: number;
   level: "LOW" | "MEDIUM" | "HIGH";
+  reviewConfidenceTier?: "LOW" | "MEDIUM" | "HIGH_REVIEW" | "STRONG_REVIEW";
   isSystemVerified: boolean;
   note: string;
   breakdown: {
@@ -293,11 +294,14 @@ export interface ClaimVerification {
     locationScore: number;
     timeScore: number;
     evidenceScore: number;
+    privateSignalScore?: number;
+    consistencyScore?: number;
   };
   signals: {
     hasClaimantMatchedLostPost: boolean;
     evidenceCount: number;
     hasEvidenceOcrText: boolean;
+    hasPrivateSignal?: boolean;
     hasApproximateLostTime: boolean;
     hasApproximateLocation: boolean;
   };

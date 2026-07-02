@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import mysql from "mysql2/promise";
 import { env } from "../config/env.js";
+import { mysqlSslOptions } from "../config/mysql-ssl.js";
 
 const migrationsDirectory = path.dirname(fileURLToPath(import.meta.url));
 
@@ -39,6 +40,7 @@ async function runMigrations() {
     port: env.db.port,
     user: env.db.user,
     password: env.db.password,
+    ssl: mysqlSslOptions(),
     multipleStatements: true,
     charset: "utf8mb4"
   };

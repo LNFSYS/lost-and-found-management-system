@@ -46,6 +46,8 @@ Auth now follows the database design in `docs/db-auth-design.md`:
 | `POST` | `/api/posts/:id/media` | Upload post images |
 | `DELETE` | `/api/posts/:id/media/:mediaId` | Delete post media |
 | `GET` | `/api/posts/:id/matches` | Get matching results |
+| `GET` | `/api/posts/:id/matches/explanations` | Get tiered score reasons, matched tokens, image/OCR terms and penalties |
+| `POST` | `/api/posts/:id/matches/re-run` | Admin-only matching re-run |
 | `DELETE` | `/api/posts/:id` | Soft-delete owned/admin post |
 | `GET` | `/api/search` | Search public posts |
 | `POST` | `/api/claims` | Submit claim for a FOUND post |
@@ -104,8 +106,9 @@ Default URL: `http://localhost:3001`.
 - SMTP is guarded. If `SMTP_*` variables are not configured, OTP creation succeeds and the service logs a warning instead of crashing.
 - Cloudinary is guarded. Upload endpoints return a structured 503 response if `CLOUDINARY_*` variables are not configured.
 - Google Vision is guarded. If `GOOGLE_VISION_API_KEY` is missing or Vision fails, post image upload returns empty AI tags/OCR text and continues.
-- Matching runs asynchronously after post create/update and post image upload, using weights from public/admin config.
+- Matching runs after post create/update and post image upload, using configurable score tiers and weights for text, category, location, time, image tags and OCR/serial-like text.
+- Matching and claim review confidence are advisory. They do not automatically verify ownership or return an item.
 - Claim duplication is blocked by service validation and `uq_claim_per_post_user`.
 - `posts.handover_point_id` is protected by a foreign key in migration `005_integrity_constraints.sql`.
-- Sensitive admin management endpoints require `ADMIN`; `STAFF` can access overview only.
-- Google OAuth and realtime chat are planned next.
+- Sensitive admin management endpoints require `ADMIN`; `STAFF` can access warehouse-focused operational surfaces.
+- Google OAuth MVP login and realtime claim chat/notifications are implemented for the current web MVP.

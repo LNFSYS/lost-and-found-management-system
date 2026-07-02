@@ -140,6 +140,19 @@ interface WarehouseAdminRow extends RowDataPacket {
   updated_at: string;
 }
 
+interface WarehousePolicyRow extends RowDataPacket {
+  id: string;
+  post_id: string | null;
+  item_name: string;
+  description: string | null;
+  category_id: string | null;
+  category_name: string | null;
+  status: WarehouseStatus;
+  received_at: string;
+  returned_at: string | null;
+  retention_deadline: string | null;
+}
+
 interface WarehouseInput {
   postId?: string | null;
   handoverPointId?: string | null;
@@ -267,6 +280,35 @@ function isActiveWarehouseStatus(status: WarehouseStatus) {
   return !isTerminalWarehouseStatus(status) && status !== "EXPIRED";
 }
 
+const allowedWarehouseTransitions: Record<WarehouseStatus, WarehouseStatus[]> = {
+  PENDING_APPROVAL: ["RECEIVED", "STORED", "EXPIRED"],
+  RECEIVED: ["STORED", "CLAIMED", "RETURNED", "EXPIRED"],
+  STORED: ["CLAIMED", "RETURNED", "EXPIRED"],
+  CLAIMED: ["RETURNED", "STORED", "EXPIRED"],
+  EXPIRED: ["DISPOSED", "DONATED", "TRANSFERRED", "STORED"],
+  RETURNED: [],
+  DISPOSED: [],
+  DONATED: [],
+  TRANSFERRED: []
+};
+
+async function currentWarehouseStatus(id: string) {
+  const [rows] = await dbPool.query<Array<RowDataPacket & { status: WarehouseStatus }>>(
+    "SELECT status FROM warehouse_items WHERE id = ? AND deleted_at IS NULL LIMIT 1",
+    [id]
+  );
+  return rows[0]?.status ?? null;
+}
+
+function assertWarehouseTransition(from: WarehouseStatus, to: WarehouseStatus) {
+  if (from === to) {
+    return;
+  }
+  if (!allowedWarehouseTransitions[from].includes(to)) {
+    throw new HttpError(409, `Invalid warehouse status transition: ${from} -> ${to}`);
+  }
+}
+
 async function activeWarehouseCount(excludeId?: string) {
   if (!excludeId) {
     return count(
@@ -308,6 +350,110 @@ async function assertWarehouseCapacityAllows(status: WarehouseStatus, excludeId?
   const snapshot = await warehouseCapacitySnapshot(excludeId);
   if (snapshot.isFull) {
     throw new HttpError(409, "Warehouse capacity is full. Process or transfer existing items before adding more.");
+  }
+}
+
+function addDays(date: Date, days: number) {
+  return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
+}
+
+function classifyWarehousePolicy(text: string) {
+  const normalized = normalizeText(text);
+  if (/\b(thuc pham|do an|nuoc uong|my pham|thuoc|y te|ve sinh|de hong)\b/.test(normalized)) {
+    return "PERISHABLE";
+  }
+  if (/\b(the sinh vien|cmnd|cccd|can cuoc|passport|ho chieu|giay to|bang lai|the ngan hang|atm|visa)\b/.test(normalized)) {
+    return "DOCUMENT";
+  }
+  if (/\b(laptop|dien thoai|ipad|tablet|airpod|tainghe|dong ho|may anh|camera|dien tu|macbook)\b/.test(normalized)) {
+    return "ELECTRONIC";
+  }
+  return "GENERAL";
+}
+
+async function retentionDaysForWarehouseItem(input: Pick<WarehouseInput, "itemName" | "description" | "categoryId">) {
+  let categoryName = "";
+  if (input.categoryId) {
+    const [rows] = await dbPool.query<Array<RowDataPacket & { name: string }>>(
+      "SELECT name FROM item_categories WHERE id = ? LIMIT 1",
+      [input.categoryId]
+    );
+    categoryName = rows[0]?.name ?? "";
+  }
+  const policy = classifyWarehousePolicy(`${input.itemName} ${input.description ?? ""} ${categoryName}`);
+  const configKey =
+    policy === "DOCUMENT"
+      ? "warehouse.retention_days_document"
+      : policy === "ELECTRONIC"
+        ? "warehouse.retention_days_electronic"
+        : policy === "PERISHABLE"
+          ? "warehouse.retention_days_perishable"
+          : "warehouse.retention_days_default";
+  const fallback = policy === "DOCUMENT" ? 120 : policy === "ELECTRONIC" ? 90 : policy === "PERISHABLE" ? 3 : 60;
+  const days = await postRepository.getConfigNumber(configKey, fallback);
+  return Math.max(1, Math.round(days));
+}
+
+async function findWarehousePolicyRow(id: string) {
+  const [rows] = await dbPool.query<WarehousePolicyRow[]>(
+    `
+      SELECT wi.id, wi.post_id, wi.item_name, wi.description, wi.category_id, c.name AS category_name,
+             wi.status, wi.received_at, wi.returned_at, wi.retention_deadline
+      FROM warehouse_items wi
+      LEFT JOIN item_categories c ON c.id = wi.category_id
+      WHERE wi.id = ? AND wi.deleted_at IS NULL
+      LIMIT 1
+    `,
+    [id]
+  );
+  return rows[0] ?? null;
+}
+
+async function assertWarehouseItemCanBeDisposed(
+  item: WarehousePolicyRow,
+  nextStatus: Extract<WarehouseStatus, "DISPOSED" | "DONATED" | "TRANSFERRED">
+) {
+  const policy = classifyWarehousePolicy(`${item.item_name} ${item.description ?? ""} ${item.category_name ?? ""}`);
+  if (policy === "DOCUMENT" && nextStatus !== "TRANSFERRED") {
+    throw new HttpError(409, "Documents/cards must be transferred to Student Services or Security, not disposed or donated.");
+  }
+
+  const graceDays = Math.max(0, Math.round(await postRepository.getConfigNumber("warehouse.disposition_grace_days", 7)));
+  if (item.retention_deadline) {
+    const retentionTime = new Date(item.retention_deadline).getTime();
+    if (!Number.isNaN(retentionTime) && Date.now() < addDays(new Date(retentionTime), graceDays).getTime()) {
+      throw new HttpError(409, `Warehouse item is still in ${graceDays}-day grace period after retention deadline.`);
+    }
+  }
+
+  if (!item.post_id) {
+    return;
+  }
+
+  const [claimRows] = await dbPool.query<CountRow[]>(
+    `
+      SELECT COUNT(*) AS total
+      FROM claims
+      WHERE post_id = ?
+        AND status IN ('PENDING', 'NEED_MORE_INFO', 'ACCEPTED')
+    `,
+    [item.post_id]
+  );
+  if ((claimRows[0]?.total ?? 0) > 0) {
+    throw new HttpError(409, "Cannot process warehouse item while a claim is pending or accepted.");
+  }
+
+  const [appointmentRows] = await dbPool.query<CountRow[]>(
+    `
+      SELECT COUNT(*) AS total
+      FROM return_appointments
+      WHERE post_id = ?
+        AND status IN ('PENDING', 'ACCEPTED')
+    `,
+    [item.post_id]
+  );
+  if ((appointmentRows[0]?.total ?? 0) > 0) {
+    throw new HttpError(409, "Cannot process warehouse item while a return appointment is pending or accepted.");
   }
 }
 
@@ -437,8 +583,23 @@ export const adminRepository = {
     }));
   },
 
-  async updateUserStatus(userId: string, status: "ACTIVE" | "LOCKED" | "DISABLED") {
+  async updateUserStatus(userId: string, status: "ACTIVE" | "LOCKED" | "DISABLED", actorId: string) {
+    const [rows] = await dbPool.query<Array<RowDataPacket & { status: string }>>(
+      "SELECT status FROM users WHERE id = ? AND deleted_at IS NULL LIMIT 1",
+      [userId]
+    );
+    const previousStatus = rows[0]?.status ?? null;
+    if (!previousStatus) {
+      throw new HttpError(404, "User not found");
+    }
     await dbPool.execute("UPDATE users SET status = ?, updated_at = UTC_TIMESTAMP() WHERE id = ?", [status, userId]);
+    await userRepository.createActivityLog({
+      userId,
+      action: "ADMIN_USER_STATUS_CHANGED",
+      entityType: "USER",
+      entityId: userId,
+      metadata: { actorId, previousStatus, nextStatus: status }
+    });
     return { updated: true };
   },
 
@@ -452,7 +613,7 @@ export const adminRepository = {
     phoneNumber?: string | null;
     status: "ACTIVE" | "LOCKED" | "DISABLED";
     roles: UserRole[];
-  }) {
+  }, actorId?: string) {
     const connection = await dbPool.getConnection();
     try {
       await connection.beginTransaction();
@@ -489,6 +650,13 @@ export const adminRepository = {
         [input.id]
       );
       await connection.commit();
+      await userRepository.createActivityLog({
+        userId: input.id,
+        action: "ADMIN_USER_CREATED",
+        entityType: "USER",
+        entityId: input.id,
+        metadata: { actorId: actorId ?? null, roles: uniqueRoles(input.roles), status: input.status }
+      });
       return { id: input.id };
     } catch (error) {
       await connection.rollback();
@@ -498,10 +666,21 @@ export const adminRepository = {
     }
   },
 
-  async updateUserRoles(userId: string, roles: UserRole[]) {
+  async updateUserRoles(userId: string, roles: UserRole[], actorId: string) {
     const connection = await dbPool.getConnection();
     try {
       await connection.beginTransaction();
+      const [existingRows] = await connection.query<Array<RowDataPacket & { code: UserRole }>>(
+        `
+          SELECT r.code
+          FROM user_roles ur
+          INNER JOIN roles r ON r.id = ur.role_id
+          WHERE ur.user_id = ?
+          ORDER BY r.code
+        `,
+        [userId]
+      );
+      const previousRoles = existingRows.map((row) => row.code);
       await connection.execute("DELETE FROM user_roles WHERE user_id = ?", [userId]);
       for (const role of uniqueRoles(roles)) {
         await connection.execute(
@@ -510,6 +689,13 @@ export const adminRepository = {
         );
       }
       await connection.commit();
+      await userRepository.createActivityLog({
+        userId,
+        action: "ADMIN_USER_ROLES_CHANGED",
+        entityType: "USER",
+        entityId: userId,
+        metadata: { actorId, previousRoles, nextRoles: uniqueRoles(roles) }
+      });
       return { updated: true };
     } catch (error) {
       await connection.rollback();
@@ -989,7 +1175,8 @@ export const adminRepository = {
     await assertWarehouseCapacityAllows(status);
     const receivedAt = optionalDate(input.receivedAt) ?? new Date();
     const returnedAt = optionalDate(input.returnedAt);
-    const retentionDeadline = optionalDate(input.retentionDeadline) ?? new Date(receivedAt.getTime() + 60 * 24 * 60 * 60 * 1000);
+    const retentionDays = await retentionDaysForWarehouseItem(input);
+    const retentionDeadline = optionalDate(input.retentionDeadline) ?? addDays(receivedAt, retentionDays);
     await dbPool.execute(
       `
         INSERT INTO warehouse_items (
@@ -1022,16 +1209,33 @@ export const adminRepository = {
         actorId
       ]
     );
+    await userRepository.createActivityLog({
+      userId: actorId,
+      action: "WAREHOUSE_ITEM_CREATED",
+      entityType: "WAREHOUSE_ITEM",
+      entityId: id,
+      metadata: { status, itemName: input.itemName.trim() }
+    });
     return { id };
   },
 
-  async updateWarehouseItem(id: string, input: WarehouseInput) {
+  async updateWarehouseItem(id: string, input: WarehouseInput, actorId: string) {
     await validateWarehouseInput(input);
-    const status = input.status ?? "RECEIVED";
+    const previousStatus = await currentWarehouseStatus(id);
+    if (!previousStatus) {
+      throw new HttpError(404, "Warehouse item not found");
+    }
+    const currentItem = await findWarehousePolicyRow(id);
+    if (!currentItem) {
+      throw new HttpError(404, "Warehouse item not found");
+    }
+    const status = input.status ?? previousStatus;
+    assertWarehouseTransition(previousStatus, status);
     await assertWarehouseCapacityAllows(status, id);
-    const receivedAt = optionalDate(input.receivedAt) ?? new Date();
-    const returnedAt = optionalDate(input.returnedAt);
-    const retentionDeadline = optionalDate(input.retentionDeadline) ?? new Date(receivedAt.getTime() + 60 * 24 * 60 * 60 * 1000);
+    const receivedAt = optionalDate(input.receivedAt) ?? new Date(currentItem.received_at);
+    const returnedAt = optionalDate(input.returnedAt) ?? optionalDate(currentItem.returned_at);
+    const retentionDays = await retentionDaysForWarehouseItem(input);
+    const retentionDeadline = optionalDate(input.retentionDeadline) ?? optionalDate(currentItem.retention_deadline) ?? addDays(receivedAt, retentionDays);
     await dbPool.execute(
       `
         UPDATE warehouse_items
@@ -1075,10 +1279,23 @@ export const adminRepository = {
         id
       ]
     );
+    await userRepository.createActivityLog({
+      userId: actorId,
+      action: "WAREHOUSE_ITEM_UPDATED",
+      entityType: "WAREHOUSE_ITEM",
+      entityId: id,
+      metadata: { previousStatus, nextStatus: status }
+    });
     return { updated: true };
   },
 
-  async updateWarehouseItemStatus(id: string, status: WarehouseStatus) {
+  async updateWarehouseItemStatus(id: string, status: WarehouseStatus, actorId: string) {
+    const previousStatus = await currentWarehouseStatus(id);
+    if (!previousStatus) {
+      throw new HttpError(404, "Warehouse item not found");
+    }
+    assertWarehouseTransition(previousStatus, status);
+    await assertWarehouseCapacityAllows(status, id);
     await dbPool.execute(
       `
         UPDATE warehouse_items
@@ -1088,6 +1305,13 @@ export const adminRepository = {
       `,
       [status, status, id]
     );
+    await userRepository.createActivityLog({
+      userId: actorId,
+      action: "WAREHOUSE_ITEM_STATUS_CHANGED",
+      entityType: "WAREHOUSE_ITEM",
+      entityId: id,
+      metadata: { previousStatus, nextStatus: status }
+    });
     return { updated: true };
   },
 
@@ -1132,7 +1356,21 @@ export const adminRepository = {
     return { expired: result.affectedRows };
   },
 
-  async processOverdueWarehouseItem(id: string, status: Extract<WarehouseStatus, "DISPOSED" | "DONATED" | "TRANSFERRED">, note: string) {
+  async processOverdueWarehouseItem(
+    id: string,
+    status: Extract<WarehouseStatus, "DISPOSED" | "DONATED" | "TRANSFERRED">,
+    note: string,
+    actorId: string
+  ) {
+    const item = await findWarehousePolicyRow(id);
+    if (!item) {
+      throw new HttpError(404, "Warehouse item not found");
+    }
+    if (item.status !== "EXPIRED") {
+      throw new HttpError(409, "Only expired warehouse items can be processed");
+    }
+    await assertWarehouseItemCanBeDisposed(item, status);
+
     const [result] = await dbPool.execute<ResultSetHeader>(
       `
         UPDATE warehouse_items
@@ -1149,14 +1387,29 @@ export const adminRepository = {
     if (result.affectedRows === 0) {
       throw new HttpError(409, "Only expired warehouse items can be processed");
     }
+    await userRepository.createActivityLog({
+      userId: actorId,
+      action: "WAREHOUSE_OVERDUE_ITEM_PROCESSED",
+      entityType: "WAREHOUSE_ITEM",
+      entityId: id,
+      metadata: { previousStatus: "EXPIRED", nextStatus: status, note: note.trim() }
+    });
     return { updated: true, status };
   },
 
-  async deleteWarehouseItem(id: string) {
+  async deleteWarehouseItem(id: string, actorId?: string) {
     await dbPool.execute(
       "UPDATE warehouse_items SET deleted_at = UTC_TIMESTAMP(), updated_at = UTC_TIMESTAMP() WHERE id = ? AND deleted_at IS NULL",
       [id]
     );
+    if (actorId) {
+      await userRepository.createActivityLog({
+        userId: actorId,
+        action: "WAREHOUSE_ITEM_SOFT_DELETED",
+        entityType: "WAREHOUSE_ITEM",
+        entityId: id
+      });
+    }
     return { deleted: true };
   },
 

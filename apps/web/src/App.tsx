@@ -4717,7 +4717,7 @@ function ClaimVerificationBadge(props: { claimId: string }) {
 
   return (
     <small className={`claim-verification-badge level-${verification.level.toLowerCase()}`}>
-      Xác thực hệ thống: {verification.ownershipConfidence}% - match {verification.breakdown.matchScore}% - bằng chứng {verification.breakdown.evidenceScore}%
+      M&#7913;c h&#7895; tr&#7907; x&#225;c th&#7921;c: {verification.ownershipConfidence}% - match {verification.breakdown.matchScore}% - b&#7857;ng ch&#7913;ng {verification.breakdown.evidenceScore}%
     </small>
   );
 }

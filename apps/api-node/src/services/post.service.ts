@@ -14,6 +14,21 @@ function assertPostOwnerOrAdmin(auth: AccessTokenPayload, ownerId: string) {
   }
 }
 
+function canViewContactInfo(auth: AccessTokenPayload | undefined, ownerId: string) {
+  return Boolean(auth && (auth.sub === ownerId || auth.roles.includes("ADMIN") || auth.roles.includes("STAFF")));
+}
+
+function redactContactInfo<T extends { userId: string; contactInfo?: string | null }>(
+  post: T,
+  auth?: AccessTokenPayload
+): T & { contactInfoHidden: boolean } {
+  if (canViewContactInfo(auth, post.userId)) {
+    return { ...post, contactInfoHidden: false };
+  }
+
+  return { ...post, contactInfo: null, contactInfoHidden: Boolean(post.contactInfo) };
+}
+
 function parseOptionalDate(value: string | null | undefined) {
   if (!value) {
     return null;
@@ -120,7 +135,11 @@ export const postService = {
   },
 
   async listPublicPosts(query: ListPostsQuery) {
-    return postRepository.list(normalizeQuery(query));
+    const result = await postRepository.list(normalizeQuery(query));
+    return {
+      ...result,
+      items: result.items.map((post) => redactContactInfo(post))
+    };
   },
 
   async listMyPosts(auth: AccessTokenPayload, query: ListPostsQuery) {
@@ -150,14 +169,14 @@ export const postService = {
     };
   },
 
-  async getPostDetail(postId: string) {
+  async getPostDetail(postId: string, auth?: AccessTokenPayload) {
     await postRepository.incrementViewCount(postId);
     const detail = await postRepository.getDetail(postId);
     if (!detail) {
       throw new HttpError(404, "Post not found");
     }
 
-    return detail;
+    return { ...detail, post: redactContactInfo(detail.post, auth) };
   },
 
   async updatePost(auth: AccessTokenPayload, postId: string, input: UpdatePostInput) {

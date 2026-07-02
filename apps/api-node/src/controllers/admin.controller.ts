@@ -76,7 +76,7 @@ const warehouseSchema = z.object({
   finderUserId: z.string().uuid().nullable().optional(),
   finderName: z.string().trim().max(150).nullable().optional(),
   finderContact: z.string().trim().max(255).nullable().optional(),
-  status: warehouseStatusSchema.default("RECEIVED"),
+  status: warehouseStatusSchema.optional(),
   conditionNotes: z.string().trim().max(2000).nullable().optional(),
   storageCode: z.string().trim().max(60).nullable().optional(),
   receivedAt: optionalDateTimeSchema,
@@ -162,7 +162,9 @@ export const adminController = {
   },
 
   async updateUserStatus(request: Request, response: Response) {
-    response.json(ok(await adminRepository.updateUserStatus(idParam(request), userStatusSchema.parse(request.body).status)));
+    response.json(
+      ok(await adminRepository.updateUserStatus(idParam(request), userStatusSchema.parse(request.body).status, request.auth!.sub))
+    );
   },
 
   async createUser(request: Request, response: Response) {
@@ -181,13 +183,13 @@ export const adminController = {
           phoneNumber: input.phoneNumber?.trim() || null,
           status: input.status,
           roles: input.roles
-        })
+        }, request.auth!.sub)
       )
     );
   },
 
   async updateUserRoles(request: Request, response: Response) {
-    response.json(ok(await adminRepository.updateUserRoles(idParam(request), userRolesSchema.parse(request.body).roles)));
+    response.json(ok(await adminRepository.updateUserRoles(idParam(request), userRolesSchema.parse(request.body).roles, request.auth!.sub)));
   },
 
   async categories(_request: Request, response: Response) {
@@ -271,7 +273,7 @@ export const adminController = {
   },
 
   async updateWarehouseItem(request: Request, response: Response) {
-    response.json(ok(await adminRepository.updateWarehouseItem(idParam(request), warehouseSchema.parse(request.body))));
+    response.json(ok(await adminRepository.updateWarehouseItem(idParam(request), warehouseSchema.parse(request.body), request.auth!.sub)));
   },
 
   async updateWarehouseItemStatus(request: Request, response: Response) {
@@ -279,7 +281,8 @@ export const adminController = {
       ok(
         await adminRepository.updateWarehouseItemStatus(
           idParam(request),
-          warehouseStatusUpdateSchema.parse(request.body).status
+          warehouseStatusUpdateSchema.parse(request.body).status,
+          request.auth!.sub
         )
       )
     );
@@ -300,11 +303,11 @@ export const adminController = {
 
   async processOverdueWarehouseItem(request: Request, response: Response) {
     const input = warehouseProcessSchema.parse(request.body);
-    response.json(ok(await adminRepository.processOverdueWarehouseItem(idParam(request), input.status, input.note)));
+    response.json(ok(await adminRepository.processOverdueWarehouseItem(idParam(request), input.status, input.note, request.auth!.sub)));
   },
 
   async deleteWarehouseItem(request: Request, response: Response) {
-    response.json(ok(await adminRepository.deleteWarehouseItem(idParam(request))));
+    response.json(ok(await adminRepository.deleteWarehouseItem(idParam(request), request.auth!.sub)));
   },
 
   async reports(_request: Request, response: Response) {

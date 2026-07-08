@@ -7,8 +7,33 @@ const scanRoots = ["apps/api-node/src", "apps/web/src", "apps/mobile", "docs"];
 const allowedExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".md", ".sql", ".json"]);
 const skippedDirectories = new Set(["node_modules", "dist", "build", ".git", "Archive"]);
 const mojibakePattern = /[\u00c3\u00c2\u00c4\u00c6\u0102\ufffd]|\u00e1\u00ba|\u00e1\u00bb/;
-const brokenQuestionPattern =
-  /"[^"]*[A-Za-zÀ-ỹ]\?[A-Za-zÀ-ỹ\?][^"]*"|'[^']*[A-Za-zÀ-ỹ]\?[A-Za-zÀ-ỹ\?][^']*'|>[^<]*[A-Za-zÀ-ỹ]\?[A-Za-zÀ-ỹ\?][^<]*</;
+const brokenQuestionPattern = /"[^"]*\p{L}\?[\p{L}\?][^"]*"|'[^']*\p{L}\?[\p{L}\?][^']*'|>[^<]*\p{L}\?[\p{L}\?][^<]*</u;
+const knownBadVietnameseFragments = [
+  "LiẨn",
+  "BẨng",
+  "chẨng",
+  "giẨng",
+  "viẨn",
+  "lĐóng",
+  "BẨn",
+  "v? tr?",
+  "Chua co",
+  "Dang tai",
+  "Khong co",
+  "Luu xu",
+  "Quan ly",
+  "Bao cao",
+  "Khu vuc",
+  "Nguoi dung",
+  "Diem ban",
+  "Tao bai",
+  "??ng",
+  "ch?a ??c",
+  "Khong tai",
+  "Khong gui",
+  "Khong vao",
+  "Khong mo",
+];
 
 function loadEnvFile(filePath) {
   if (!fs.existsSync(filePath)) {
@@ -47,7 +72,11 @@ function walk(dir, hits) {
     }
     const text = fs.readFileSync(fullPath, "utf8");
     text.split(/\r?\n/).forEach((line, index) => {
-      if (mojibakePattern.test(line) || brokenQuestionPattern.test(line)) {
+      if (
+        mojibakePattern.test(line) ||
+        brokenQuestionPattern.test(line) ||
+        knownBadVietnameseFragments.some((fragment) => line.includes(fragment))
+      ) {
         hits.push(`${path.relative(repoRoot, fullPath)}:${index + 1}: ${line.trim().slice(0, 180)}`);
       }
     });

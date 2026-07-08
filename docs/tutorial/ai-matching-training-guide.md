@@ -197,7 +197,7 @@ File export se:
 - gom label feedback
 - gom behavior impression/click/claim-start neu co
 
-Khong commit folder `training-exports/` len git.
+Không commit folder `training-exports/` lên git.
 
 ## 8. Train model nho
 
@@ -240,7 +240,7 @@ File model:
 apps/api-node/model-artifacts/match-ranker-logreg.json
 ```
 
-Khong commit folder `model-artifacts/` len git tru khi team quyet dinh luu artifact demo rieng.
+Không commit folder `model-artifacts/` lên git trừ khi team quyết định lưu artifact demo riêng.
 
 ## 9. Neu script bao loi
 
@@ -256,7 +256,7 @@ npm run export:training-data
 
 ### Loi: Not enough labeled data
 
-Chua co du feedback dung/sai.
+Chưa có đủ feedback đúng/sai.
 
 Cach sua:
 

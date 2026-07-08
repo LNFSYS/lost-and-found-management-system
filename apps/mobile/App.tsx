@@ -48,13 +48,13 @@ type Tab = "board" | "create" | "matches" | "handover" | "notifications" | "prof
 type SortMode = "latest" | "oldest" | "highest_match";
 
 const tabs: Array<{ id: Tab; label: string; roles?: string[] }> = [
-  { id: "board", label: "Bang tin" },
-  { id: "create", label: "Dang bai" },
-  { id: "matches", label: "Goi y" },
-  { id: "handover", label: "Ban giao" },
-  { id: "notifications", label: "Thong bao" },
-  { id: "profile", label: "Ca nhan" },
-  { id: "staff", label: "Quan ly", roles: ["ADMIN", "STAFF"] },
+  { id: "board", label: "Bảng tin" },
+  { id: "create", label: "Đăng bài" },
+  { id: "matches", label: "Gợi ý" },
+  { id: "handover", label: "Bàn giao" },
+  { id: "notifications", label: "Thông báo" },
+  { id: "profile", label: "Cá nhân" },
+  { id: "staff", label: "Quản lý", roles: ["ADMIN", "STAFF"] },
   { id: "chat", label: "Chat" }
 ];
 
@@ -63,7 +63,7 @@ function isPrivileged(user: PublicUser | null) {
 }
 
 function formatDate(value: string | null | undefined) {
-  if (!value) return "Chua co";
+  if (!value) return "Chưa có";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" });
@@ -74,7 +74,7 @@ function percent(value: number | undefined) {
 }
 
 function pickLabel(type: PostType) {
-  return type === "LOST" ? "Da mat" : "Da nhat";
+  return type === "LOST" ? "Đã mất" : "Đã nhặt";
 }
 
 function Field(props: {
@@ -171,7 +171,7 @@ function PostCard({ post, onPress }: { post: BoardPost; onPress: () => void }) {
           {post.description}
         </Text>
         <Text style={styles.metaText}>
-          {post.category?.name ?? "Chua phan loai"} · {post.location.buildingName ?? post.location.areaName ?? "Chua ro vi tri"}
+                {post.category?.name ?? "Chưa phân loại"} · {post.location.buildingName ?? post.location.areaName ?? "Chưa rõ vị trí"}
         </Text>
         <Text style={styles.metaText}>{formatDate(post.lostFoundAt ?? post.createdAt)}</Text>
       </View>
@@ -187,7 +187,7 @@ function MatchCard(props: {
   return (
     <View style={styles.matchCard}>
       <View style={styles.rowBetween}>
-        <Badge label={`${percent(props.suggestion.match.totalScore)} giong`} tone="MATCHED" />
+        <Badge label={`${percent(props.suggestion.match.totalScore)} giống`} tone="MATCHED" />
         <Text style={styles.metaText}>{props.suggestion.match.scoreTier ?? "rule score"}</Text>
       </View>
       <Text style={styles.cardTitle}>{props.suggestion.post.title}</Text>
@@ -196,7 +196,7 @@ function MatchCard(props: {
       </Text>
       <View style={styles.actionRow}>
         <Button label="Xem bai" variant="blue" onPress={() => props.onOpen(props.suggestion.post.id)} />
-        <Button label="Dung" variant="ghost" onPress={() => props.onFeedback("TRUE_MATCH")} />
+        <Button label="Đúng" variant="ghost" onPress={() => props.onFeedback("TRUE_MATCH")} />
         <Button label="Sai" variant="ghost" onPress={() => props.onFeedback("FALSE_MATCH")} />
         <Button label="Khong chac" variant="ghost" onPress={() => props.onFeedback("UNCERTAIN")} />
       </View>
@@ -207,7 +207,7 @@ function MatchCard(props: {
 async function pickImages(limit = 5) {
   const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!permission.granted) {
-    Alert.alert("Can quyen truy cap anh", "Hay cho phep ung dung chon anh de dang bai hoac gui bang chung.");
+    Alert.alert("Cần quyền truy cập ảnh", "Hãy cho phép ứng dụng chọn ảnh để đăng bài hoặc gửi bằng chứng.");
     return [];
   }
   const result = await ImagePicker.launchImageLibraryAsync({
@@ -227,7 +227,7 @@ async function pickImages(limit = 5) {
 async function captureImage() {
   const permission = await ImagePicker.requestCameraPermissionsAsync();
   if (!permission.granted) {
-    Alert.alert("Can quyen camera", "Hay cho phep ung dung dung camera de chup anh vat pham.");
+    Alert.alert("Cần quyền camera", "Hãy cho phép ứng dụng dùng camera để chụp ảnh vật phẩm.");
     return null;
   }
   const result = await ImagePicker.launchCameraAsync({
@@ -278,7 +278,7 @@ export default function App() {
     return (
       <SafeAreaView style={styles.centerScreen}>
         <ActivityIndicator size="large" color={colors.orange} />
-        <Text style={styles.metaText}>Dang mo FPTU Lost & Found...</Text>
+      <Text style={styles.metaText}>Đang mở FPTU Lost & Found...</Text>
       </SafeAreaView>
     );
   }
@@ -295,7 +295,7 @@ export default function App() {
         <View style={styles.header}>
           <View>
             <Text style={styles.brand}>FPT Lost & Found</Text>
-            <Text style={styles.headerSub}>Campus Da Nang · Mobile</Text>
+            <Text style={styles.headerSub}>Campus Đà Nẵng · Mobile</Text>
           </View>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{user.fullName.slice(0, 1).toUpperCase()}</Text>
@@ -310,7 +310,7 @@ export default function App() {
 
         <View style={styles.content}>
           {tab === "board" && <BoardScreen onOpenPost={setSelectedPostId} />}
-          {tab === "create" && <CreatePostScreen onCreated={(id) => { setSelectedPostId(id); showMessage("Da dang bai va chay matching."); }} />}
+          {tab === "create" && <CreatePostScreen onCreated={(id) => { setSelectedPostId(id); showMessage("Đã đăng bài và chạy matching."); }} />}
           {tab === "matches" && <MatchesScreen onOpenPost={setSelectedPostId} onMessage={showMessage} />}
           {tab === "handover" && <HandoverScreen />}
           {tab === "notifications" && <NotificationsScreen onOpenPost={setSelectedPostId} onMessage={showMessage} />}
@@ -361,7 +361,7 @@ function AuthScreen({ onSignedIn }: { onSignedIn: (user: PublicUser) => void }) 
       await saveTokens(result.tokens);
       onSignedIn(result.user);
     } catch (error) {
-      Alert.alert("Dang nhap that bai", error instanceof Error ? error.message : "Vui long thu lai");
+      Alert.alert("Đăng nhập thất bại", error instanceof Error ? error.message : "Vui lòng thử lại");
     } finally {
       setLoading(false);
     }
@@ -373,7 +373,7 @@ function AuthScreen({ onSignedIn }: { onSignedIn: (user: PublicUser) => void }) 
       await api.requestRegistrationOtp({ email, password, fullName, studentCode, phoneNumber });
       setMode("otp");
     } catch (error) {
-      Alert.alert("Khong gui duoc OTP", error instanceof Error ? error.message : "Vui long thu lai");
+      Alert.alert("Không gửi được OTP", error instanceof Error ? error.message : "Vui lòng thử lại");
     } finally {
       setLoading(false);
     }
@@ -386,7 +386,7 @@ function AuthScreen({ onSignedIn }: { onSignedIn: (user: PublicUser) => void }) 
       await saveTokens(result.tokens);
       onSignedIn(result.user);
     } catch (error) {
-      Alert.alert("OTP khong hop le", error instanceof Error ? error.message : "Vui long thu lai");
+      Alert.alert("OTP không hợp lệ", error instanceof Error ? error.message : "Vui lòng thử lại");
     } finally {
       setLoading(false);
     }
@@ -399,33 +399,33 @@ function AuthScreen({ onSignedIn }: { onSignedIn: (user: PublicUser) => void }) 
           <Text style={styles.authMarkText}>FPT</Text>
         </View>
         <Text style={styles.authTitle}>Lost & Found Campus</Text>
-        <Text style={styles.authBody}>Dang nhap de dang bai, gui claim, theo doi lich ban giao va nhan thong bao realtime.</Text>
+      <Text style={styles.authBody}>Đăng nhập để đăng bài, gửi claim, theo dõi lịch bàn giao và nhận thông báo realtime.</Text>
 
         {mode !== "otp" ? (
           <>
             <Field label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" placeholder="ban@example.com" />
-            <Field label="Mat khau" value={password} onChangeText={setPassword} secureTextEntry placeholder="toi thieu 8 ky tu" />
+            <Field label="Mật khẩu" value={password} onChangeText={setPassword} secureTextEntry placeholder="tối thiểu 8 ký tự" />
           </>
         ) : null}
 
         {mode === "register" ? (
           <>
-            <Field label="Ho ten" value={fullName} onChangeText={setFullName} placeholder="Nguyen Van A" />
-            <Field label="Ma sinh vien/nhan su" value={studentCode} onChangeText={setStudentCode} placeholder="Tuy chon" />
-            <Field label="So dien thoai" value={phoneNumber} onChangeText={setPhoneNumber} keyboardType="phone-pad" placeholder="Tuy chon" />
+            <Field label="Họ tên" value={fullName} onChangeText={setFullName} placeholder="Nguyễn Văn A" />
+            <Field label="Mã sinh viên/nhân sự" value={studentCode} onChangeText={setStudentCode} placeholder="Tùy chọn" />
+            <Field label="Số điện thoại" value={phoneNumber} onChangeText={setPhoneNumber} keyboardType="phone-pad" placeholder="Tùy chọn" />
           </>
         ) : null}
 
         {mode === "otp" ? (
-          <Field label="Ma OTP" value={otp} onChangeText={setOtp} placeholder="Nhap ma trong email" />
+          <Field label="Mã OTP" value={otp} onChangeText={setOtp} placeholder="Nhập mã trong email" />
         ) : null}
 
-        {mode === "login" && <Button label={loading ? "Dang xu ly..." : "Dang nhap"} disabled={loading} onPress={signIn} />}
-        {mode === "register" && <Button label={loading ? "Dang gui..." : "Gui OTP dang ky"} disabled={loading} onPress={requestOtp} />}
-        {mode === "otp" && <Button label={loading ? "Dang xac thuc..." : "Xac thuc OTP"} disabled={loading} onPress={verifyOtp} />}
+      {mode === "login" && <Button label={loading ? "Đang xử lý..." : "Đăng nhập"} disabled={loading} onPress={signIn} />}
+      {mode === "register" && <Button label={loading ? "Đang gửi..." : "Gửi OTP đăng ký"} disabled={loading} onPress={requestOtp} />}
+      {mode === "otp" && <Button label={loading ? "Đang xác thực..." : "Xác thực OTP"} disabled={loading} onPress={verifyOtp} />}
 
         <View style={styles.authSwitch}>
-          <Button label={mode === "login" ? "Tao tai khoan" : "Da co tai khoan"} variant="ghost" onPress={() => setMode(mode === "login" ? "register" : "login")} />
+          <Button label={mode === "login" ? "Tạo tài khoản" : "Đã có tài khoản"} variant="ghost" onPress={() => setMode(mode === "login" ? "register" : "login")} />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -445,7 +445,7 @@ function BoardScreen({ onOpenPost }: { onOpenPost: (id: string) => void }) {
       const result = await api.listPosts({ page: 1, pageSize: 30, q: query, type, sort });
       setPosts(result.items);
     } catch (error) {
-      Alert.alert("Khong tai duoc bang tin", error instanceof Error ? error.message : "Vui long thu lai");
+      Alert.alert("Không tải được bảng tin", error instanceof Error ? error.message : "Vui lòng thử lại");
     } finally {
       setLoading(false);
     }
@@ -457,21 +457,21 @@ function BoardScreen({ onOpenPost }: { onOpenPost: (id: string) => void }) {
 
   return (
     <View style={styles.screen}>
-      <Text style={styles.screenTitle}>Bang tin that lac</Text>
-      <TextInput value={query} onChangeText={setQuery} placeholder="Tim theo ten vat pham" placeholderTextColor="#98A2B3" style={styles.searchInput} onSubmitEditing={load} />
+      <Text style={styles.screenTitle}>Bảng tin thất lạc</Text>
+      <TextInput value={query} onChangeText={setQuery} placeholder="Tìm theo tên vật phẩm" placeholderTextColor="#98A2B3" style={styles.searchInput} onSubmitEditing={load} />
       <View style={styles.chips}>
-        <Chip label="Tat ca" active={type === ""} onPress={() => setType("")} />
-        <Chip label="Da mat" active={type === "LOST"} onPress={() => setType("LOST")} />
-        <Chip label="Da nhat" active={type === "FOUND"} onPress={() => setType("FOUND")} />
-        <Chip label="Moi nhat" active={sort === "latest"} onPress={() => setSort("latest")} />
-        <Chip label="Giong nhat" active={sort === "highest_match"} onPress={() => setSort("highest_match")} />
+        <Chip label="Tất cả" active={type === ""} onPress={() => setType("")} />
+        <Chip label="Đã mất" active={type === "LOST"} onPress={() => setType("LOST")} />
+        <Chip label="Đã nhặt" active={type === "FOUND"} onPress={() => setType("FOUND")} />
+        <Chip label="Mới nhất" active={sort === "latest"} onPress={() => setSort("latest")} />
+        <Chip label="Giống nhất" active={sort === "highest_match"} onPress={() => setSort("highest_match")} />
       </View>
       <FlatList
         data={posts}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <PostCard post={item} onPress={() => onOpenPost(item.id)} />}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.orange} />}
-        ListEmptyComponent={<EmptyState title="Chua co bai phu hop" body="Thu doi bo loc hoac dang bai moi de he thong chay matching." />}
+        ListEmptyComponent={<EmptyState title="Chưa có bài phù hợp" body="Thử đổi bộ lọc hoặc đăng bài mới để hệ thống chạy matching." />}
         contentContainerStyle={posts.length === 0 ? styles.listEmpty : styles.listContent}
       />
     </View>
@@ -554,7 +554,7 @@ function CreatePostScreen({ onCreated }: { onCreated: (postId: string) => void }
       setImages([]);
       onCreated(result.post.id);
     } catch (error) {
-      Alert.alert("Khong dang duoc bai", error instanceof Error ? error.message : "Kiem tra lai thong tin");
+      Alert.alert("Không đăng được bài", error instanceof Error ? error.message : "Kiểm tra lại thông tin");
     } finally {
       setLoading(false);
     }
@@ -562,28 +562,28 @@ function CreatePostScreen({ onCreated }: { onCreated: (postId: string) => void }
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.formContent}>
-      <Text style={styles.screenTitle}>Dang LOST/FOUND</Text>
+      <Text style={styles.screenTitle}>Đăng LOST/FOUND</Text>
       <View style={styles.segment}>
-        <Chip label="Da mat" active={type === "LOST"} onPress={() => setType("LOST")} />
-        <Chip label="Da nhat" active={type === "FOUND"} onPress={() => setType("FOUND")} />
+        <Chip label="Đã mất" active={type === "LOST"} onPress={() => setType("LOST")} />
+        <Chip label="Đã nhặt" active={type === "FOUND"} onPress={() => setType("FOUND")} />
       </View>
-      <Field label="Ten vat pham" value={title} onChangeText={setTitle} placeholder="Vi du: Tai nghe AirPods trang" />
-      <Field label="Mo ta cong khai" value={description} onChangeText={setDescription} multiline placeholder="Mau sac, vi tri, dac diem de nhan biet" />
-      <Field label="Lien he" value={contactInfo} onChangeText={setContactInfo} placeholder="Sdt/email lien he" />
+      <Field label="Tên vật phẩm" value={title} onChangeText={setTitle} placeholder="Ví dụ: Tai nghe AirPods trắng" />
+      <Field label="Mô tả công khai" value={description} onChangeText={setDescription} multiline placeholder="Màu sắc, vị trí, đặc điểm dễ nhận biết" />
+      <Field label="Liên hệ" value={contactInfo} onChangeText={setContactInfo} placeholder="SĐT/email liên hệ" />
       {type === "LOST" ? (
-        <Field label="Thong tin xac minh rieng" value={secretVerification} onChangeText={setSecretVerification} multiline placeholder="Serial, vet xuoc, phu kien di kem..." />
+      <Field label="Thông tin xác minh riêng" value={secretVerification} onChangeText={setSecretVerification} multiline placeholder="Serial, vết xước, phụ kiện đi kèm..." />
       ) : null}
-      <Field label="Phong/khu vuc" value={roomText} onChangeText={setRoomText} placeholder="VD: Alpha 315" />
-      <Field label="Mo ta vi tri" value={customLocation} onChangeText={setCustomLocation} placeholder="Gan cau thang, san bong..." />
+      <Field label="Phòng/khu vực" value={roomText} onChangeText={setRoomText} placeholder="VD: Alpha 315" />
+      <Field label="Mô tả vị trí" value={customLocation} onChangeText={setCustomLocation} placeholder="Gần cầu thang, sân bóng..." />
 
-      <Text style={styles.fieldLabel}>Danh muc</Text>
+      <Text style={styles.fieldLabel}>Danh mục</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalPicker}>
         {categories.map((category) => (
           <Chip key={category.id} label={category.name} active={categoryId === category.id} onPress={() => setCategoryId(category.id)} />
         ))}
       </ScrollView>
 
-      <Text style={styles.fieldLabel}>Khu vuc</Text>
+        <Text style={styles.fieldLabel}>Khu vực</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalPicker}>
         {areas.map((area) => (
           <Chip key={area.id} label={area.name} active={areaId === area.id} onPress={() => setAreaId(area.id)} />
@@ -592,7 +592,7 @@ function CreatePostScreen({ onCreated }: { onCreated: (postId: string) => void }
 
       {type === "FOUND" ? (
         <>
-          <Text style={styles.fieldLabel}>Diem ban giao</Text>
+        <Text style={styles.fieldLabel}>Điểm bàn giao</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalPicker}>
             {handoverPoints.map((point) => (
               <Chip key={point.id} label={point.name} active={handoverPointId === point.id} onPress={() => setHandoverPointId(point.id)} />
@@ -603,14 +603,14 @@ function CreatePostScreen({ onCreated }: { onCreated: (postId: string) => void }
 
       <View style={styles.actionRow}>
         <Button label="Chup anh" variant="blue" onPress={takePhoto} />
-        <Button label={`Chon anh (${images.length})`} variant="ghost" onPress={chooseImages} />
+        <Button label={`Ch?n ?nh (${images.length})`} variant="ghost" onPress={chooseImages} />
       </View>
       <View style={styles.previewRow}>
         {images.map((image) => (
           <Image key={image.uri} source={{ uri: image.uri }} style={styles.previewImage} />
         ))}
       </View>
-      <Button label={loading ? "Dang dang..." : "Dang bai"} disabled={loading} onPress={submit} />
+      <Button label={loading ? "Đang đăng..." : "Đăng bài"} disabled={loading} onPress={submit} />
     </ScrollView>
   );
 }
@@ -625,7 +625,7 @@ function MatchesScreen(props: { onOpenPost: (id: string) => void; onMessage: (me
       const result = await api.myMatchSuggestions();
       setSuggestions(result.suggestions);
     } catch (error) {
-      Alert.alert("Khong tai duoc goi y", error instanceof Error ? error.message : "Vui long thu lai");
+      Alert.alert("Không tải được gợi ý", error instanceof Error ? error.message : "Vui lòng thử lại");
     } finally {
       setLoading(false);
     }
@@ -638,15 +638,15 @@ function MatchesScreen(props: { onOpenPost: (id: string) => void; onMessage: (me
   async function feedback(item: PostMatchSuggestion, label: string) {
     try {
       await api.recordMatchFeedback(item.sourcePostId ?? item.post.id, item.match.id, label);
-      props.onMessage("Da luu danh gia match de phuc vu training.");
+      props.onMessage("Đã lưu đánh giá match để phục vụ training.");
     } catch (error) {
-      Alert.alert("Khong luu duoc feedback", error instanceof Error ? error.message : "Vui long thu lai");
+      Alert.alert("Không lưu được feedback", error instanceof Error ? error.message : "Vui lòng thử lại");
     }
   }
 
   return (
     <View style={styles.screen}>
-      <Text style={styles.screenTitle}>Goi y tu dong</Text>
+      <Text style={styles.screenTitle}>Gợi ý tự động</Text>
       <FlatList
         data={suggestions}
         keyExtractor={(item) => item.match.id}
@@ -654,7 +654,7 @@ function MatchesScreen(props: { onOpenPost: (id: string) => void; onMessage: (me
           <MatchCard suggestion={item} onOpen={props.onOpenPost} onFeedback={(label) => feedback(item, label)} />
         )}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.orange} />}
-        ListEmptyComponent={<EmptyState title="Chua co goi y moi" body="Khi bai LOST cua ban co vat FOUND tuong tu, he thong se hien tai day." />}
+      ListEmptyComponent={<EmptyState title="Chưa có gợi ý mới" body="Khi bài LOST của bạn có vật FOUND tương tự, hệ thống sẽ hiện tại đây." />}
         contentContainerStyle={suggestions.length === 0 ? styles.listEmpty : styles.listContent}
       />
     </View>
@@ -671,7 +671,7 @@ function HandoverScreen() {
       const result = await api.handoverPoints();
       setPoints(result.handoverPoints);
     } catch (error) {
-      Alert.alert("Khong tai duoc diem ban giao", error instanceof Error ? error.message : "Vui long thu lai");
+      Alert.alert("Không tải được điểm bàn giao", error instanceof Error ? error.message : "Vui lòng thử lại");
     } finally {
       setLoading(false);
     }
@@ -683,7 +683,7 @@ function HandoverScreen() {
 
   return (
     <View style={styles.screen}>
-      <Text style={styles.screenTitle}>Diem ban giao</Text>
+      <Text style={styles.screenTitle}>Điểm bàn giao</Text>
       <FlatList
         data={points}
         keyExtractor={(item) => item.id}
@@ -692,11 +692,11 @@ function HandoverScreen() {
           <View style={styles.panel}>
             <View style={styles.rowBetween}>
               <Text style={styles.cardTitle}>{item.name}</Text>
-              <Badge label={`${item.storedItems ?? 0} mon`} tone="OPEN" />
+              <Badge label={`${item.storedItems ?? 0} m?n`} tone="OPEN" />
             </View>
             <Text style={styles.cardText}>{item.address}</Text>
-            <Text style={styles.metaText}>Gio: {item.openingHours ?? "Chua cap nhat"}</Text>
-            <Text style={styles.metaText}>Lien he: {item.contactInfo ?? "Chua cap nhat"}</Text>
+          <Text style={styles.metaText}>Giờ: {item.openingHours ?? "Chưa cập nhật"}</Text>
+          <Text style={styles.metaText}>Liên hệ: {item.contactInfo ?? "Chưa cập nhật"}</Text>
           </View>
         )}
       />
@@ -716,7 +716,7 @@ function NotificationsScreen(props: { onOpenPost: (id: string) => void; onMessag
       setItems(result.items);
       setUnread(result.unreadCount);
     } catch (error) {
-      Alert.alert("Khong tai duoc thong bao", error instanceof Error ? error.message : "Vui long thu lai");
+      Alert.alert("Không tải được thông báo", error instanceof Error ? error.message : "Vui lòng thử lại");
     } finally {
       setLoading(false);
     }
@@ -730,18 +730,18 @@ function NotificationsScreen(props: { onOpenPost: (id: string) => void; onMessag
     try {
       await api.markNotificationRead(item.id);
       if (item.entityType === "POST" && item.entityId) props.onOpenPost(item.entityId);
-      props.onMessage("Da danh dau da doc.");
+      props.onMessage("Đã đánh dấu đã đọc.");
       void load();
     } catch (error) {
-      Alert.alert("Khong mo duoc thong bao", error instanceof Error ? error.message : "Vui long thu lai");
+      Alert.alert("Không mở được thông báo", error instanceof Error ? error.message : "Vui lòng thử lại");
     }
   }
 
   return (
     <View style={styles.screen}>
       <View style={styles.rowBetween}>
-        <Text style={styles.screenTitle}>Thong bao</Text>
-        <Badge label={`${unread} chua doc`} tone={unread > 0 ? "OPEN" : "CLOSED"} />
+      <Text style={styles.screenTitle}>Thông báo</Text>
+        <Badge label={`${unread} chưa đọc`} tone={unread > 0 ? "OPEN" : "CLOSED"} />
       </View>
       <FlatList
         data={items}
@@ -750,7 +750,7 @@ function NotificationsScreen(props: { onOpenPost: (id: string) => void; onMessag
         renderItem={({ item }) => (
           <Pressable onPress={() => open(item)} style={[styles.panel, !item.isRead && styles.unreadPanel]}>
             <Text style={styles.cardTitle}>{item.title}</Text>
-            <Text style={styles.cardText}>{item.body ?? "Khong co noi dung"}</Text>
+          <Text style={styles.cardText}>{item.body ?? "Không có nội dung"}</Text>
             <Text style={styles.metaText}>{formatDate(item.createdAt)}</Text>
           </Pressable>
         )}
@@ -779,9 +779,9 @@ function ProfileScreen(props: {
     try {
       const result = await api.updateProfile({ fullName, phoneNumber });
       props.onUser(result.user);
-      props.onMessage("Da cap nhat ho so.");
+      props.onMessage("Đã cập nhật hồ sơ.");
     } catch (error) {
-      Alert.alert("Khong luu duoc ho so", error instanceof Error ? error.message : "Vui long thu lai");
+      Alert.alert("Không lưu được hồ sơ", error instanceof Error ? error.message : "Vui lòng thử lại");
     }
   }
 
@@ -796,7 +796,7 @@ function ProfileScreen(props: {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.formContent}>
-      <Text style={styles.screenTitle}>Ca nhan</Text>
+      <Text style={styles.screenTitle}>Cá nhân</Text>
       <View style={styles.profileCard}>
         <View style={styles.avatarLarge}>
           <Text style={styles.avatarTextLarge}>{props.user.fullName.slice(0, 1).toUpperCase()}</Text>
@@ -805,22 +805,22 @@ function ProfileScreen(props: {
         <Text style={styles.metaText}>{props.user.email}</Text>
         <View style={styles.chips}>{props.user.roles.map((role) => <Badge key={role} label={role} tone="OPEN" />)}</View>
       </View>
-      <Field label="Ho ten" value={fullName} onChangeText={setFullName} />
-      <Field label="So dien thoai" value={phoneNumber} onChangeText={setPhoneNumber} />
-      <Button label="Luu ho so" onPress={save} />
+      <Field label="Họ tên" value={fullName} onChangeText={setFullName} />
+      <Field label="Số điện thoại" value={phoneNumber} onChangeText={setPhoneNumber} />
+      <Button label="Lưu hồ sơ" onPress={save} />
       {reputation ? (
         <View style={styles.panel}>
-          <Text style={styles.cardTitle}>Uy tin</Text>
-          <Text style={styles.cardText}>{reputation.totalPoints} diem · {reputation.level}</Text>
+          <Text style={styles.cardTitle}>Uy tín</Text>
+          <Text style={styles.cardText}>{reputation.totalPoints} điểm · {reputation.level}</Text>
         </View>
       ) : null}
       <View style={styles.panel}>
-        <Text style={styles.cardTitle}>Hoat dong gan day</Text>
+        <Text style={styles.cardTitle}>Hoạt động gần đây</Text>
         {activity.slice(0, 5).map((item) => (
           <Text key={item.id} style={styles.metaText}>{item.action} · {formatDate(item.createdAt)}</Text>
         ))}
       </View>
-      <Button label="Dang xuat" variant="danger" onPress={signOut} />
+        <Button label="Đăng xuất" variant="danger" onPress={signOut} />
     </ScrollView>
   );
 }
@@ -847,7 +847,7 @@ function StaffScreen({ enabled }: { enabled: boolean }) {
       setReports(reportsResult.reports);
       setFeedback(feedbackResult.feedback);
     } catch (error) {
-      Alert.alert("Khong tai duoc quan ly", error instanceof Error ? error.message : "Vui long thu lai");
+      Alert.alert("Không tải được quản lý", error instanceof Error ? error.message : "Vui lòng thử lại");
     } finally {
       setLoading(false);
     }
@@ -858,7 +858,7 @@ function StaffScreen({ enabled }: { enabled: boolean }) {
   }, [load]);
 
   if (!enabled) {
-    return <EmptyState title="Khong co quyen" body="Man hinh nay chi danh cho Staff/Admin." />;
+    return <EmptyState title="Không có quyền" body="Màn hình này chỉ dành cho Staff/Admin." />;
   }
 
   return (
@@ -879,11 +879,11 @@ function StaffScreen({ enabled }: { enabled: boolean }) {
             <Text style={styles.cardTitle}>{item.itemName}</Text>
             <Badge label={item.status} tone={item.status} />
           </View>
-          <Text style={styles.metaText}>Ma kho: {item.storageCode ?? "Chua co"}</Text>
-          <Text style={styles.metaText}>Han luu: {formatDate(item.retentionDeadline)}</Text>
+          <Text style={styles.metaText}>Mã kho: {item.storageCode ?? "Chưa có"}</Text>
+          <Text style={styles.metaText}>Hạn lưu: {formatDate(item.retentionDeadline)}</Text>
         </View>
       ))}
-      <Text style={styles.sectionTitle}>Bao cao</Text>
+      <Text style={styles.sectionTitle}>Báo cáo</Text>
       {reports.slice(0, 6).map((report) => (
         <View key={report.id} style={styles.panel}>
           <View style={styles.rowBetween}>
@@ -893,14 +893,14 @@ function StaffScreen({ enabled }: { enabled: boolean }) {
           <Text style={styles.cardText}>{report.targetText}</Text>
         </View>
       ))}
-      <Text style={styles.sectionTitle}>Feedback sau ban giao</Text>
+      <Text style={styles.sectionTitle}>Feedback sau bàn giao</Text>
       {feedback.slice(0, 8).map((item) => (
         <View key={item.id} style={styles.panel}>
           <View style={styles.rowBetween}>
-            <Text style={styles.cardTitle}>{item.rating}/5 - {item.targetUser.fullName ?? "Nguoi dung"}</Text>
+          <Text style={styles.cardTitle}>{item.rating}/5 - {item.targetUser.fullName ?? "Người dùng"}</Text>
             <Badge label={item.status} tone={item.isNegative ? "REJECTED" : "RESOLVED"} />
           </View>
-          <Text style={styles.cardText}>{item.comment ?? "Khong co ghi chu"}</Text>
+          <Text style={styles.cardText}>{item.comment ?? "Không có ghi chú"}</Text>
           <Text style={styles.metaText}>{item.postTitle ?? item.postId} ? {formatDate(item.createdAt)}</Text>
         </View>
       ))}
@@ -932,7 +932,7 @@ function ChatScreen() {
       setConnected(true);
       nextSocket.emit("claim:join", { claimId }, (payload: unknown) => {
         const response = payload as { ok?: boolean; error?: string };
-        if (!response.ok) Alert.alert("Khong vao duoc phong", response.error ?? "Kiem tra claim ID");
+        if (!response.ok) Alert.alert("Không vào được phòng", response.error ?? "Kiểm tra claim ID");
       });
     });
     nextSocket.on("disconnect", () => setConnected(false));
@@ -949,18 +949,18 @@ function ChatScreen() {
   return (
     <View style={styles.screen}>
       <Text style={styles.screenTitle}>Claim chat</Text>
-      <Field label="Claim ID" value={claimId} onChangeText={setClaimId} placeholder="Nhap claim ID da duoc accept" />
-      <Button label={connected ? "Da ket noi" : "Vao phong chat"} variant={connected ? "ghost" : "primary"} onPress={join} />
+      <Field label="Claim ID" value={claimId} onChangeText={setClaimId} placeholder="Nhập claim ID đã được accept" />
+      <Button label={connected ? "Đã kết nối" : "Vào phòng chat"} variant={connected ? "ghost" : "primary"} onPress={join} />
       <ScrollView style={styles.chatBox}>
         {messages.map((item, index) => (
           <View key={`${item.id ?? index}`} style={styles.chatBubble}>
-            <Text style={styles.cardText}>{item.content ?? "[Tin nhan anh/he thong]"}</Text>
+            <Text style={styles.cardText}>{item.content ?? "[Tin nhắn ảnh/hệ thống]"}</Text>
             <Text style={styles.metaText}>{item.senderId ?? "system"}</Text>
           </View>
         ))}
       </ScrollView>
       <View style={styles.chatInputRow}>
-        <TextInput value={content} onChangeText={setContent} placeholder="Nhap tin nhan" placeholderTextColor="#98A2B3" style={styles.chatInput} />
+        <TextInput value={content} onChangeText={setContent} placeholder="Nhập tin nhắn" placeholderTextColor="#98A2B3" style={styles.chatInput} />
         <Button label="Gui" onPress={send} />
       </View>
     </View>
@@ -989,7 +989,7 @@ function PostDetailModal(props: {
       setDetail(result);
       api.postClaims(props.postId).then((claimResult) => setClaims(claimResult.claims)).catch(() => setClaims([]));
     } catch (error) {
-      Alert.alert("Khong tai duoc bai", error instanceof Error ? error.message : "Vui long thu lai");
+      Alert.alert("Không tải được bài", error instanceof Error ? error.message : "Vui lòng thử lại");
     } finally {
       setLoading(false);
     }
@@ -1009,10 +1009,10 @@ function PostDetailModal(props: {
         approximateLocation: claimLocation || null,
         approximateLostAt: new Date().toISOString()
       });
-      props.onMessage("Da gui claim. Hay bo sung bang chung neu co.");
+      props.onMessage("Đã gửi claim. Hãy bổ sung bằng chứng nếu có.");
       props.onOpenClaim(result.claim.id);
     } catch (error) {
-      Alert.alert("Khong gui duoc claim", error instanceof Error ? error.message : "Vui long thu lai");
+      Alert.alert("Không gửi được claim", error instanceof Error ? error.message : "Vui lòng thử lại");
     }
   }
 
@@ -1020,9 +1020,9 @@ function PostDetailModal(props: {
     if (!detail) return;
     try {
       await api.recordMatchFeedback(detail.post.id, matchId, label);
-      props.onMessage("Da luu feedback match.");
+      props.onMessage("Đã lưu feedback match.");
     } catch (error) {
-      Alert.alert("Khong luu duoc feedback", error instanceof Error ? error.message : "Vui long thu lai");
+      Alert.alert("Không lưu được feedback", error instanceof Error ? error.message : "Vui lòng thử lại");
     }
   }
 
@@ -1043,7 +1043,7 @@ function PostDetailModal(props: {
             </View>
             <Text style={styles.detailTitle}>{detail.post.title}</Text>
             <Text style={styles.cardText}>{detail.post.description}</Text>
-            <Text style={styles.metaText}>{detail.post.category?.name ?? "Chua co danh muc"} · {detail.post.location.buildingName ?? detail.post.location.areaName ?? "Chua ro vi tri"}</Text>
+          <Text style={styles.metaText}>{detail.post.category?.name ?? "Chưa có danh mục"} · {detail.post.location.buildingName ?? detail.post.location.areaName ?? "Chưa rõ vị trí"}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.mediaStrip}>
               {detail.media.map((item) => (
                 <Image key={item.id} source={{ uri: item.optimizedUrl ?? item.thumbnailUrl ?? item.secureUrl }} style={styles.detailImage} />
@@ -1054,16 +1054,16 @@ function PostDetailModal(props: {
             </View>
 
             <Text style={styles.sectionTitle}>Match</Text>
-            {detail.matches.length === 0 ? <Text style={styles.metaText}>Chua co match.</Text> : null}
+        {detail.matches.length === 0 ? <Text style={styles.metaText}>Chưa có match.</Text> : null}
             {detail.matches.map((match) => (
               <View key={match.id} style={styles.panel}>
                 <View style={styles.rowBetween}>
-                  <Text style={styles.cardTitle}>{percent(match.totalScore)} giong nhau</Text>
+                  <Text style={styles.cardTitle}>{percent(match.totalScore)} giống nhau</Text>
                   <Badge label={match.scoreTier ?? "MATCH"} tone={match.scoreTier ?? "MATCHED"} />
                 </View>
-                <Text style={styles.metaText}>Text {percent(match.textScore)} · Vi tri {percent(match.locationScore)} · OCR {percent(match.ocrScore)}</Text>
+            <Text style={styles.metaText}>Text {percent(match.textScore)} · Vị trí {percent(match.locationScore)} · OCR {percent(match.ocrScore)}</Text>
                 <View style={styles.actionRow}>
-                  <Button label="Dung" variant="ghost" onPress={() => feedback(match.id, "TRUE_MATCH")} />
+                  <Button label="Đúng" variant="ghost" onPress={() => feedback(match.id, "TRUE_MATCH")} />
                   <Button label="Sai" variant="ghost" onPress={() => feedback(match.id, "FALSE_MATCH")} />
                   <Button label="Khong chac" variant="ghost" onPress={() => feedback(match.id, "UNCERTAIN")} />
                 </View>
@@ -1073,21 +1073,21 @@ function PostDetailModal(props: {
             {detail.post.type === "FOUND" && detail.post.userId !== props.currentUser.id ? (
               <>
                 <Text style={styles.sectionTitle}>Gui claim</Text>
-                <Field label="Mo ta quyen so huu" value={claimDescription} onChangeText={setClaimDescription} multiline placeholder="Noi ro dac diem rieng cua vat" />
+                <Field label="Mô tả quyền sở hữu" value={claimDescription} onChangeText={setClaimDescription} multiline placeholder="Noi ro dac điểm rieng cua vat" />
                 <Field label="Cau tra loi rieng" value={claimSecret} onChangeText={setClaimSecret} placeholder="Serial, vet xuoc, phu kien..." />
-                <Field label="Vi tri/thoi gian uoc tinh" value={claimLocation} onChangeText={setClaimLocation} placeholder="VD: Alpha 315" />
+      <Field label="Vị trí/thời gian ước tính" value={claimLocation} onChangeText={setClaimLocation} placeholder="VD: Alpha 315" />
                 <Button label="Gui claim" onPress={submitClaim} />
               </>
             ) : null}
 
-            <Text style={styles.sectionTitle}>Claim lien quan</Text>
+            <Text style={styles.sectionTitle}>Claim liên quan</Text>
             {claims.map((claim) => (
               <Pressable key={claim.id} onPress={() => props.onOpenClaim(claim.id)} style={styles.panel}>
                 <View style={styles.rowBetween}>
                   <Text style={styles.cardTitle}>{claim.claimant.fullName}</Text>
                   <Badge label={claim.status} tone={claim.status} />
                 </View>
-                <Text style={styles.cardText}>{claim.description ?? "Khong co mo ta"}</Text>
+          <Text style={styles.cardText}>{claim.description ?? "Không có mô tả"}</Text>
               </Pressable>
             ))}
           </ScrollView>
@@ -1120,7 +1120,7 @@ function ClaimModal(props: { claimId: string | null; onClose: () => void; onMess
   }, [props.claimId]);
 
   useEffect(() => {
-    load().catch((error) => Alert.alert("Khong tai duoc claim", error instanceof Error ? error.message : "Vui long thu lai"));
+    load().catch((error) => Alert.alert("Không tải được claim", error instanceof Error ? error.message : "Vui lòng thử lại"));
   }, [load]);
 
   async function uploadEvidence() {
@@ -1129,7 +1129,7 @@ function ClaimModal(props: { claimId: string | null; onClose: () => void; onMess
     if (picked[0]) {
       const result = await api.uploadClaimEvidence(props.claimId, picked[0]);
       setDetail(result);
-      props.onMessage("Da tai bang chung.");
+      props.onMessage("Đã tải bằng chứng.");
     }
   }
 
@@ -1139,7 +1139,7 @@ function ClaimModal(props: { claimId: string | null; onClose: () => void; onMess
     if (photo) {
       const result = await api.uploadClaimEvidence(props.claimId, photo);
       setDetail(result);
-      props.onMessage("Da tai anh bang chung.");
+      props.onMessage("Đã tải ảnh bằng chứng.");
     }
   }
 
@@ -1153,10 +1153,10 @@ function ClaimModal(props: { claimId: string | null; onClose: () => void; onMess
         handoverPointId: handoverPointId || null,
         customLocation: handoverPointId ? null : "FPTU campus"
       });
-      props.onMessage("Da tao lich ban giao.");
+      props.onMessage("Đã tạo lịch bàn giao.");
       await load();
     } catch (error) {
-      Alert.alert("Khong tao duoc lich", error instanceof Error ? error.message : "Claim can duoc chap nhan truoc");
+      Alert.alert("Không tạo được lịch", error instanceof Error ? error.message : "Claim cần được chấp nhận trước");
     }
   }
 
@@ -1167,9 +1167,9 @@ function ClaimModal(props: { claimId: string | null; onClose: () => void; onMess
         comment: feedbackComment || null
       });
       setFeedbackComment("");
-      props.onMessage("Da gui feedback sau ban giao.");
+      props.onMessage("Đã gửi feedback sau bàn giao.");
     } catch (error) {
-      Alert.alert("Khong gui duoc feedback", error instanceof Error ? error.message : "Vui long thu lai");
+      Alert.alert("Không gửi được feedback", error instanceof Error ? error.message : "Vui lòng thử lại");
     }
   }
 
@@ -1179,25 +1179,25 @@ function ClaimModal(props: { claimId: string | null; onClose: () => void; onMess
       if (!image) {
         return;
       }
-      await api.uploadAppointmentProof(appointmentId, image, "Chung tu ban giao tu mobile");
-      props.onMessage("Da tai chung tu ban giao.");
+      await api.uploadAppointmentProof(appointmentId, image, "Chứng từ bàn giao từ mobile");
+      props.onMessage("Đã tải chứng từ bàn giao.");
       await load();
     } catch (error) {
-      Alert.alert("Khong tai duoc chung tu", error instanceof Error ? error.message : "Vui long thu lai");
+      Alert.alert("Không tải được chứng từ", error instanceof Error ? error.message : "Vui lòng thử lại");
     }
   }
 
   async function accept() {
     if (!detail) return;
     await api.acceptClaim(detail.claim.id);
-    props.onMessage("Da chap nhan claim.");
+    props.onMessage("Đã chấp nhận claim.");
     await load();
   }
 
   async function reject() {
     if (!detail) return;
-    await api.rejectClaim(detail.claim.id, "Khong du bang chung tren mobile");
-    props.onMessage("Da tu choi claim.");
+    await api.rejectClaim(detail.claim.id, "Không đủ bằng chứng trên mobile");
+    props.onMessage("Đã từ chối claim.");
     await load();
   }
 
@@ -1213,28 +1213,28 @@ function ClaimModal(props: { claimId: string | null; onClose: () => void; onMess
         ) : (
           <ScrollView style={styles.screen} contentContainerStyle={styles.formContent}>
             <View style={styles.rowBetween}>
-              <Text style={styles.detailTitle}>Yeu cau nhan do</Text>
+              <Text style={styles.detailTitle}>Yêu cầu nhận đồ</Text>
               <Badge label={detail.claim.status} tone={detail.claim.status} />
             </View>
-            <Text style={styles.cardText}>{detail.claim.description ?? "Khong co mo ta"}</Text>
-            <Text style={styles.metaText}>Nguoi claim: {detail.claim.claimant.fullName}</Text>
+            <Text style={styles.cardText}>{detail.claim.description ?? "Không có mô tả"}</Text>
+            <Text style={styles.metaText}>Người claim: {detail.claim.claimant.fullName}</Text>
             {confidence ? (
               <View style={styles.panelHighlight}>
-                <Text style={styles.cardTitle}>Muc ho tro xac thuc {Math.round(confidence.ownershipConfidence * 100)}%</Text>
+                <Text style={styles.cardTitle}>Mức hỗ trợ xác thực {Math.round(confidence.ownershipConfidence * 100)}%</Text>
                 <Text style={styles.cardText}>{confidence.level} · {confidence.note}</Text>
               </View>
             ) : null}
             <View style={styles.actionRow}>
-              <Button label="Chap nhan" variant="blue" onPress={accept} />
+              <Button label="Chấp nhận" variant="blue" onPress={accept} />
               <Button label="Tu choi" variant="danger" onPress={reject} />
-              <Button label="Chup bang chung" variant="ghost" onPress={captureEvidence} />
-              <Button label="Tai bang chung" variant="ghost" onPress={uploadEvidence} />
+              <Button label="Chụp bằng chứng" variant="ghost" onPress={captureEvidence} />
+              <Button label="Tải bằng chứng" variant="ghost" onPress={uploadEvidence} />
             </View>
-            <Text style={styles.sectionTitle}>Bang chung</Text>
+            <Text style={styles.sectionTitle}>Bằng chứng</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               {detail.evidence.map((item) => <Image key={item.id} source={{ uri: item.secureUrl }} style={styles.detailImage} />)}
             </ScrollView>
-            <Text style={styles.sectionTitle}>Lich ban giao</Text>
+            <Text style={styles.sectionTitle}>Lịch bàn giao</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalPicker}>
               {handoverPoints.map((point) => <Chip key={point.id} label={point.name} active={handoverPointId === point.id} onPress={() => setHandoverPointId(point.id)} />)}
             </ScrollView>
@@ -1248,22 +1248,22 @@ function ClaimModal(props: { claimId: string | null; onClose: () => void; onMess
                 <Text style={styles.metaText}>{formatDate(appointment.proposedAt)}</Text>
                 {appointment.proof ? (
                   <View style={styles.proofBox}>
-                    <Text style={styles.cardTitle}>Chung tu ban giao</Text>
+                    <Text style={styles.cardTitle}>Chứng từ bàn giao</Text>
                     <Text style={styles.metaText}>
-                      {appointment.proof.uploadedBy?.fullName ?? "Nguoi dung"} · {formatDate(appointment.proof.uploadedAt)}
+            {appointment.proof.uploadedBy?.fullName ?? "Người dùng"} · {formatDate(appointment.proof.uploadedAt)}
                     </Text>
                     {appointment.proof.note ? <Text style={styles.cardText}>{appointment.proof.note}</Text> : null}
                   </View>
                 ) : null}
                 {appointment.status === "ACCEPTED" || appointment.status === "COMPLETED" ? (
                   <View style={styles.actionRow}>
-                    <Button label="Chup chung tu" variant="ghost" onPress={() => uploadAppointmentProof(appointment.id, "camera")} />
-                    <Button label="Tai chung tu" variant="ghost" onPress={() => uploadAppointmentProof(appointment.id, "library")} />
+                    <Button label="Chụp chứng từ" variant="ghost" onPress={() => uploadAppointmentProof(appointment.id, "camera")} />
+                    <Button label="Tải chứng từ" variant="ghost" onPress={() => uploadAppointmentProof(appointment.id, "library")} />
                   </View>
                 ) : null}
                 {appointment.status === "COMPLETED" ? (
                   <View style={styles.feedbackBox}>
-                    <Field label="Feedback sau ban giao" value={feedbackComment} onChangeText={setFeedbackComment} placeholder="Nhan xet ngan, neu can" />
+                    <Field label="Feedback sau bàn giao" value={feedbackComment} onChangeText={setFeedbackComment} placeholder="Nhận xét ngắn, nếu cần" />
                     <View style={styles.actionRow}>
                       <Button label="5 sao" variant="ghost" onPress={() => submitFeedback(appointment.id, 5)} />
                       <Button label="3 sao" variant="ghost" onPress={() => submitFeedback(appointment.id, 3)} />

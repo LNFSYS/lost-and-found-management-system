@@ -6,6 +6,8 @@ import { HttpError } from "../utils/http-error.js";
 
 export interface UploadedAsset {
   secureUrl: string;
+  thumbnailUrl?: string;
+  optimizedUrl?: string;
   publicId: string;
   resourceType: string;
   format?: string;
@@ -42,7 +44,11 @@ function streamUpload(buffer: Buffer, folder: string): Promise<UploadApiResponse
       {
         folder,
         resource_type: "image",
-        overwrite: false
+        overwrite: false,
+        eager: [
+          { width: 360, height: 260, crop: "fill", gravity: "auto", quality: "auto", fetch_format: "auto" },
+          { width: 1280, crop: "limit", quality: "auto", fetch_format: "auto" }
+        ]
       },
       (error, result) => {
         if (error) {
@@ -68,6 +74,8 @@ export const cloudinaryService = {
 
     return {
       secureUrl: result.secure_url,
+      thumbnailUrl: result.eager?.[0]?.secure_url,
+      optimizedUrl: result.eager?.[1]?.secure_url,
       publicId: result.public_id,
       resourceType: result.resource_type,
       format: result.format,

@@ -41,6 +41,14 @@ claimRoutes.post("/:id/evidence", requireAuth, claimUploadLimit, memoryUpload.si
   mediaController.claimEvidence(request, response).catch(next);
 });
 
+claimRoutes.get("/:id/evidence/:evidenceId/image", requireAuth, (request, response, next) => {
+  mediaController.claimEvidenceImage(request, response).catch(next);
+});
+
 claimRoutes.post("/:id/chat-image", requireAuth, claimUploadLimit, memoryUpload.single("image"), (request, response, next) => {
   mediaController.claimChatImage(request, response).catch(next);
+});
+
+claimRoutes.get("/:id/chat-image", requireAuth, (request, response, next) => {
+  mediaController.claimChatImageFile(request, response).catch(next);
 });

@@ -71,20 +71,22 @@ import {
   type PublicConfigEntry,
   type PublicUser,
   type ReturnAppointment,
+  type ReturnFeedback,
 } from "./services/api";
 import { HandoverPointPage } from "./handover/HandoverPointPage";
 
-type View = "board" | "my-posts" | "create" | "handover" | "account";
+type View = "board" | "my-posts" | "create" | "handover" | "account" | "post-detail";
 type AuthMode = "login" | "register" | "forgot" | "reset";
 type AuthEntryMode = Extract<AuthMode, "login" | "register">;
 type AudienceRole = "STUDENT" | "LECTURER";
-type AdminTab = "overview" | "moderation" | "categories" | "locations" | "handover" | "warehouse" | "users" | "reports" | "config";
+type AdminTab = "overview" | "moderation" | "categories" | "locations" | "handover" | "warehouse" | "users" | "reports" | "feedback" | "config";
 
 type ChatMessageView = {
   id: string;
   sender: { id: string; fullName: string | null };
   content: string | null;
   mediaUrl: string | null;
+  mediaPublicId: string | null;
   messageType: "TEXT" | "IMAGE" | "SYSTEM";
   isRead: boolean;
   createdAt: string;
@@ -97,17 +99,17 @@ interface ImageUploadRules {
 }
 
 const statusLabels: Record<string, string> = {
-  OPEN: "Đang mở",
-  MATCHED: "Có gợi ý",
-  RESOLVED: "Đã trả",
-  CLOSED: "Đã đóng",
-  EXPIRED: "Hết hạn",
-  HIDDEN: "Ẩn"
+  OPEN: "Dang mo",
+  MATCHED: "Co goi y",
+  RESOLVED: "Da tra",
+  CLOSED: "Da dong",
+  EXPIRED: "Het han",
+  HIDDEN: "An"
 };
 
 const typeLabels: Record<PostType, string> = {
-  LOST: "Đồ bị mất",
-  FOUND: "Đồ nhặt được"
+  LOST: "Do bi mat",
+  FOUND: "Do nhat duoc"
 };
 
 function matchSuggestionsSignature(suggestions: PostMatchSuggestion[]) {
@@ -132,24 +134,27 @@ const warehouseStatuses: AdminWarehouseStatus[] = [
 ];
 
 const warehouseStatusLabels: Record<AdminWarehouseStatus, string> = {
-  PENDING_APPROVAL: "Chờ duyệt nhập kho",
-  RECEIVED: "Đã nhận",
-  STORED: "Đang lưu kho",
-  CLAIMED: "Đang claim",
-  RETURNED: "Đã trả",
-  EXPIRED: "Quá hạn",
-  DISPOSED: "Đã hủy/thanh lý",
-  DONATED: "Đã quyên góp",
-  TRANSFERRED: "Đã chuyển giao"
+  PENDING_APPROVAL: "Cho duyet nhap kho",
+  RECEIVED: "Da nhan",
+  STORED: "Dang luu kho",
+  CLAIMED: "Dang claim",
+  RETURNED: "Da tra",
+  EXPIRED: "Qua han",
+  DISPOSED: "Da huy/thanh ly",
+  DONATED: "Da quyen gop",
+  TRANSFERRED: "Da chuyen giao"
 };
 
 export function App() {
   const queryClient = useQueryClient();
-  const [view, setView] = useState<View>("board");
+  const [view, setView] = useState<View>(() => {
+    return new URLSearchParams(window.location.search).get("post") ? "post-detail" : "board";
+  });
   const [filters, setFilters] = useState<ListPostsParams>({ page: 1, pageSize: 12, sort: "latest" });
   const [selectedPostId, setSelectedPostId] = useState<string | null>(() => {
     return new URLSearchParams(window.location.search).get("post");
   });
+  const [detailReturnView, setDetailReturnView] = useState<Exclude<View, "post-detail">>("board");
   const [claimPost, setClaimPost] = useState<BoardPost | null>(null);
   const [authVersion, setAuthVersion] = useState(0);
   const [authEntryMode, setAuthEntryMode] = useState<AuthEntryMode>("login");
@@ -254,6 +259,11 @@ export function App() {
     queryFn: () => api.adminReports(),
     enabled: adminMode && isAdmin
   });
+  const adminReturnFeedbackQuery = useQuery({
+    queryKey: ["admin-return-feedback", adminMode],
+    queryFn: () => api.adminReturnFeedback(),
+    enabled: adminMode && canUseAdmin
+  });
   const adminConfigQuery = useQuery({
     queryKey: ["admin-config", adminMode],
     queryFn: () => api.adminConfig(),
@@ -311,7 +321,7 @@ export function App() {
       return;
     }
     if (!accessToken || !refreshToken) {
-      setOauthError("Không nhận được token đăng nhập Google.");
+        setOauthError("Khong nhan duoc token dang nhap Google.");
       setView("account");
       return;
     }
@@ -363,7 +373,7 @@ export function App() {
   }, [realtimeToast]);
 
   useEffect(() => {
-    if (adminMode && !isAdmin && adminTab !== "overview" && adminTab !== "warehouse") {
+    if (adminMode && !isAdmin && adminTab !== "overview" && adminTab !== "warehouse" && adminTab !== "feedback") {
       setAdminTab("warehouse");
     }
   }, [adminMode, adminTab, isAdmin]);
@@ -399,7 +409,12 @@ export function App() {
   }
 
   function openPost(postId: string) {
+    if (view !== "post-detail") {
+      setDetailReturnView(view);
+    }
     setSelectedPostId(postId);
+    setAdminMode(false);
+    setView("post-detail");
     const url = new URL(window.location.href);
     url.searchParams.set("post", postId);
     window.history.replaceState(null, "", url);
@@ -407,6 +422,7 @@ export function App() {
 
   function closePost() {
     setSelectedPostId(null);
+    setView(detailReturnView);
     const url = new URL(window.location.href);
     url.searchParams.delete("post");
     window.history.replaceState(null, "", url);
@@ -528,9 +544,14 @@ export function App() {
                 <LayoutDashboard size={18} /> Dashboard
               </button>
               {!isAdmin && (
+                <>
                 <button className={adminTab === "warehouse" ? "active" : ""} type="button" onClick={() => setAdminTab("warehouse")}>
                   <Boxes size={18} /> Quản lý kho
                 </button>
+                  <button className={adminTab === "feedback" ? "active" : ""} type="button" onClick={() => setAdminTab("feedback")}>
+                    <MessageCircle size={18} /> Feedback
+                  </button>
+                </>
               )}
               {isAdmin && (
                 <>
@@ -554,6 +575,9 @@ export function App() {
                   </button>
                   <button className={adminTab === "reports" ? "active" : ""} type="button" onClick={() => setAdminTab("reports")}>
                     <Flag size={18} /> Báo cáo
+                  </button>
+                  <button className={adminTab === "feedback" ? "active" : ""} type="button" onClick={() => setAdminTab("feedback")}>
+                    <MessageCircle size={18} /> Feedback
                   </button>
                   <button className={adminTab === "config" ? "active" : ""} type="button" onClick={() => setAdminTab("config")}>
                     <Key size={18} /> Cấu hình
@@ -659,13 +683,13 @@ export function App() {
                 onLogout={() => logoutMutation.mutate()}
               />
             ) : (
-              <button className="avatar-menu-trigger guest-avatar-trigger" type="button" onClick={() => openAuth("login")} aria-label="Đăng nhập">
+              <button className="avatar-menu-trigger guest-avatar-trigger" type="button" onClick={() => openAuth("login")} aria-label="Dang nhap">
                 <UserCircle size={24} />
               </button>
             )}
             {!adminMode && (
               <button className="primary-button" type="button" onClick={() => setView("create")}>
-                <Camera size={18} /> Đăng tin
+                <Camera size={18} /> ??ng tin
               </button>
             )}
           </div>
@@ -685,6 +709,7 @@ export function App() {
             handoverPoints={adminHandoverQuery.data?.handoverPoints ?? []}
             warehouseItems={adminWarehouseQuery.data?.warehouseItems ?? []}
             reports={adminReportsQuery.data?.reports ?? []}
+            returnFeedback={adminReturnFeedbackQuery.data?.feedback ?? []}
             configEntries={adminConfigQuery.data?.entries ?? []}
             configHistory={adminConfigHistoryQuery.data?.history ?? []}
             totalPosts={adminPostsQuery.data?.total ?? 0}
@@ -714,8 +739,8 @@ export function App() {
         {!adminMode && view === "my-posts" && !isSignedIn && (
           <div className="empty-state">
             <ShieldCheck size={30} />
-            <strong>Cần đăng nhập để xem tin của tôi</strong>
-            <span>Bấm Đăng nhập hoặc Đăng ký ở thanh trên để tiếp tục.</span>
+              <strong>Can dang nhap de xem tin cua toi</strong>
+              <span>Bam dang nhap hoac dang ky o thanh tren de tiep tuc.</span>
           </div>
         )}
 
@@ -784,51 +809,51 @@ export function App() {
             }}
           />
         )}
+
+        {!adminMode && view === "post-detail" && selectedPostId && (
+          <PostDrawer
+            loading={selectedPostQuery.isLoading}
+            detail={selectedPostQuery.data}
+            handoverPoints={handoverQuery.data?.handoverPoints ?? []}
+            currentUserId={meQuery.data?.user.id}
+            onClose={closePost}
+            onClaim={(post) => setClaimPost(post)}
+          />
+        )}
       </section>
 
       {!adminMode && (
-        <nav className={`mobile-bottom-nav ${isSignedIn ? "" : "guest-bottom-nav"}`} aria-label="Điều hướng nhanh">
+        <nav className={`mobile-bottom-nav ${isSignedIn ? "" : "guest-bottom-nav"}`} aria-label="Dieu huong nhanh">
           <button className={view === "board" ? "active" : ""} type="button" onClick={() => setView("board")}>
             <Search size={18} />
-            <span>Cộng đồng</span>
+            <span>Cong dong</span>
           </button>
           {isSignedIn && (
             <button className={view === "my-posts" ? "active" : ""} type="button" onClick={() => setView("my-posts")}>
               <UserCircle size={18} />
-              <span>Tin tôi</span>
+            <span>Tin toi</span>
             </button>
           )}
           <button className={view === "create" ? "active" : ""} type="button" onClick={() => setView("create")}>
             <Camera size={20} />
-            <span>Đăng</span>
+            <span>Dang</span>
           </button>
           <button className={view === "handover" ? "active" : ""} type="button" onClick={() => setView("handover")}>
             <Handshake size={18} />
-            <span>Bàn giao</span>
+            <span>Ban giao</span>
           </button>
           {isSignedIn ? (
           <button className={view === "account" ? "active" : ""} type="button" onClick={() => setView("account")}>
             <UserCircle size={18} />
-            <span>Hồ sơ</span>
+            <span>H? s?</span>
           </button>
           ) : (
           <button className={view === "account" ? "active" : ""} type="button" onClick={() => openAuth("login")}>
             <UserCircle size={18} />
-            <span>Đăng nhập</span>
+            <span>Dang nhap</span>
           </button>
           )}
         </nav>
-      )}
-
-      {selectedPostId && (
-        <PostDrawer
-          loading={selectedPostQuery.isLoading}
-          detail={selectedPostQuery.data}
-          handoverPoints={handoverQuery.data?.handoverPoints ?? []}
-          currentUserId={meQuery.data?.user.id}
-          onClose={closePost}
-          onClaim={(post) => setClaimPost(post)}
-        />
       )}
 
       {claimPost && (
@@ -883,10 +908,10 @@ function RealtimeNotificationToast(props: {
       </div>
       {props.notification.entityType === "POST" && props.notification.entityId && (
         <button className="text-button" type="button" onClick={props.onOpen}>
-          Mở
+          M?
         </button>
       )}
-      <button className="icon-button" type="button" onClick={props.onClose} aria-label="Đóng thông báo">
+        <button className="icon-button" type="button" onClick={props.onClose} aria-label="Dong thong bao">
         <X size={16} />
       </button>
     </aside>
@@ -930,7 +955,7 @@ function UserMenu(props: {
         className="avatar-menu-trigger"
         type="button"
         onClick={() => setOpen((value) => !value)}
-        aria-label="Mở menu tài khoản"
+          aria-label="Mo menu tai khoan"
         aria-expanded={open}
       >
         {props.user.avatarUrl ? <img src={props.user.avatarUrl} alt="" /> : <span>{avatarInitials(props.user.fullName)}</span>}
@@ -951,7 +976,7 @@ function UserMenu(props: {
             setOpen(false);
             props.onProfile();
           }}>
-            <UserCircle size={17} /> Hồ sơ
+            <UserCircle size={17} /> H? s?
           </button>
 
           {props.canUseAdmin && (
@@ -959,16 +984,16 @@ function UserMenu(props: {
               setOpen(false);
               props.onToggleAdmin();
             }}>
-              <LayoutDashboard size={17} /> {props.adminMode ? "Về cộng đồng" : props.isAdmin ? "Mở Admin Dashboard" : "Mở Staff Dashboard"}
+            <LayoutDashboard size={17} /> {props.adminMode ? "Ve cong dong" : props.isAdmin ? "Mo Admin Dashboard" : "Mo Staff Dashboard"}
             </button>
           )}
 
           <div className="notification-menu">
             <div className="notification-menu-heading">
-              <span><Bell size={16} /> Thông báo</span>
+          <span><Bell size={16} /> Thong bao</span>
               {props.unreadCount > 0 && (
                 <button disabled={props.markAllPending} type="button" onClick={props.onMarkAllRead}>
-                  Đọc hết
+                  ??c h?t
                 </button>
               )}
             </div>
@@ -988,7 +1013,7 @@ function UserMenu(props: {
                   <small>{formatDate(notification.createdAt)}</small>
                 </button>
               ))}
-              {props.notifications.length === 0 && <small className="notification-empty">Chưa có thông báo.</small>}
+        {props.notifications.length === 0 && <small className="notification-empty">Chua co thong bao.</small>}
             </div>
           </div>
 
@@ -996,7 +1021,7 @@ function UserMenu(props: {
             setOpen(false);
             props.onLogout();
           }}>
-            <LogOut size={17} /> {props.logoutPending ? "Đang đăng xuất..." : "Đăng xuất"}
+        <LogOut size={17} /> {props.logoutPending ? "Dang dang xuat..." : "Dang xuat"}
           </button>
         </div>
       )}
@@ -1019,6 +1044,7 @@ function AdminDashboardView(props: {
   handoverPoints: AdminHandoverPoint[];
   warehouseItems: AdminWarehouseItem[];
   reports: AdminReport[];
+  returnFeedback: ReturnFeedback[];
   configEntries: AdminConfigEntry[];
   configHistory: AdminConfigHistoryEntry[];
   totalPosts: number;
@@ -1046,6 +1072,7 @@ function AdminDashboardView(props: {
         queryClient.invalidateQueries({ queryKey: ["admin-handover"] }),
         queryClient.invalidateQueries({ queryKey: ["admin-warehouse"] }),
         queryClient.invalidateQueries({ queryKey: ["admin-reports"] }),
+        queryClient.invalidateQueries({ queryKey: ["admin-return-feedback"] }),
         queryClient.invalidateQueries({ queryKey: ["admin-config"] }),
         queryClient.invalidateQueries({ queryKey: ["admin-config-history"] }),
         queryClient.invalidateQueries({ queryKey: ["public-config"] }),
@@ -1064,23 +1091,23 @@ function AdminDashboardView(props: {
       <section className="admin-metric-grid">
         {props.isAdmin ? (
           <>
-            <Metric label="Tổng bài đăng" value={props.overview?.posts ?? props.totalPosts} icon={<BarChart3 size={18} />} />
-            <Metric label="Đang xử lý" value={openCount} icon={<Clock size={18} />} />
-            <Metric label="Người dùng" value={props.overview?.users ?? props.users.length} icon={<Users size={18} />} />
-            <Metric label="Đã hoàn trả" value={resolvedCount} icon={<CheckCircle2 size={18} />} />
+          <Metric label="Tong bai dang" value={props.overview?.posts ?? props.totalPosts} icon={<BarChart3 size={18} />} />
+            <Metric label="?ang x? l?" value={openCount} icon={<Clock size={18} />} />
+          <Metric label="Nguoi dung" value={props.overview?.users ?? props.users.length} icon={<Users size={18} />} />
+          <Metric label="Da hoan tra" value={resolvedCount} icon={<CheckCircle2 size={18} />} />
           </>
         ) : (
           <>
-            <Metric label="Vật trong kho" value={activeWarehouseCount} icon={<Boxes size={18} />} />
-            <Metric label="Đã nhận/lưu" value={storedWarehouseCount} icon={<CheckCircle2 size={18} />} />
-            <Metric label="Điểm có vật" value={handoverWithItemsCount} icon={<MapPin size={18} />} />
-            <Metric label="Bài FOUND" value={foundCount} icon={<Handshake size={18} />} />
+          <Metric label="Vat trong kho" value={activeWarehouseCount} icon={<Boxes size={18} />} />
+          <Metric label="Da nhan/luu" value={storedWarehouseCount} icon={<CheckCircle2 size={18} />} />
+          <Metric label="Diem co vat" value={handoverWithItemsCount} icon={<MapPin size={18} />} />
+          <Metric label="Bai FOUND" value={foundCount} icon={<Handshake size={18} />} />
           </>
         )}
       </section>
 
       {adminMutation.error instanceof Error && <div className="notice error">{adminMutation.error.message}</div>}
-      {adminMutation.isPending && <div className="notice">Đang lưu thay đổi admin...</div>}
+        {adminMutation.isPending && <div className="notice">Dang luu thay doi admin...</div>}
 
       {props.activeTab === "overview" && props.isAdmin && (
         <AdminOverviewPanel posts={props.posts} users={props.users} reports={props.reports} foundCount={foundCount} />
@@ -1139,6 +1166,14 @@ function AdminDashboardView(props: {
       )}
       {props.activeTab === "reports" && props.isAdmin && (
         <AdminReportsPanel reports={props.reports} pending={adminMutation.isPending} onRun={runAdminAction} />
+      )}
+      {props.activeTab === "feedback" && (
+        <AdminReturnFeedbackPanel
+          feedback={props.returnFeedback}
+          canReview={props.isAdmin}
+          pending={adminMutation.isPending}
+          onRun={runAdminAction}
+        />
       )}
       {props.activeTab === "config" && props.isAdmin && (
         <AdminConfigPanel
@@ -1201,7 +1236,7 @@ function AdminConfigPanel(props: {
         <div className="panel-heading">
           <div>
             <span className="eyebrow">System rules</span>
-            <h2>Cấu hình vận hành</h2>
+              <h2>Cau hinh van hanh</h2>
           </div>
           <Key size={18} />
         </div>
@@ -1218,13 +1253,13 @@ function AdminConfigPanel(props: {
             >
               <div>
                 <strong>{entry.key}</strong>
-                <small>{entry.description ?? "Không có mô tả"}</small>
+            <small>{entry.description ?? "Khong co mo ta"}</small>
               </div>
               <span className="status-pill">{entry.valueType}</span>
               {entry.valueType === "BOOLEAN" ? (
                 <label className="switch-row compact">
                   <input name="value" type="checkbox" defaultChecked={Boolean(entry.value)} />
-                  <span>Bật</span>
+                  <span>Bat</span>
                 </label>
               ) : (
                 <input
@@ -1235,11 +1270,11 @@ function AdminConfigPanel(props: {
                 />
               )}
               <button className="secondary-button" disabled={props.pending} type="submit">
-                Lưu
+                L?u
               </button>
             </form>
           ))}
-          {sortedEntries.length === 0 && <div className="notice">Chưa có cấu hình hệ thống.</div>}
+        {sortedEntries.length === 0 && <div className="notice">Chua co cau hinh he thong.</div>}
         </div>
       </article>
 
@@ -1247,16 +1282,16 @@ function AdminConfigPanel(props: {
         <div className="panel-heading">
           <div>
             <span className="eyebrow">History</span>
-            <h2>Lịch sử cấu hình</h2>
+              <h2>Lich su cau hinh</h2>
           </div>
           <Clock size={18} />
         </div>
         <div className="admin-table">
           <div className="admin-row head">
             <span>Key</span>
-            <span>Giá trị cũ</span>
-            <span>Giá trị mới</span>
-            <span>Thời gian</span>
+            <span>Gi? tr? c?</span>
+            <span>Gia tri moi</span>
+            <span>Thoi gian</span>
           </div>
           {props.history.slice(0, 12).map((item) => (
             <div className="admin-row" key={item.id}>
@@ -1264,9 +1299,17 @@ function AdminConfigPanel(props: {
               <span>{item.oldValue ?? "-"}</span>
               <span>{item.newValue}</span>
               <span>{formatDate(item.changedAt)}</span>
+              <button
+                className="secondary-button compact-button"
+                disabled={props.pending || item.oldValue === null}
+                type="button"
+                onClick={() => props.onRun(() => api.adminRollbackConfigHistory(item.id))}
+              >
+                Rollback
+              </button>
             </div>
           ))}
-          {props.history.length === 0 && <div className="notice">Chưa có lịch sử thay đổi cấu hình.</div>}
+        {props.history.length === 0 && <div className="notice">Chua co lich su thay doi cau hinh.</div>}
         </div>
       </article>
     </section>
@@ -1295,7 +1338,7 @@ function AdminOverviewPanel(props: { posts: BoardPost[]; users: AdminUser[]; rep
   }, [props.posts]);
   const areaStats = useMemo(() => {
     const buckets = new Map<string, number>();
-    props.posts.forEach((post) => buckets.set(post.location.areaName ?? post.location.buildingName ?? "Chưa rõ", (buckets.get(post.location.areaName ?? post.location.buildingName ?? "Chưa rõ") ?? 0) + 1));
+  props.posts.forEach((post) => buckets.set(post.location.areaName ?? post.location.buildingName ?? "Chua ro", (buckets.get(post.location.areaName ?? post.location.buildingName ?? "Chua ro") ?? 0) + 1));
     return Array.from(buckets.entries()).sort((a, b) => b[1] - a[1]).slice(0, 6);
   }, [props.posts]);
   const resolvedCount = props.posts.filter((post) => post.status === "RESOLVED").length;
@@ -1329,7 +1372,7 @@ function AdminOverviewPanel(props: { posts: BoardPost[]; users: AdminUser[]; rep
               </div>
             );
           })}
-          {postsByDate.length === 0 && <small>Chưa có dữ liệu.</small>}
+        {postsByDate.length === 0 && <small>Chua co du lieu.</small>}
         </div>
       </article>
 
@@ -1351,7 +1394,7 @@ function AdminOverviewPanel(props: { posts: BoardPost[]; users: AdminUser[]; rep
         <div className="panel-heading">
           <div>
             <span className="eyebrow">Category</span>
-            <h2>Thống kê danh mục</h2>
+              <h2>Thong ke danh muc</h2>
           </div>
           <Boxes size={18} />
         </div>
@@ -1384,7 +1427,7 @@ function AdminOverviewPanel(props: { posts: BoardPost[]; users: AdminUser[]; rep
               <span>{user.reputationPoints} diem - {user.reputationLevel}</span>
             </div>
           ))}
-          {trustedUsers.length === 0 && <small>Chưa có người dùng hoạt động.</small>}
+        {trustedUsers.length === 0 && <small>Chua co nguoi dung hoat dong.</small>}
         </div>
       </article>
 
@@ -1392,16 +1435,16 @@ function AdminOverviewPanel(props: { posts: BoardPost[]; users: AdminUser[]; rep
         <div className="panel-heading">
           <div>
             <span className="eyebrow">Operations</span>
-            <h2>Bài đăng gần đây</h2>
+              <h2>Bai dang gan day</h2>
           </div>
           <span>{props.foundCount} FOUND</span>
         </div>
         <div className="admin-table">
           <div className="admin-row head">
-            <span>Loại</span>
-            <span>Tiêu đề</span>
-            <span>Trạng thái</span>
-            <span>Vị trí</span>
+            <span>Loai</span>
+            <span>Tieu de</span>
+            <span>Trang thai</span>
+            <span>V? tr?</span>
           </div>
           {props.posts.slice(0, 8).map((post) => (
             <div className="admin-row" key={post.id}>
@@ -1411,12 +1454,12 @@ function AdminOverviewPanel(props: { posts: BoardPost[]; users: AdminUser[]; rep
               <span>{locationText(post)}</span>
             </div>
           ))}
-          {props.posts.length === 0 && <div className="notice">Chưa có dữ liệu bài đăng để thống kê.</div>}
+        {props.posts.length === 0 && <div className="notice">Chua co du lieu bai dang de thong ke.</div>}
         </div>
       </article>
 
-      <AdminListPanel title="Người dùng mới" icon={<Users size={18} />} items={props.users.map((user) => `${user.fullName} · ${user.roles.join("/") || user.status}`)} />
-      <AdminListPanel title="Báo cáo mới" icon={<Flag size={18} />} items={props.reports.map((report) => `${report.status} · ${report.reason}`)} />
+        <AdminListPanel title="Nguoi dung moi" icon={<Users size={18} />} items={props.users.map((user) => `${user.fullName} - ${user.roles.join("/") || user.status}`)} />
+        <AdminListPanel title="Bao cao moi" icon={<Flag size={18} />} items={props.reports.map((report) => `${report.status} - ${report.reason}`)} />
     </section>
   );
 }
@@ -1426,14 +1469,14 @@ function DashboardRankList(props: { items: Array<[string, number]> }) {
 
   return (
     <div className="dashboard-rank-list">
-      {props.items.map(([label, total]) => (
-        <div key={label}>
+      {props.items.map(([label, total], index) => (
+        <div key={`${label}-${index}`}>
           <span>{label}</span>
           <strong>{total}</strong>
           <i style={{ width: `${Math.max(8, (total / max) * 100)}%` }} />
         </div>
       ))}
-      {props.items.length === 0 && <small>Chưa có dữ liệu.</small>}
+        {props.items.length === 0 && <small>Chua co du lieu.</small>}
     </div>
   );
 }
@@ -1459,22 +1502,22 @@ function StaffWarehouseOverviewPanel(props: {
         <div className="panel-heading">
           <div>
             <span className="eyebrow">Staff warehouse</span>
-            <h2>Ca trực kho hôm nay</h2>
+              <h2>Ca truc kho hom nay</h2>
           </div>
           <Boxes size={18} />
         </div>
         <div className="staff-command-grid">
           <div>
             <strong>{activeItems.length}</strong>
-            <span>vật đang cần theo dõi</span>
+            <span>vat dang can theo doi</span>
           </div>
           <div>
             <strong>{attentionItems.length}</strong>
-            <span>mục cần xử lý nhanh</span>
+            <span>muc can xu ly nhanh</span>
           </div>
           <div>
             <strong>{stockedPoints.length}</strong>
-            <span>điểm bàn giao có lưu vật</span>
+            <span>diem ban giao co luu vat</span>
           </div>
         </div>
       </article>
@@ -1483,7 +1526,7 @@ function StaffWarehouseOverviewPanel(props: {
         <div className="panel-heading">
           <div>
             <span className="eyebrow">Queue</span>
-            <h2>Cần xử lý</h2>
+              <h2>Can xu ly?</h2>
           </div>
           <Clock size={18} />
         </div>
@@ -1497,12 +1540,12 @@ function StaffWarehouseOverviewPanel(props: {
               </div>
               {item.post && (
                 <button className="secondary-button" type="button" onClick={() => props.onSelectPost(item.post!.id)}>
-                  <Eye size={16} /> Xem bài
+                  <Eye size={16} /> Xem b?i
                 </button>
               )}
             </div>
           ))}
-          {attentionItems.length === 0 && <small>Không có vật nào cần xử lý gấp.</small>}
+        {attentionItems.length === 0 && <small>Khong co vat nao can xu ly gap.</small>}
         </div>
       </article>
 
@@ -1510,7 +1553,7 @@ function StaffWarehouseOverviewPanel(props: {
         <div className="panel-heading">
           <div>
             <span className="eyebrow">Handover</span>
-            <h2>Tồn theo điểm bàn giao</h2>
+              <h2>Ton theo diem ban giao</h2>
           </div>
           <MapPin size={18} />
         </div>
@@ -1521,7 +1564,7 @@ function StaffWarehouseOverviewPanel(props: {
               <strong>{point.storedItems}</strong>
             </div>
           ))}
-          {stockedPoints.length === 0 && <small>Chưa có vật phẩm đang lưu tại điểm bàn giao.</small>}
+        {stockedPoints.length === 0 && <small>Chua co vat pham dang luu tai diem ban giao.</small>}
         </div>
       </article>
     </section>
@@ -1552,7 +1595,7 @@ function AdminModerationPanel(props: {
       <div className="panel-heading">
         <div>
           <span className="eyebrow">Moderation</span>
-          <h2>Quản lý kiểm duyệt bài đăng</h2>
+              <h2>Quan ly kiem duyet bai dang</h2>
         </div>
         <span>{visiblePosts.length}/{props.posts.length}</span>
       </div>
@@ -1560,20 +1603,20 @@ function AdminModerationPanel(props: {
       <div className="admin-moderation-filters">
         <div className="search-box">
           <Search size={18} />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm theo tiêu đề, mô tả, người đăng..." />
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tim theo tieu de, mo ta, nguoi dang..." />
         </div>
         <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as PostType | "ALL")}>
-          <option value="ALL">Tất cả loại bài</option>
-          <option value="LOST">Đồ bị mất</option>
-          <option value="FOUND">Đồ nhặt được</option>
+          <option value="ALL">Tat ca loai bai</option>
+          <option value="LOST">Do bi mat</option>
+          <option value="FOUND">Do nhat duoc</option>
         </select>
         <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as PostStatus | "ALL")}>
-          <option value="ALL">Tất cả trạng thái</option>
-          <option value="OPEN">Đang mở</option>
-          <option value="MATCHED">Có gợi ý</option>
-          <option value="RESOLVED">Đã hoàn thành</option>
-          <option value="CLOSED">Đã đóng</option>
-          <option value="HIDDEN">Đã ẩn</option>
+          <option value="ALL">Tat ca trang thai</option>
+          <option value="OPEN">?ang m?</option>
+          <option value="MATCHED">Co goi y</option>
+          <option value="RESOLVED">Da hoan thanh</option>
+          <option value="CLOSED">Da dong</option>
+          <option value="HIDDEN">?? ?n</option>
         </select>
       </div>
 
@@ -1587,7 +1630,7 @@ function AdminModerationPanel(props: {
             onSelectPost={props.onSelectPost}
           />
         ))}
-        {visiblePosts.length === 0 && <div className="notice">Không có bài đăng phù hợp bộ lọc.</div>}
+        {visiblePosts.length === 0 && <div className="notice">Khong co bai dang phu hop bo loc.</div>}
       </div>
     </section>
   );
@@ -1604,7 +1647,7 @@ function AdminModerationRow(props: {
   }
 
   function deletePost() {
-    const confirmed = window.confirm(`Xóa mềm bài "${props.post.title}"? Bài sẽ không còn hiển thị trên hệ thống.`);
+    const confirmed = window.confirm(`X?a m?m b?i "${props.post.title}"? B?i s? kh?ng c?n hi?n th? tr?n h? th?ng.`);
     if (confirmed) {
       props.onRun(() => api.deletePost(props.post.id));
     }
@@ -1620,27 +1663,27 @@ function AdminModerationRow(props: {
         <strong>{props.post.title}</strong>
         <p>{props.post.description}</p>
         <small>
-          {props.post.owner.fullName} · {locationText(props.post)} · {formatDate(props.post.createdAt)}
+          {props.post.owner.fullName} ? {locationText(props.post)} ? {formatDate(props.post.createdAt)}
         </small>
       </div>
       <div className="admin-inline-actions">
         <button className="secondary-button" type="button" onClick={() => props.onSelectPost(props.post.id)}>
-          <Eye size={16} /> Xem chi tiết
+          <Eye size={16} /> Xem chi ti?t
         </button>
         <button className="secondary-button" disabled={props.pending || props.post.status === "RESOLVED"} type="button" onClick={() => updateStatus("RESOLVED")}>
-          Hoàn thành
+          Ho?n th?nh
         </button>
         <button className="secondary-button" disabled={props.pending || props.post.status === "CLOSED"} type="button" onClick={() => updateStatus("CLOSED")}>
-          Đóng
+          ??ng
         </button>
         <button className="secondary-button" disabled={props.pending || props.post.status === "OPEN"} type="button" onClick={() => updateStatus("OPEN")}>
-          Mở lại
+          M? l?i
         </button>
         <button className="secondary-button" disabled={props.pending || props.post.status === "HIDDEN"} type="button" onClick={() => updateStatus("HIDDEN")}>
-          Ẩn
+          ?n
         </button>
         <button className="danger-button" disabled={props.pending} type="button" onClick={deletePost}>
-          Xóa
+          X?a
         </button>
       </div>
     </article>
@@ -1676,18 +1719,18 @@ function AdminCategoryPanel(props: { categories: AdminCategory[]; pending: boole
         <div className="panel-heading">
           <div>
             <span className="eyebrow">Categories</span>
-            <h2>{editing ? "Sửa danh mục" : "Tạo danh mục"}</h2>
+        <h2>{editing ? "Sua danh muc" : "Tao danh muc"}</h2>
           </div>
           <Boxes size={18} />
         </div>
         <label>
-          Tên danh mục
-          <input name="name" required minLength={2} defaultValue={editing?.name ?? ""} placeholder="Ví dụ: Thiết bị điện tử" />
+          T?n danh m?c
+          <input name="name" required minLength={2} defaultValue={editing?.name ?? ""} placeholder="Vi du: Thiet bi dien tu" />
         </label>
         <label>
-          Nhóm hiển thị
+          Nh?m hi?n th?
           <select name="parentId" defaultValue={editing?.parentId ?? ""} disabled={editingHasChildren}>
-            <option value="">Nhóm chính</option>
+            <option value="">Nhom chinh</option>
             {parentCategories
               .filter((category) => category.id !== editing?.id)
               .map((category) => (
@@ -1698,18 +1741,18 @@ function AdminCategoryPanel(props: { categories: AdminCategory[]; pending: boole
           </select>
           <small className="form-hint">
             {editingHasChildren
-              ? "Nhóm này đang có danh mục bên trong nên không thể chuyển sang nhóm khác."
-              : "Để trống nếu đây là nhóm chính; chọn một nhóm nếu đây là danh mục cụ thể bên trong nhóm đó."}
+            ? "Nhom nay dang co danh muc ben trong nen khong the chuyen sang nhom khac."
+            : "De trong neu day la nhom chinh; chon mot nhom neu day la danh muc cu the ben trong nhom do."}
           </small>
         </label>
         <div className="admin-form-actions">
           {editing && (
             <button className="secondary-button" type="button" onClick={() => setEditing(null)}>
-              Hủy sửa
+            H?y s?a
             </button>
           )}
           <button className="primary-button" disabled={props.pending} type="submit">
-            {editing ? "Lưu danh mục" : "Tạo danh mục"}
+          {editing ? "Luu danh muc" : "Tao danh muc"}
           </button>
         </div>
       </form>
@@ -1718,12 +1761,12 @@ function AdminCategoryPanel(props: { categories: AdminCategory[]; pending: boole
         <div className="panel-heading">
           <div>
             <span className="eyebrow">CRUD</span>
-            <h2>Danh sách danh mục</h2>
+          <h2>Danh sach danh muc</h2>
           </div>
           <span>{props.categories.length}</span>
         </div>
         <div className="admin-resource-list">
-          <strong className="admin-resource-group-title">Nhóm chính</strong>
+        <strong className="admin-resource-group-title">Nhom chinh</strong>
           <div className="admin-categories-grid">
             {parentCategories.map((category) => (
               <div className="admin-category-card" key={category.id}>
@@ -1748,7 +1791,7 @@ function AdminCategoryPanel(props: { categories: AdminCategory[]; pending: boole
                             setOpenMenuId(null);
                           }}
                         >
-                          Sửa
+                        S?a
                         </button>
                         <button
                           type="button"
@@ -1759,7 +1802,7 @@ function AdminCategoryPanel(props: { categories: AdminCategory[]; pending: boole
                             setOpenMenuId(null);
                           }}
                         >
-                          {category.isActive ? "Ẩn" : "Kích hoạt"}
+                    {category.isActive ? "An" : "Kich hoat"}
                         </button>
                       </div>
                     )}
@@ -1767,13 +1810,13 @@ function AdminCategoryPanel(props: { categories: AdminCategory[]; pending: boole
                 </div>
                 <div className="category-card-body">
                   <strong>{category.name}</strong>
-                  <span>{props.categories.filter((child) => child.parentId === category.id).length} danh mục</span>
+                  <span>{props.categories.filter((child) => child.parentId === category.id).length} danh muc</span>
                 </div>
               </div>
             ))}
           </div>
 
-          <strong className="admin-resource-group-title">Danh mục cụ thể</strong>
+        <strong className="admin-resource-group-title">Danh muc cu the</strong>
           <div className="admin-categories-grid">
             {childCategories.map((category) => (
               <div className="admin-category-card" key={category.id}>
@@ -1798,7 +1841,7 @@ function AdminCategoryPanel(props: { categories: AdminCategory[]; pending: boole
                             setOpenMenuId(null);
                           }}
                         >
-                          Sửa
+                        S?a
                         </button>
                         <button
                           type="button"
@@ -1809,7 +1852,7 @@ function AdminCategoryPanel(props: { categories: AdminCategory[]; pending: boole
                             setOpenMenuId(null);
                           }}
                         >
-                          {category.isActive ? "Ẩn" : "Kích hoạt"}
+                    {category.isActive ? "An" : "Kich hoat"}
                         </button>
                       </div>
                     )}
@@ -1817,12 +1860,12 @@ function AdminCategoryPanel(props: { categories: AdminCategory[]; pending: boole
                 </div>
                 <div className="category-card-body">
                   <strong>{category.name}</strong>
-                  <span>Trong nhóm {categoryNameById.get(category.parentId ?? "") ?? "đã ẩn/xóa"}</span>
+                  <span>Trong nhom {categoryNameById.get(category.parentId ?? "") ?? "Da an/xoa"}</span>
                 </div>
               </div>
             ))}
           </div>
-          {props.categories.length === 0 && <small>Chưa có danh mục.</small>}
+        {props.categories.length === 0 && <small>Chua co danh muc.</small>}
         </div>
       </article>
     </section>
@@ -1869,30 +1912,30 @@ function AdminLocationPanel(props: {
           <div className="panel-heading">
             <div>
               <span className="eyebrow">Areas</span>
-              <h2>{areaEdit ? "Sửa khu vực" : "Tạo khu vực"}</h2>
+          <h2>{areaEdit ? "Sua khu vuc" : "Tao khu vuc"}</h2>
             </div>
             <Building2 size={18} />
           </div>
           <label>
-            Tên khu vực
-            <input name="name" required defaultValue={areaEdit?.name ?? ""} placeholder="Ví dụ: Khu Alpha" />
+            T?n khu v?c
+            <input name="name" required defaultValue={areaEdit?.name ?? ""} placeholder="V? d?: Khu Alpha" />
           </label>
           <label>
-            Mô tả
-            <input name="description" defaultValue={areaEdit?.description ?? ""} placeholder="Mô tả ngắn" />
+            M? t?
+          <input name="description" defaultValue={areaEdit?.description ?? ""} placeholder="Mo ta ngan" />
           </label>
           <div className="admin-form-actions">
-            {areaEdit && <button className="secondary-button" type="button" onClick={() => setAreaEdit(null)}>Hủy sửa</button>}
-            <button className="primary-button" disabled={props.pending} type="submit">{areaEdit ? "Lưu khu vực" : "Tạo khu vực"}</button>
+        {areaEdit && <button className="secondary-button" type="button" onClick={() => setAreaEdit(null)}>Huy sua</button>}
+        <button className="primary-button" disabled={props.pending} type="submit">{areaEdit ? "Luu khu vuc" : "Tao khu vuc"}</button>
           </div>
         </form>
 
         <AdminResourceList
-          title="Danh sách khu vực"
+        title="Danh sach khu vuc"
           items={props.areas.map((area) => ({
             id: area.id,
             name: area.name,
-            meta: area.description ?? "Không có mô tả",
+          meta: area.description ?? "Khong co mo ta",
             active: area.isActive,
             onEdit: () => setAreaEdit(area),
             onToggle: () => props.onRun(() => api.adminSetAreaActive(area.id, !area.isActive))
@@ -1906,35 +1949,35 @@ function AdminLocationPanel(props: {
           <div className="panel-heading">
             <div>
               <span className="eyebrow">Buildings</span>
-              <h2>{buildingEdit ? "Sửa địa điểm" : "Tạo địa điểm"}</h2>
+          <h2>{buildingEdit ? "Sua dia diem" : "Tao dia diem"}</h2>
             </div>
             <Building2 size={18} />
           </div>
           <label>
-            Khu vực
+            Khu v?c
             <select name="areaId" required defaultValue={buildingEdit?.areaId ?? ""}>
-              <option value="">Chọn khu vực</option>
+            <option value="">Chon khu vuc</option>
               {props.areas.map((area) => (
                 <option key={area.id} value={area.id}>{area.name}</option>
               ))}
             </select>
           </label>
           <label>
-            Tên địa điểm cụ thể
-            <input name="name" required defaultValue={buildingEdit?.name ?? ""} placeholder="Ví dụ: Tòa Alpha, Cổng chính" />
+            T?n ??a ?i?m c? th?
+          <input name="name" required defaultValue={buildingEdit?.name ?? ""} placeholder="Vi du: Toa Alpha, Cong chinh" />
           </label>
           <div className="admin-form-actions">
-            {buildingEdit && <button className="secondary-button" type="button" onClick={() => setBuildingEdit(null)}>Hủy sửa</button>}
-            <button className="primary-button" disabled={props.pending} type="submit">{buildingEdit ? "Lưu địa điểm" : "Tạo địa điểm"}</button>
+        {buildingEdit && <button className="secondary-button" type="button" onClick={() => setBuildingEdit(null)}>Huy sua</button>}
+        <button className="primary-button" disabled={props.pending} type="submit">{buildingEdit ? "Luu dia diem" : "Tao dia diem"}</button>
           </div>
         </form>
 
         <AdminResourceList
-          title="Danh sách địa điểm cụ thể"
+        title="Danh sach dia diem cu the"
           items={props.buildings.map((building) => ({
             id: building.id,
             name: building.name,
-            meta: building.areaName ?? "Chưa gắn khu vực",
+          meta: building.areaName ?? "Chua gan khu vuc",
             active: building.isActive,
             onEdit: () => setBuildingEdit(building),
             onToggle: () => props.onRun(() => api.adminSetBuildingActive(building.id, !building.isActive))
@@ -1944,7 +1987,7 @@ function AdminLocationPanel(props: {
       </div>
 
       <div className="notice">
-        Phòng học không quản lý bằng CRUD riêng. Khi đăng tin, user sẽ nhập phòng/vị trí chi tiết dạng text để tránh phải tạo quá nhiều phòng.
+          Ph?ng h?c kh?ng qu?n l? b?ng CRUD ri?ng. Khi ??ng tin, user s? nh?p ph?ng/v? tr? chi ti?t d?ng text ?? tr?nh ph?i t?o qu? nhi?u ph?ng.
       </div>
     </section>
   );
@@ -2021,21 +2064,21 @@ function AdminHandoverPanel(props: {
         <div className="panel-heading">
           <div>
             <span className="eyebrow">Handover</span>
-            <h2>{editing ? "Sửa điểm bàn giao" : "Tạo điểm bàn giao"}</h2>
+        <h2>{editing ? "Sua diem ban giao" : "Tao diem ban giao"}</h2>
           </div>
           <Handshake size={18} />
         </div>
         <label>
-          Tên điểm
-          <input name="name" required defaultValue={editing?.name ?? ""} placeholder="Ví dụ: Quầy CTSV" />
+          T?n ?i?m
+          <input name="name" required defaultValue={editing?.name ?? ""} placeholder="Vi du: Quay CTSV" />
         </label>
         <label>
-          Địa chỉ
-          <input name="address" required defaultValue={editing?.address ?? ""} placeholder="Tầng 1, tòa Alpha" />
+          ??a ch?
+          <input name="address" required defaultValue={editing?.address ?? ""} placeholder="Tang 1, toa Alpha" />
         </label>
         <div className="form-grid">
           <label>
-            Khu vực
+          Khu v?c
             <select
               name="areaId"
               value={selectedAreaId}
@@ -2044,21 +2087,21 @@ function AdminHandoverPanel(props: {
                 setSelectedBuildingId("");
               }}
             >
-              <option value="">Không gắn</option>
+            <option value="">Khong gan</option>
               {props.areas.map((area) => (
                 <option key={area.id} value={area.id}>{area.name}</option>
               ))}
             </select>
           </label>
           <label>
-            Địa điểm cụ thể
+          ??a ?i?m c? th?
             <select
               name="buildingId"
               value={selectedBuildingId}
               onChange={(event) => setSelectedBuildingId(event.target.value)}
               disabled={!selectedAreaId}
             >
-              <option value="">Không gắn</option>
+            <option value="">Khong gan</option>
               {(buildingsQuery.data?.buildings ?? []).map((building) => (
                 <option key={building.id} value={building.id}>{building.name}</option>
               ))}
@@ -2067,32 +2110,32 @@ function AdminHandoverPanel(props: {
         </div>
         <div className="form-grid">
           <label>
-            Giờ mở cửa
+          Gi? m? c?a
             <input name="openingHours" defaultValue={editing?.openingHours ?? ""} placeholder="08:00 - 17:00" />
           </label>
           <label>
-            Liên hệ
-            <input name="contactInfo" defaultValue={editing?.contactInfo ?? ""} placeholder="Email/SĐT phụ trách" />
+          Li?n h?
+          <input name="contactInfo" defaultValue={editing?.contactInfo ?? ""} placeholder="Email/SDT phu trach" />
           </label>
         </div>
         <div className="admin-map-picker-field">
           <label>
-            Ảnh bản đồ campus
+          ?nh b?n ?? campus
             <input
-              value={mapImageUrl.startsWith("data:") ? "Ảnh đã chọn từ máy" : mapImageUrl}
+            value={mapImageUrl.startsWith("data:") ? "Anh da chon tu may" : mapImageUrl}
               onChange={(event) => setMapImageUrl(event.target.value)}
-              placeholder="/fpt-campus-map.jpg hoặc chọn file bên dưới"
+            placeholder="/fpt-campus-map.jpg hoac chon file ben duoi"
               readOnly={mapImageUrl.startsWith("data:")}
             />
           </label>
           <label className="upload-strip admin-map-upload">
             <Upload size={18} />
-            Chọn ảnh map
+          Ch?n ?nh map
             <input type="file" accept="image/*" onChange={(event) => selectMapFile(event.target.files?.[0])} />
           </label>
           {mapImageUrl.startsWith("data:") && (
             <button className="secondary-button" type="button" onClick={() => setMapImageUrl("")}>
-              Chọn lại bằng URL
+          Ch?n l?i b?ng URL
             </button>
           )}
         </div>
@@ -2102,17 +2145,17 @@ function AdminHandoverPanel(props: {
           onChange={setMapPosition}
         />
         <div className="admin-form-actions">
-          {editing && <button className="secondary-button" type="button" onClick={() => setEditing(null)}>Hủy sửa</button>}
-          <button className="primary-button" disabled={props.pending} type="submit">{editing ? "Lưu điểm" : "Tạo điểm"}</button>
+        {editing && <button className="secondary-button" type="button" onClick={() => setEditing(null)}>Huy sua</button>}
+        <button className="primary-button" disabled={props.pending} type="submit">{editing ? "Luu diem" : "Tao diem"}</button>
         </div>
       </form>
 
       <AdminResourceList
-        title="Danh sách điểm bàn giao"
+        title="Danh sach diem ban giao"
         items={props.handoverPoints.map((point) => ({
           id: point.id,
           name: point.name,
-          meta: `${point.address}${point.openingHours ? ` · ${point.openingHours}` : ""} · ${point.storedItems} vật phẩm`,
+            meta: `${point.address}${point.openingHours ? ` ? ${point.openingHours}` : ""} ? ${point.storedItems} v?t ph?m`,
           active: point.isActive,
           onEdit: () => setEditing(point),
           onToggle: () => props.onRun(() => api.adminSetHandoverPointActive(point.id, !point.isActive))
@@ -2143,7 +2186,7 @@ function AdminMapLocationPicker(props: {
   return (
     <div className="admin-map-picker">
       <div className="admin-map-picker-heading">
-        <strong>Vị trí điểm bàn giao trên map</strong>
+            <strong>Vi tri diem ban giao tren map</strong>
         <span>{props.position.x.toFixed(1)}%, {props.position.y.toFixed(1)}%</span>
       </div>
       <div
@@ -2160,15 +2203,15 @@ function AdminMapLocationPicker(props: {
         }}
       >
         {props.imageUrl ? (
-          <img src={props.imageUrl} alt="Bản đồ campus dùng để đặt điểm bàn giao" />
+        <img src={props.imageUrl} alt="Ban do campus dung de dat diem ban giao" />
         ) : (
-          <span>Chọn ảnh map trước, sau đó kéo marker tới vị trí mong muốn.</span>
+        <span>Chon anh map truoc, sau do keo marker toi vi tri mong muon.</span>
         )}
         <button
           className="admin-map-location-pin"
           type="button"
           style={{ left: `${props.position.x}%`, top: `${props.position.y}%` }}
-          aria-label="Vị trí điểm bàn giao"
+          aria-label="Vi tri diem ban giao"
         >
           <MapPin size={22} />
         </button>
@@ -2192,6 +2235,8 @@ function AdminWarehousePanel(props: {
   const [editing, setEditing] = useState<AdminWarehouseItem | null>(null);
   const [selectedAreaId, setSelectedAreaId] = useState("");
   const [selectedBuildingId, setSelectedBuildingId] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const foundPosts = useMemo(() => props.posts.filter((post) => post.type === "FOUND"), [props.posts]);
   const categoryOptions = useMemo(() => categorySelectOptions(props.categories), [props.categories]);
   const buildingOptions = useMemo(
@@ -2236,24 +2281,44 @@ function AdminWarehousePanel(props: {
     clearForm(event.currentTarget);
   }
 
+  async function exportWarehouseCsv() {
+    setExportError(null);
+    setExporting(true);
+    try {
+      const blob = await api.adminDownloadWarehouseCsv();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `lost-found-warehouse-${Date.now()}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : "Khong the xuat CSV kho.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <section className="admin-management-grid warehouse-management-grid">
       <form className="admin-panel admin-form" key={editing?.id ?? "new-warehouse"} onSubmit={submit}>
         <div className="panel-heading">
           <div>
             <span className="eyebrow">Warehouse</span>
-            <h2>{editing ? "Sửa vật trong kho" : "Nhập vật vào kho"}</h2>
+        <h2>{editing ? "Sua vat trong kho" : "Nhap vat vao kho"}</h2>
           </div>
           <Boxes size={18} />
         </div>
         <label>
-          Tên vật
-          <input name="itemName" required minLength={2} defaultValue={editing?.itemName ?? ""} placeholder="Ví dụ: Ví da màu nâu" />
+            T?n v?t
+          <input name="itemName" required minLength={2} defaultValue={editing?.itemName ?? ""} placeholder="Vi du: Vi da mau nau" />
         </label>
         <label>
-          Bài FOUND liên quan
+            B?i FOUND li?n quan
           <select name="postId" defaultValue={editing?.post?.id ?? ""}>
-            <option value="">Không gắn bài đăng</option>
+            <option value="">Khong gan bai dang</option>
             {foundPosts.map((post) => (
               <option key={post.id} value={post.id}>{post.title}</option>
             ))}
@@ -2261,16 +2326,16 @@ function AdminWarehousePanel(props: {
         </label>
         <div className="form-grid">
           <label>
-            Danh mục
+            Danh m?c
             <select name="categoryId" defaultValue={editing?.category?.id ?? ""}>
-              <option value="">Chưa phân loại</option>
+            <option value="">Chua phan loai</option>
               {categoryOptions.map((category) => (
                 <option key={category.id} value={category.id}>{category.label}</option>
               ))}
             </select>
           </label>
           <label>
-            Trạng thái
+            Tr?ng th?i
             <select name="status" defaultValue={editing?.status ?? "RECEIVED"}>
               {warehouseStatuses.map((status) => (
                 <option key={status} value={status}>{warehouseStatusLabel(status)}</option>
@@ -2280,22 +2345,22 @@ function AdminWarehousePanel(props: {
         </div>
         <div className="form-grid">
           <label>
-            Điểm bàn giao/kho
+            ?i?m b?n giao/kho
             <select name="handoverPointId" defaultValue={editing?.handoverPoint?.id ?? ""}>
-              <option value="">Chưa gắn điểm</option>
+            <option value="">Chua gan diem</option>
               {props.handoverPoints.map((point) => (
                 <option key={point.id} value={point.id}>{point.name}</option>
               ))}
             </select>
           </label>
           <label>
-            Mã kệ/ngăn
+            M? k?/ng?n
             <input name="storageCode" defaultValue={editing?.storageCode ?? ""} placeholder="VD: KHO-A1-03" />
           </label>
         </div>
         <div className="form-grid">
           <label>
-            Khu vực
+            Khu v?c
             <select
               name="areaId"
               value={selectedAreaId}
@@ -2304,21 +2369,21 @@ function AdminWarehousePanel(props: {
                 setSelectedBuildingId("");
               }}
             >
-              <option value="">Không gắn</option>
+            <option value="">Khong gan</option>
               {props.areas.map((area) => (
                 <option key={area.id} value={area.id}>{area.name}</option>
               ))}
             </select>
           </label>
           <label>
-            Địa điểm cụ thể
+            ??a ?i?m c? th?
             <select
               name="buildingId"
               value={selectedBuildingId}
               onChange={(event) => setSelectedBuildingId(event.target.value)}
               disabled={!selectedAreaId}
             >
-              <option value="">Không gắn</option>
+            <option value="">Khong gan</option>
               {buildingOptions.map((building) => (
                 <option key={building.id} value={building.id}>{building.name}</option>
               ))}
@@ -2326,46 +2391,46 @@ function AdminWarehousePanel(props: {
           </label>
         </div>
         <label>
-          Phòng/vị trí chi tiết
-          <input name="roomText" defaultValue={editing?.location.roomText ?? ""} placeholder="VD: quầy CTSV, kệ số 2" />
+            Ph?ng/v? tr? chi ti?t
+          <input name="roomText" defaultValue={editing?.location.roomText ?? ""} placeholder="VD: quay CTSV, ke so 2" />
         </label>
         <div className="form-grid">
           <label>
-            Người gửi/nhặt được
-            <input name="finderName" defaultValue={editing?.finder.name ?? editing?.finder.fullName ?? ""} placeholder="Tên sinh viên gửi kho" />
+            Ng??i g?i/nh?t ???c
+          <input name="finderName" defaultValue={editing?.finder.name ?? editing?.finder.fullName ?? ""} placeholder="Ten sinh vien gui kho" />
           </label>
           <label>
-            Liên hệ người gửi
-            <input name="finderContact" defaultValue={editing?.finder.contact ?? ""} placeholder="SĐT/email/Zalo" />
+            Li?n h? ng??i g?i
+          <input name="finderContact" defaultValue={editing?.finder.contact ?? ""} placeholder="SDT/email/Zalo" />
           </label>
         </div>
         <div className="form-grid">
           <label>
-            Ngày nhận vào kho
+            Ng?y nh?n v?o kho
             <input name="receivedAt" type="datetime-local" defaultValue={dateTimeLocalInputValue(editing?.receivedAt)} />
           </label>
           <label>
-            Hạn lưu giữ
+            H?n l?u gi?
             <input name="retentionDeadline" type="datetime-local" defaultValue={dateTimeLocalInputValue(editing?.retentionDeadline ?? undefined)} />
           </label>
         </div>
         <div className="form-grid">
           <label>
-            Ngày hoàn trả/xử lý
+            Ng?y ho?n tr?/x? l?
             <input name="returnedAt" type="datetime-local" defaultValue={dateTimeLocalInputValue(editing?.returnedAt ?? undefined)} />
           </label>
         </div>
         <label>
-          Mô tả
-          <textarea name="description" rows={3} defaultValue={editing?.description ?? ""} placeholder="Mô tả vật, màu sắc, nhãn hiệu..." />
+            M? t?
+          <textarea name="description" rows={3} defaultValue={editing?.description ?? ""} placeholder="Mo ta vat, mau sac, nhan hieu..." />
         </label>
         <label>
-          Ghi chú tình trạng
-          <textarea name="conditionNotes" rows={3} defaultValue={editing?.conditionNotes ?? ""} placeholder="Tình trạng khi nhận, bao bì, phụ kiện đi kèm..." />
+            Ghi ch? t?nh tr?ng
+          <textarea name="conditionNotes" rows={3} defaultValue={editing?.conditionNotes ?? ""} placeholder="Tinh trang khi nhan, bao bi, phu kien di kem..." />
         </label>
         <div className="admin-form-actions">
-          {editing && <button className="secondary-button" type="button" onClick={() => clearForm()}>Hủy sửa</button>}
-          <button className="primary-button" disabled={props.pending} type="submit">{editing ? "Lưu vật trong kho" : "Nhập kho"}</button>
+        {editing && <button className="secondary-button" type="button" onClick={() => clearForm()}>Huy sua</button>}
+        <button className="primary-button" disabled={props.pending} type="submit">{editing ? "Luu vat trong kho" : "Nhap kho"}</button>
         </div>
       </form>
 
@@ -2373,10 +2438,16 @@ function AdminWarehousePanel(props: {
         <div className="panel-heading">
           <div>
             <span className="eyebrow">CRUD</span>
-            <h2>Danh sách nhà kho</h2>
+          <h2>Danh sach nha kho</h2>
           </div>
-          <span>{props.warehouseItems.length}</span>
+          <div className="panel-heading-actions">
+            <span>{props.warehouseItems.length}</span>
+            <button className="secondary-button compact-button" disabled={exporting} type="button" onClick={() => void exportWarehouseCsv()}>
+          {exporting ? "Dang xuat..." : "Xuat CSV"}
+            </button>
+          </div>
         </div>
+        {exportError && <div className="notice error">{exportError}</div>}
         <div className="warehouse-item-list">
           {props.warehouseItems.map((item) => (
             <AdminWarehouseRow
@@ -2389,7 +2460,7 @@ function AdminWarehousePanel(props: {
               onSelectPost={props.onSelectPost}
             />
           ))}
-          {props.warehouseItems.length === 0 && <small>Chưa có vật nào trong kho.</small>}
+        {props.warehouseItems.length === 0 && <small>Chua co vat nao trong kho.</small>}
         </div>
       </article>
     </section>
@@ -2405,7 +2476,7 @@ function AdminWarehouseRow(props: {
   onSelectPost: (postId: string) => void;
 }) {
   function deleteItem() {
-    const confirmed = window.confirm(`Xóa vật "${props.item.itemName}" khỏi danh sách nhà kho?`);
+    const confirmed = window.confirm(`X?a v?t "${props.item.itemName}" kh?i danh s?ch nh? kho?`);
     if (confirmed) {
       props.onRun(() => api.adminDeleteWarehouseItem(props.item.id));
     }
@@ -2416,9 +2487,9 @@ function AdminWarehouseRow(props: {
       <div className="warehouse-item-main">
         <span className={`warehouse-status status-${props.item.status.toLowerCase()}`}>{warehouseStatusLabel(props.item.status)}</span>
         <strong>{props.item.itemName}</strong>
-        <span>{props.item.storageCode || props.item.handoverPoint?.name || "Chưa có mã/kho cụ thể"}</span>
+          <span>{props.item.storageCode || props.item.handoverPoint?.name || "Chua co ma/kho cu the"}</span>
         <small>
-          {warehouseLocationText(props.item)} · Nhận: {formatDate(props.item.receivedAt)} · Hạn: {props.item.retentionDeadline ? formatDate(props.item.retentionDeadline) : "60 ngày mặc định"}
+          {warehouseLocationText(props.item)} - Nhan: {formatDate(props.item.receivedAt)} - Han: {props.item.retentionDeadline ? formatDate(props.item.retentionDeadline) : "60 ngay mac dinh"}
         </small>
       </div>
       <select
@@ -2433,11 +2504,11 @@ function AdminWarehouseRow(props: {
       <div className="admin-inline-actions">
         {props.item.post && (
           <button className="secondary-button" type="button" onClick={() => props.onSelectPost(props.item.post!.id)}>
-            <Eye size={16} /> Xem bài
+          <Eye size={16} /> Xem b?i
           </button>
         )}
-        <button className="secondary-button" type="button" onClick={props.onEdit}>Sửa</button>
-        {props.canDelete && <button className="danger-button" disabled={props.pending} type="button" onClick={deleteItem}>Xóa</button>}
+        <button className="secondary-button" type="button" onClick={props.onEdit}>Sua</button>
+        {props.canDelete && <button className="danger-button" disabled={props.pending} type="button" onClick={deleteItem}>Xoa</button>}
       </div>
     </div>
   );
@@ -2469,7 +2540,7 @@ function AdminUsersPanel(props: { users: AdminUser[]; pending: boolean; onRun: A
         <div className="panel-heading">
           <div>
             <span className="eyebrow">Users</span>
-            <h2>Tạo người dùng</h2>
+        <h2>Tao nguoi dung</h2>
           </div>
           <Users size={18} />
         </div>
@@ -2478,25 +2549,25 @@ function AdminUsersPanel(props: { users: AdminUser[]; pending: boolean; onRun: A
           <input name="email" required type="email" placeholder="user@fpt.edu.vn" />
         </label>
         <label>
-          Họ tên
-          <input name="fullName" required minLength={2} placeholder="Nguyễn Văn A" />
+          H? t?n
+          <input name="fullName" required minLength={2} placeholder="Nguyen Van A" />
         </label>
         <label>
-          Mật khẩu tạm
-          <input name="password" required minLength={8} type="password" placeholder="Ít nhất 8 ký tự" />
+          M?t kh?u t?m
+          <input name="password" required minLength={8} type="password" placeholder="It nhat 8 ky tu" />
         </label>
         <div className="form-grid">
           <label>
-            MSSV/Mã GV
-            <input name="studentCode" placeholder="Tuỳ chọn" />
+            MSSV/M? GV
+          <input name="studentCode" placeholder="Tuy chon" />
           </label>
           <label>
-            SĐT
-            <input name="phoneNumber" placeholder="Tuỳ chọn" />
+            S?T
+          <input name="phoneNumber" placeholder="Tuy chon" />
           </label>
         </div>
         <label>
-          Trạng thái
+          Tr?ng th?i
           <select name="status" defaultValue="ACTIVE">
             <option value="ACTIVE">ACTIVE</option>
             <option value="LOCKED">LOCKED</option>
@@ -2511,14 +2582,14 @@ function AdminUsersPanel(props: { users: AdminUser[]; pending: boolean; onRun: A
             </label>
           ))}
         </div>
-        <button className="primary-button wide" disabled={props.pending} type="submit">Tạo người dùng</button>
+        <button className="primary-button wide" disabled={props.pending} type="submit">Tao nguoi dung</button>
       </form>
 
       <article className="admin-panel">
         <div className="panel-heading">
           <div>
             <span className="eyebrow">Access control</span>
-            <h2>Quản lý người dùng</h2>
+          <h2>Quan ly nguoi dung</h2>
           </div>
           <span>{props.users.length}</span>
         </div>
@@ -2526,7 +2597,7 @@ function AdminUsersPanel(props: { users: AdminUser[]; pending: boolean; onRun: A
           {props.users.map((user) => (
             <AdminUserRow key={user.id} pending={props.pending} user={user} onRun={props.onRun} />
           ))}
-          {props.users.length === 0 && <small>Chưa có người dùng.</small>}
+        {props.users.length === 0 && <small>Chua co nguoi dung.</small>}
         </div>
       </article>
     </section>
@@ -2565,7 +2636,7 @@ function AdminUserRow(props: { user: AdminUser; pending: boolean; onRun: AdminAc
         <option value="STAFF">STAFF</option>
         <option value="ADMIN">ADMIN</option>
       </select>
-      <button className="secondary-button" disabled={props.pending} type="submit">Lưu</button>
+          <button className="secondary-button" disabled={props.pending} type="submit">Luu</button>
     </form>
   );
 }
@@ -2576,7 +2647,7 @@ function AdminReportsPanel(props: { reports: AdminReport[]; pending: boolean; on
       <div className="panel-heading">
         <div>
           <span className="eyebrow">Reports</span>
-          <h2>Quản lý báo cáo</h2>
+        <h2>Quan ly bao cao</h2>
         </div>
         <span>{props.reports.length}</span>
       </div>
@@ -2584,7 +2655,7 @@ function AdminReportsPanel(props: { reports: AdminReport[]; pending: boolean; on
         {props.reports.map((report) => (
           <AdminReportRow key={report.id} pending={props.pending} report={report} onRun={props.onRun} />
         ))}
-        {props.reports.length === 0 && <div className="notice">Chưa có báo cáo nào.</div>}
+        {props.reports.length === 0 && <div className="notice">Chua co bao cao nao.</div>}
       </div>
     </section>
   );
@@ -2608,27 +2679,89 @@ function AdminReportRow(props: { report: AdminReport; pending: boolean; onRun: A
       <div className="admin-report-body">
         <span className={`status-pill report-${props.report.status.toLowerCase()}`}>{props.report.status}</span>
         <strong>{props.report.reason}</strong>
-        <p>{props.report.details ?? "Không có mô tả thêm."}</p>
+          <p>{props.report.details ?? "Khong co mo ta them."}</p>
         <small>
-          {props.report.entityType} · {props.report.targetText} · Người báo cáo:{" "}
-          {props.report.reporter.fullName ?? props.report.reporter.email ?? "Không rõ"}
+          {props.report.entityType} ? {props.report.targetText} ? Ng??i b?o c?o:{" "}
+            {props.report.reporter.fullName ?? props.report.reporter.email ?? "Khong ro"}
         </small>
       </div>
       <select name="status" defaultValue={props.report.status === "PENDING" ? "REVIEWED" : props.report.status}>
-        <option value="REVIEWED">Đã xử lý</option>
-        <option value="DISMISSED">Bỏ qua</option>
+          <option value="REVIEWED">?? x? l?</option>
+          <option value="DISMISSED">B? qua</option>
       </select>
       <select name="actionType" defaultValue="">
-        <option value="">Không áp dụng hành động</option>
-        <option value="WARN_USER">Cảnh báo user</option>
-        <option value="HIDE_POST">Ẩn bài viết</option>
-        <option value="DELETE_POST">Xóa mềm bài viết</option>
-        <option value="BAN_USER">Khóa user</option>
-        <option value="UNBAN_USER">Mở khóa user</option>
+            <option value="">Khong ap dung hanh dong</option>
+            <option value="WARN_USER">Canh bao user</option>
+            <option value="HIDE_POST">An bai viet</option>
+            <option value="DELETE_POST">Xoa mem bai viet</option>
+            <option value="BAN_USER">Khoa user</option>
+            <option value="UNBAN_USER">Mo khoa user</option>
       </select>
-      <input name="note" placeholder="Ghi chú xử lý" />
-      <button className="primary-button" disabled={props.pending} type="submit">Lưu xử lý</button>
+        <input name="note" placeholder="Ghi ch? x? l?" />
+          <button className="primary-button" disabled={props.pending} type="submit">Luu xu ly</button>
     </form>
+  );
+}
+
+function AdminReturnFeedbackPanel(props: {
+  feedback: ReturnFeedback[];
+  canReview: boolean;
+  pending: boolean;
+  onRun: AdminActionRunner;
+}) {
+  return (
+    <section className="admin-panel wide-panel">
+      <div className="panel-heading">
+        <div>
+          <span className="eyebrow">Return feedback</span>
+        <h2>Feedback sau ban giao</h2>
+        </div>
+        <span>{props.feedback.length}</span>
+      </div>
+      <div className="admin-report-list">
+        {props.feedback.map((item) => (
+          <form
+            className={`admin-report-row status-${item.status.toLowerCase()}`}
+            key={item.id}
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!props.canReview) {
+                return;
+              }
+              const data = new FormData(event.currentTarget);
+              props.onRun(() => api.adminReviewReturnFeedback(item.id, formText(data, "status") as ReturnFeedback["status"]));
+            }}
+          >
+            <div className="admin-report-body">
+              <span className={`status-pill report-${item.status.toLowerCase()}`}>{item.status}</span>
+              <strong>
+              {item.rating}/5 - {item.targetUser.fullName ?? item.targetUser.email ?? "Nguoi dung"}
+              </strong>
+          <p>{item.comment ?? "Khong co ghi chu them."}</p>
+              <small>
+          {item.postTitle ?? item.postId} - Nguoi danh gia: {item.reviewer.fullName ?? item.reviewer.email ?? "Khong ro"} -{" "}
+                {formatDate(item.createdAt)}
+              </small>
+            </div>
+            {props.canReview ? (
+              <>
+                <select name="status" defaultValue={item.status === "NEW" ? "REVIEWED" : item.status}>
+            <option value="REVIEWED">?? xem</option>
+            <option value="FLAGGED">Gan co user</option>
+            <option value="DISMISSED">B? qua</option>
+                </select>
+                <button className="primary-button" disabled={props.pending} type="submit">
+          L?u x? l?
+                </button>
+              </>
+            ) : (
+              <span className="status-pill">Staff view</span>
+            )}
+          </form>
+        ))}
+        {props.feedback.length === 0 && <div className="notice">Chua co feedback sau ban giao.</div>}
+      </div>
+    </section>
   );
 }
 
@@ -2673,7 +2806,7 @@ function AdminResourceList(props: {
                           setOpenMenuId(null);
                         }}
                       >
-                        Sửa
+              S?a
                       </button>
                       <button
                         type="button"
@@ -2684,7 +2817,7 @@ function AdminResourceList(props: {
                           setOpenMenuId(null);
                         }}
                       >
-                        {item.active ? "Ẩn" : "Kích hoạt"}
+                    {item.active ? "An" : "Kich hoat"}
                       </button>
                     </div>
                   )}
@@ -2697,7 +2830,7 @@ function AdminResourceList(props: {
             </div>
           ))}
         </div>
-        {props.items.length === 0 && <small className="empty-resource-notice">Chưa có dữ liệu.</small>}
+        {props.items.length === 0 && <small className="empty-resource-notice">Chua co du lieu.</small>}
       </div>
     </article>
   );
@@ -2740,10 +2873,10 @@ function LegacyAdminDashboardView(props: {
   return (
     <div className="admin-dashboard">
       <section className="admin-metric-grid">
-        <Metric label="Tổng bài đăng" value={overview?.posts ?? props.totalPosts} icon={<BarChart3 size={18} />} />
-        <Metric label="Đang xử lý" value={openCount} icon={<Clock size={18} />} />
-        <Metric label="Người dùng" value={overview?.users ?? props.users.length} icon={<Users size={18} />} />
-        <Metric label="Đã hoàn trả" value={resolvedCount} icon={<CheckCircle2 size={18} />} />
+          <Metric label="Tong bai dang" value={overview?.posts ?? props.totalPosts} icon={<BarChart3 size={18} />} />
+          <Metric label="?ang x? l?" value={openCount} icon={<Clock size={18} />} />
+          <Metric label="Nguoi dung" value={overview?.users ?? props.users.length} icon={<Users size={18} />} />
+          <Metric label="Da hoan tra" value={resolvedCount} icon={<CheckCircle2 size={18} />} />
       </section>
 
       <section className="admin-grid">
@@ -2751,16 +2884,16 @@ function LegacyAdminDashboardView(props: {
           <div className="panel-heading">
             <div>
               <span className="eyebrow">Operations</span>
-              <h2>Bài đăng gần đây</h2>
+          <h2>Bai dang gan day</h2>
             </div>
             <span>{foundCount} FOUND</span>
           </div>
           <div className="admin-table">
             <div className="admin-row head">
-              <span>Loại</span>
-              <span>Tiêu đề</span>
-              <span>Trạng thái</span>
-              <span>Vị trí</span>
+            <span>Loai</span>
+            <span>Tieu de</span>
+            <span>Trang thai</span>
+            <span>V? tr?</span>
             </div>
             {props.posts.slice(0, 8).map((post) => (
               <div className="admin-row" key={post.id}>
@@ -2770,38 +2903,38 @@ function LegacyAdminDashboardView(props: {
                 <span>{locationText(post)}</span>
               </div>
             ))}
-            {props.posts.length === 0 && <div className="notice">Chưa có dữ liệu bài đăng để thống kê.</div>}
+        {props.posts.length === 0 && <div className="notice">Chua co du lieu bai dang de thong ke.</div>}
           </div>
         </article>
 
-        <AdminListPanel title="Quản lý danh mục" icon={<Boxes size={18} />} items={props.categories.map(resourceLabel)} />
-        <AdminListPanel title="Khu vực / địa điểm" icon={<Building2 size={18} />} items={props.areas.map(resourceLabel)} />
-        <AdminListPanel title="Điểm bàn giao" icon={<Handshake size={18} />} items={props.handoverPoints.map((item) => `${resourceLabel(item)} · ${item.address}`)} />
+      <AdminListPanel title="Quan ly danh muc" icon={<Boxes size={18} />} items={props.categories.map(resourceLabel)} />
+      <AdminListPanel title="Khu vuc / dia diem" icon={<Building2 size={18} />} items={props.areas.map(resourceLabel)} />
+      <AdminListPanel title="Diem ban giao" icon={<Handshake size={18} />} items={props.handoverPoints.map((item) => `${resourceLabel(item)} - ${item.address}`)} />
         <article className="admin-panel">
           <div className="panel-heading">
             <div>
               <span className="eyebrow">Users</span>
-              <h2>Người dùng</h2>
+          <h2>Nguoi dung</h2>
             </div>
             <Users size={18} />
           </div>
           <div className="admin-chip-list">
             {props.users.slice(0, 8).map((user) => (
-              <span key={user.id}>{user.fullName} · {user.roles.join("/") || user.status}</span>
+              <span key={user.id}>{user.fullName} ? {user.roles.join("/") || user.status}</span>
             ))}
-            {props.users.length === 0 && <small>Chưa có dữ liệu người dùng.</small>}
+        {props.users.length === 0 && <small>Chua co du lieu nguoi dung.</small>}
           </div>
         </article>
         <article className="admin-panel">
           <div className="panel-heading">
             <div>
               <span className="eyebrow">Reports</span>
-              <h2>Báo cáo</h2>
+          <h2>Bao cao</h2>
             </div>
             <Flag size={18} />
           </div>
           <p>
-            Theo dõi bài vi phạm, claim bất thường, khu vực có nhiều đồ thất lạc và tỷ lệ hoàn trả theo thời gian.
+            Theo d?i b?i vi ph?m, claim b?t th??ng, khu v?c c? nhi?u ?? th?t l?c v? t? l? ho?n tr? theo th?i gian.
           </p>
         </article>
       </section>
@@ -2810,7 +2943,7 @@ function LegacyAdminDashboardView(props: {
 }
 
 function resourceLabel(resource: AdminNamedResource) {
-  return `${resource.name}${resource.isActive ? "" : " (ẩn)"}`;
+  return `${resource.name}${resource.isActive ? "" : " (?n)"}`;
 }
 
 function AdminListPanel(props: { title: string; icon: React.ReactNode; items: string[] }) {
@@ -2827,7 +2960,7 @@ function AdminListPanel(props: { title: string; icon: React.ReactNode; items: st
         {props.items.slice(0, 8).map((item, index) => (
           <span key={`${item}-${index}`}>{item}</span>
         ))}
-        {props.items.length === 0 && <small>Chưa có dữ liệu.</small>}
+        {props.items.length === 0 && <small>Chua co du lieu.</small>}
       </div>
     </article>
   );
@@ -2889,10 +3022,10 @@ function BoardView(props: {
         <div className="fpt-community-banner">
           <div className="banner-left-content">
             <h1 className="banner-title">
-              Cộng đồng FPT University Da Nang Lost & Found
+              C?ng ??ng FPT University Da Nang Lost & Found
             </h1>
             <p className="banner-description">
-              Nơi kết nối và hỗ trợ tìm lại đồ đạc thất lạc tại FPT University Da Nang. Hãy cùng nhau xây dựng một cộng đồng văn minh và tử tế.
+              N?i k?t n?i v? h? tr? t?m l?i ?? ??c th?t l?c t?i FPT University Da Nang. H?y c?ng nhau x?y d?ng m?t campus t? t? h?n.
             </p>
             <div className="banner-actions">
               <button
@@ -2900,14 +3033,14 @@ function BoardView(props: {
                 type="button"
                 onClick={() => props.onNavigate?.("create")}
               >
-                Báo mất đồ
+              B?o m?t ??
               </button>
               <button
                 className="banner-btn-secondary"
                 type="button"
                 onClick={() => props.onFilter("type", "LOST")}
               >
-                Tìm đồ rơi
+              T?m ?? r?i
               </button>
             </div>
           </div>
@@ -2919,7 +3052,7 @@ function BoardView(props: {
 
       <div className={`community-feed-layout ${isSidebarOpen ? "" : "sidebar-closed"}`}>
         {isSidebarOpen && (
-          <aside className="feed-sidebar" aria-label="Bộ lọc bài đăng">
+      <aside className="feed-sidebar" aria-label="Bo loc bai dang">
         <div className="sidebar-header">
           <h2>Filters</h2>
           <button className="reset-link" type="button" onClick={handleReset}>
@@ -2977,7 +3110,7 @@ function BoardView(props: {
                   <span>{cat.name}</span>
                 </label>
               ))}
-              {rootCategories.length === 0 && <small>Không có danh mục</small>}
+            {rootCategories.length === 0 && <small>Khong co danh muc</small>}
             </div>
           )}
         </div>
@@ -3002,7 +3135,7 @@ function BoardView(props: {
                   <span>{b.name}</span>
                 </label>
               ))}
-              {props.buildings.length === 0 && <small>Không có địa điểm</small>}
+            {props.buildings.length === 0 && <small>Khong co dia diem</small>}
             </div>
           )}
         </div>
@@ -3011,8 +3144,8 @@ function BoardView(props: {
 
       <main className="feed-main-content">
         <div className="feed-header-section">
-          <h1>Cộng đồng</h1>
-          <p>Tìm kiếm, báo cáo và nhận lại đồ thất lạc trong khuôn viên FPT.</p>
+              <h1>Cong dong</h1>
+              <p>Tim kiem, bao cao va nhan lai do that lac trong khuon vien FPT.</p>
         </div>
 
         <div className="feed-stats-overview">
@@ -3053,12 +3186,12 @@ function BoardView(props: {
             aria-label="Toggle filters"
           >
             <Filter size={18} />
-            <span>Bộ lọc</span>
+          <span>Bo loc</span>
           </button>
           <div className="feed-search-bar">
             <Search size={18} />
             <input
-              placeholder="Tìm kiếm theo tên vật phẩm, khu vực..."
+          placeholder="Tim kiem theo ten vat pham, khu vuc..."
               value={props.filters.q ?? ""}
               onChange={(event) => props.onFilter("q", event.target.value)}
             />
@@ -3069,57 +3202,57 @@ function BoardView(props: {
               type="button"
               onClick={() => props.onFilter("type", "")}
             >
-              Tất cả
+            T?t c?
             </button>
             <button
               className={`type-tab-btn ${props.filters.type === "FOUND" ? "active" : ""}`}
               type="button"
               onClick={() => props.onFilter("type", "FOUND")}
             >
-              Đồ Nhặt Được
+            ?? Nh?t ???c
             </button>
             <button
               className={`type-tab-btn ${props.filters.type === "LOST" ? "active" : ""}`}
               type="button"
               onClick={() => props.onFilter("type", "LOST")}
             >
-              Đồ Đánh Rơi
+            ?? ??nh R?i
             </button>
           </div>
         </div>
 
         <div className="quick-categories-row">
           <div
-            className={`quick-category-card ${props.filters.categoryId === getCatIdByName("Thiết bị điện tử") ? "active" : ""}`}
-            onClick={() => toggleQuickCategory("Thiết bị điện tử")}
+                className={`quick-category-card ${props.filters.categoryId === getCatIdByName("Thiet bi dien tu") ? "active" : ""}`}
+                onClick={() => toggleQuickCategory("Thiet bi dien tu")}
           >
             <div className="quick-category-icon-wrapper">
               <Laptop size={22} />
             </div>
-            <span>Đồ Điện Tử</span>
+                <span>Do Dien Tu</span>
           </div>
           <div
-            className={`quick-category-card ${props.filters.categoryId === getCatIdByName("Giấy tờ cá nhân") ? "active" : ""}`}
-            onClick={() => toggleQuickCategory("Giấy tờ cá nhân")}
+                className={`quick-category-card ${props.filters.categoryId === getCatIdByName("Giay to ca nhan") ? "active" : ""}`}
+                onClick={() => toggleQuickCategory("Giay to ca nhan")}
           >
             <div className="quick-category-icon-wrapper">
               <Wallet size={22} />
             </div>
-            <span>Ví & Giấy Tờ</span>
+                <span>Vi & Giay To</span>
           </div>
           <div
-            className={`quick-category-card ${props.filters.categoryId === getCatIdByName("Chìa khóa & thẻ") ? "active" : ""}`}
-            onClick={() => toggleQuickCategory("Chìa khóa & thẻ")}
+                className={`quick-category-card ${props.filters.categoryId === getCatIdByName("Chia khoa & the") ? "active" : ""}`}
+                onClick={() => toggleQuickCategory("Chia khoa & the")}
           >
             <div className="quick-category-icon-wrapper">
               <Key size={22} />
             </div>
-            <span>Chìa Khóa & Thẻ</span>
+                <span>Chia Khoa & The</span>
           </div>
         </div>
 
-        {props.error instanceof Error && <div className="notice error">Chưa tải được bảng tin: {props.error.message}</div>}
-        {props.loading && <div className="notice">Đang tải bảng tin...</div>}
+      {props.error instanceof Error && <div className="notice error">Chua tai duoc bang tin: {props.error.message}</div>}
+      {props.loading && <div className="notice">Dang tai bang tin...</div>}
 
         <div className="feed-post-grid">
           {props.posts.map((post) => (
@@ -3129,8 +3262,8 @@ function BoardView(props: {
         {!props.loading && props.posts.length === 0 && (
           <div className="empty-state">
             <Search size={28} />
-            <strong>Chưa có bài phù hợp</strong>
-            <span>Thử đổi bộ lọc hoặc đăng tin đầu tiên cho campus.</span>
+              <strong>Chua co bai phu hop</strong>
+              <span>Thu doi bo loc hoac dang tin dau tien cho campus.</span>
           </div>
         )}
       </main>
@@ -3143,7 +3276,7 @@ function PostCard({ post, onSelect }: { post: BoardPost; onSelect: (id: string) 
   const displayDate = post.lostFoundAt ? (() => {
     const d = new Date(post.lostFoundAt);
     return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
-  })() : "Chưa rõ thời gian";
+            })() : "Chua ro thoi gian";
 
   return (
     <article className="feed-post-card" onClick={() => onSelect(post.id)}>
@@ -3274,8 +3407,8 @@ function CreatePostView(props: {
     onSuccess: async (result) => {
       setMessage(
         result.matchSuggestions.length > 0
-          ? `Đã tạo bài và tìm thấy ${result.matchSuggestions.length} gợi ý phù hợp.`
-          : "Đã tạo bài. Hệ thống đã kiểm tra matching tự động."
+        ? `?? t?o b?i v? t?m th?y ${result.matchSuggestions.length} g?i ? ph? h?p.`
+          : "Da tao bai. He thong da kiem tra matching tu dong."
       );
       await props.onCreated(result.post.id, result.matchSuggestions);
     }
@@ -3285,11 +3418,11 @@ function CreatePostView(props: {
     event.preventDefault();
     setMessage(null);
     if (!selectedParentCategoryId) {
-      setMessage("Vui lòng chọn nhóm danh mục.");
+      setMessage("Vui long chon nhom danh muc.");
       return;
     }
     if (childCategories.length > 0 && !selectedChildCategoryId) {
-      setMessage("Vui lòng chọn danh mục cụ thể.");
+      setMessage("Vui long chon danh muc cu the.");
       return;
     }
     const validationErrors = validateImageFiles([...itemFiles, ...evidenceFiles], props.imageRules, props.imageRules.maxImages);
@@ -3326,7 +3459,7 @@ function CreatePostView(props: {
     } else {
       setEvidenceFiles(nextFiles);
     }
-    setMessage(`${otherFiles.length + nextFiles.length} ảnh đã sẵn sàng upload.`);
+    setMessage(`${otherFiles.length + nextFiles.length} ?nh ?? s?n s?ng upload.`);
   }
 
   function removeFile(index: number, kind: "ITEM" | "EVIDENCE") {
@@ -3335,7 +3468,7 @@ function CreatePostView(props: {
       const nextFiles = current.filter((_, fileIndex) => fileIndex !== index);
       const otherCount = kind === "ITEM" ? evidenceFiles.length : itemFiles.length;
       const total = otherCount + nextFiles.length;
-      setMessage(total > 0 ? `${total} ảnh đã sẵn sàng upload.` : null);
+    setMessage(total > 0 ? `${total} ?nh ?? s?n s?ng upload.` : null);
       return nextFiles;
     });
   }
@@ -3344,8 +3477,8 @@ function CreatePostView(props: {
     return (
       <div className="empty-state">
         <ShieldCheck size={30} />
-        <strong>Cần đăng nhập để đăng tin</strong>
-        <span>Bấm Đăng nhập hoặc Đăng ký ở thanh trên để tiếp tục.</span>
+          <strong>Can dang nhap de dang tin</strong>
+          <span>Bam dang nhap hoac dang ky o thanh tren de tiep tuc.</span>
       </div>
     );
   }
@@ -3353,42 +3486,42 @@ function CreatePostView(props: {
   return (
     <div className="create-page">
       <section className="create-intro">
-        <span className="eyebrow">Tạo bài trong cộng đồng</span>
-        <h2>Báo cáo Mất / Nhặt được đồ</h2>
-        <p>Điền đủ thông tin để cộng đồng và hệ thống matching có thể giúp bạn tìm lại hoặc trả đúng chủ sở hữu nhanh hơn.</p>
+          <span className="eyebrow">Tao bai trong cong dong</span>
+          <h2>Bao cao Mat / Nhat duoc do</h2>
+          <p>Dien du thong tin de cong dong va he thong matching co the giup ban tim lai hoac tra do dung nguoi.</p>
       </section>
 
       <form className="form-panel create-report-form" onSubmit={submit}>
       <div className="segmented">
         <button className={type === "LOST" ? "active" : ""} type="button" onClick={() => setType("LOST")}>
-          Tôi làm mất
+            T?i l?m m?t
         </button>
         <button className={type === "FOUND" ? "active" : ""} type="button" onClick={() => setType("FOUND")}>
-          Tôi nhặt được
+            T?i nh?t ???c
         </button>
       </div>
       <div className="form-section-heading">
         <span>01</span>
         <div>
-          <strong>Thông tin cơ bản</strong>
-          <small>Tiêu đề rõ, mô tả cụ thể và chọn đúng danh mục.</small>
+          <strong>Thong tin co ban</strong>
+          <small>Tieu de ro, mo ta cu the va chon dung danh muc.</small>
         </div>
       </div>
       <label>
-        Tiêu đề
-        <input name="title" required minLength={3} placeholder="Ví dụ: Tai nghe Sony màu đen" />
+            Ti?u ??
+          <input name="title" required minLength={3} placeholder="Vi du: Tai nghe Sony mau den" />
       </label>
       <label>
-        Mô tả
-        <textarea name="description" required minLength={10} rows={4} placeholder="Mô tả đặc điểm, nơi thấy/mất..." />
+            M? t?
+          <textarea name="description" required minLength={10} rows={4} placeholder="Mo ta dac diem, noi thay/mat..." />
       </label>
       <label>
-        Thông tin liên hệ
-        <input name="contactInfo" required minLength={3} placeholder="SĐT, email hoặc Zalo để người liên quan liên hệ" />
+            Th?ng tin li?n h?
+          <input name="contactInfo" required minLength={3} placeholder="SDT, email hoac Zalo de nguoi lien quan lien he" />
       </label>
       <div className="form-grid">
         <label>
-          Nhóm danh mục
+            Nh?m danh m?c
           <select
             required
             value={selectedParentCategoryId}
@@ -3397,7 +3530,7 @@ function CreatePostView(props: {
               setSelectedChildCategoryId("");
             }}
           >
-            <option value="">Chọn nhóm đồ</option>
+            <option value="">Chon nhom do</option>
             {rootCategories.map((category) => (
               <option key={category.id} value={category.id}>
                 {category.name}
@@ -3406,7 +3539,7 @@ function CreatePostView(props: {
           </select>
         </label>
         <label>
-          Danh mục cụ thể
+            Danh m?c c? th?
           <select
             required={childCategories.length > 0}
             disabled={!selectedParentCategoryId || childCategories.length === 0}
@@ -3415,10 +3548,10 @@ function CreatePostView(props: {
           >
             <option value="">
               {!selectedParentCategoryId
-                ? "Chọn nhóm trước"
+                ? "Chon nhom truoc"
                 : childCategories.length === 0
-                  ? "Nhóm này chưa có danh mục cụ thể"
-                  : "Chọn danh mục cụ thể"}
+                  ? "Nhom nay chua co danh muc cu the"
+                  : "Chon danh muc cu the"}
             </option>
             {childCategories.map((category) => (
               <option key={category.id} value={category.id}>
@@ -3431,13 +3564,13 @@ function CreatePostView(props: {
       <div className="form-section-heading">
         <span>02</span>
         <div>
-          <strong>Vị trí & thời gian</strong>
-          <small>Chọn nơi gần đúng, rồi bổ sung vị trí tự nhập nếu cần.</small>
+          <strong>Vi tri & thoi gian</strong>
+          <small>Chon noi gan dung, roi bo sung vi tri tu nhap neu can.</small>
         </div>
       </div>
       <div className="form-grid">
         <label>
-          Khu vực
+            Khu v?c
           <select
             name="areaId"
             value={selectedAreaId}
@@ -3446,7 +3579,7 @@ function CreatePostView(props: {
               setSelectedBuildingId("");
             }}
           >
-            <option value="">Chọn khu vực</option>
+            <option value="">Chon khu vuc</option>
             {props.areas.map((area) => (
               <option key={area.id} value={area.id}>
                 {area.name}
@@ -3455,49 +3588,49 @@ function CreatePostView(props: {
           </select>
         </label>
         <label>
-          Địa điểm cụ thể
+          ??a ?i?m c? th?
           <select
             name="buildingId"
             disabled={!selectedAreaId}
             value={selectedBuildingId}
             onChange={(event) => setSelectedBuildingId(event.target.value)}
           >
-            <option value="">{selectedAreaId ? "Chọn địa điểm cụ thể" : "Chọn khu vực trước"}</option>
+            <option value="">{selectedAreaId ? "Chon dia diem cu the" : "Chon khu vuc truoc"}</option>
             {(buildingsQuery.data?.buildings ?? []).map((building) => (
               <option key={building.id} value={building.id}>
                 {building.name}
               </option>
             ))}
           </select>
-          {selectedAreaId && buildingsQuery.data?.buildings.length === 0 && <small className="form-hint">Khu vực này chưa có địa điểm cụ thể active.</small>}
+          {selectedAreaId && buildingsQuery.data?.buildings.length === 0 && <small className="form-hint">Khu vuc nay chua co dia diem cu the active.</small>}
         </label>
         <label>
-          Phòng
-          <input name="roomText" placeholder="VD: A101, LAB 302, hành lang tầng 2..." />
+          Ph?ng
+          <input name="roomText" placeholder="VD: A101, LAB 302, hanh lang tang 2..." />
         </label>
       </div>
       <div className="form-grid">
         <label>
-          Vị trí tự nhập
-          <input name="customLocation" placeholder="VD: Alpha tầng 2, thư viện..." />
+          V? tr? t? nh?p
+          <input name="customLocation" placeholder="VD: Alpha tang 2, thu vien..." />
         </label>
         <label>
-          Thời gian
+          Th?i gian
           <input name="lostFoundAt" type="datetime-local" />
         </label>
       </div>
       <div className="form-section-heading">
         <span>03</span>
         <div>
-          <strong>Xác minh & hình ảnh</strong>
-          <small>Ảnh và câu xác minh giúp giảm nhận nhầm đồ.</small>
+          <strong>Xac minh & hinh anh</strong>
+          <small>Anh va cau xac minh giup giam nhan nham do.</small>
         </div>
       </div>
       {type === "FOUND" ? (
         <label>
-          Điểm bàn giao nếu đã gửi về trường
+          ?i?m b?n giao n?u ?? g?i v? tr??ng
           <select name="handoverPointId">
-            <option value="">Tôi đang giữ đồ / chưa gửi về điểm bàn giao</option>
+            <option value="">Toi dang giu do / chua gui ve diem ban giao</option>
             {props.handoverPoints.map((point) => (
               <option key={point.id} value={point.id}>
                 {point.name}
@@ -3507,29 +3640,29 @@ function CreatePostView(props: {
         </label>
       ) : (
         <label>
-          Mô tả chi tiết và dấu hiệu chứng minh quyền sở hữu
+          M? t? chi ti?t v? d?u hi?u ch?ng minh quy?n s? h?u
           <textarea
             name="secretVerification"
             required
             minLength={3}
             rows={3}
-            placeholder="Nêu dấu hiệu riêng, mã/serial, vết trầy, vật bên trong, nội dung hóa đơn hoặc chi tiết chỉ chủ sở hữu biết"
+            placeholder="Neu dau hieu rieng, ma/serial, vet tray, vat ben trong, noi dung hoa don hoac chi tiet chi chu so huu biet"
           />
         </label>
       )}
       <div className="upload-guide-panel">
-        <strong>Gợi ý chụp ảnh đồ vật</strong>
+        <strong>Goi y chup anh do vat</strong>
         <div className="upload-guide-grid">
-          <span>Chụp mặt trước, mặt sau và hai cạnh để hệ thống nhìn vật theo nhiều góc.</span>
-          <span>Thêm ảnh cận cảnh logo, vết trầy, serial, phụ kiện hoặc dấu hiệu riêng.</span>
-          <span>Nếu có thể, xoay quanh vật như chụp 3D: trên, dưới, trái, phải. Không bắt buộc.</span>
+          <span>Chup mat truoc, mat sau va hai canh de he thong nhin vat theo nhieu goc.</span>
+          <span>Them anh can canh logo, vet tray, serial, phu kien hoac dau hieu rieng.</span>
+          <span>Neu co the, xoay quanh vat nhu chup 3D: tren, duoi, trai, phai. Khong bat buoc.</span>
         </div>
       </div>
       <div className="upload-split-grid">
         <label className="upload-dropzone">
           <Upload size={22} />
-          <strong>Ảnh đồ vật</strong>
-          <span>Ưu tiên ảnh rõ vật, nền sáng, không che khuất. Ảnh đầu tiên sẽ làm ảnh bìa.</span>
+          <strong>Anh do vat</strong>
+          <span>Uu tien anh ro vat, nen sang, khong che khuat. Anh dau tien se lam anh bia.</span>
           <input
             type="file"
             accept={acceptAttribute(props.imageRules)}
@@ -3542,8 +3675,8 @@ function CreatePostView(props: {
         </label>
         <label className="upload-dropzone evidence-dropzone">
           <Upload size={22} />
-          <strong>Bằng chứng kèm theo</strong>
-          <span>Không bắt buộc. Có thể thêm bill, hóa đơn, ảnh từng sử dụng, khung hình camera hoặc giấy tờ liên quan.</span>
+          <strong>Bang chung kem theo</strong>
+          <span>Khong bat buoc. Co the them bill, hoa don, anh tung su dung, khung hinh camera hoac giay to lien quan.</span>
           <input
             type="file"
             accept={acceptAttribute(props.imageRules)}
@@ -3557,13 +3690,13 @@ function CreatePostView(props: {
       </div>
       {itemImagePreviews.length > 0 && (
         <>
-          <strong className="preview-section-title">Ảnh đồ vật</strong>
+          <strong className="preview-section-title">Anh do vat</strong>
           <div className="preview-grid">
             {itemImagePreviews.map((previewUrl, index) => (
               <div className="preview-item" key={previewUrl}>
-                <img src={previewUrl} alt={`Ảnh đồ vật ${index + 1}`} />
-                <button type="button" onClick={() => removeFile(index, "ITEM")} aria-label={`Xóa ảnh đồ vật ${index + 1}`}>
-                  Xóa
+                <img src={previewUrl} alt={`?nh ?? v?t ${index + 1}`} />
+                <button type="button" onClick={() => removeFile(index, "ITEM")} aria-label={`X?a ?nh ?? v?t ${index + 1}`}>
+                  X?a
                 </button>
               </div>
             ))}
@@ -3572,13 +3705,13 @@ function CreatePostView(props: {
       )}
       {evidenceImagePreviews.length > 0 && (
         <>
-          <strong className="preview-section-title">Ảnh bằng chứng</strong>
+          <strong className="preview-section-title">Anh bang chung</strong>
           <div className="preview-grid">
             {evidenceImagePreviews.map((previewUrl, index) => (
               <div className="preview-item" key={previewUrl}>
-                <img src={previewUrl} alt={`Ảnh bằng chứng ${index + 1}`} />
-                <button type="button" onClick={() => removeFile(index, "EVIDENCE")} aria-label={`Xóa ảnh bằng chứng ${index + 1}`}>
-                  Xóa
+                <img src={previewUrl} alt={`?nh b?ng ch?ng ${index + 1}`} />
+                <button type="button" onClick={() => removeFile(index, "EVIDENCE")} aria-label={`X?a ?nh b?ng ch?ng ${index + 1}`}>
+                  X?a
                 </button>
               </div>
             ))}
@@ -3586,14 +3719,14 @@ function CreatePostView(props: {
         </>
       )}
       <small className="form-hint">
-        Tối đa {props.imageRules.maxImages} ảnh cho cả ảnh đồ vật và bằng chứng, mỗi ảnh {props.imageRules.maxImageSizeMb}MB, định dạng{" "}
+        T?i ?a {props.imageRules.maxImages} ?nh cho c? ?nh ?? v?t v? b?ng ch?ng, m?i ?nh {props.imageRules.maxImageSizeMb}MB, ??nh d?ng{" "}
         {props.imageRules.allowedFormats.join(", ").toUpperCase()}.
       </small>
       {createMutation.error instanceof Error && <div className="notice error">{createMutation.error.message}</div>}
       {message && <div className="notice success">{message}</div>}
       <button className="primary-button wide" disabled={createMutation.isPending} type="submit">
         <Upload size={18} />
-        {createMutation.isPending ? "Đang đăng..." : "Đăng tin"}
+        {createMutation.isPending ? "Dang dang..." : "Dang tin"}
       </button>
       </form>
     </div>
@@ -3654,7 +3787,7 @@ function AccountView(props: {
       return api.requestRegistrationOtp({ email });
     },
     onSuccess: () => {
-      setAuthMessage("Đã gửi mã OTP đăng ký. Vui lòng kiểm tra email hoặc liên hệ quản trị viên nếu chưa nhận được mã.");
+      setAuthMessage("Da gui ma OTP dang ky. Vui long kiem tra email hoac lien he quan tri vien neu chua nhan duoc ma.");
     }
   });
   const forgotMutation = useMutation({
@@ -3664,7 +3797,7 @@ function AccountView(props: {
       return api.forgotPassword({ email });
     },
     onSuccess: () => {
-      setAuthMessage("Nếu email đã kích hoạt, mã đặt lại mật khẩu đã được gửi.");
+      setAuthMessage("Neu email da kich hoat, ma dat lai mat khau da duoc gui.");
       setMode("reset");
     }
   });
@@ -3676,7 +3809,7 @@ function AccountView(props: {
         newPassword: formData.get("newPassword")
       }),
     onSuccess: () => {
-      setAuthMessage("Đã đặt lại mật khẩu. Bạn có thể đăng nhập bằng mật khẩu mới.");
+      setAuthMessage("Da dat lai mat khau. Ban co the dang nhap bang mat khau moi.");
       setMode("login");
     }
   });
@@ -3711,13 +3844,13 @@ function AccountView(props: {
           <article className="mini-panel">
             <CheckCircle2 size={18} />
             <strong>{activityQuery.data?.activity.length ?? 0}</strong>
-            <span>hoạt động gần đây</span>
+            <span>hoat dong gan day</span>
           </article>
         </div>
         <div className="activity-list">
           {(activityQuery.data?.activity ?? []).slice(0, 5).map((activity) => (
             <span key={activity.id}>
-              {activity.action} · {formatDate(activity.createdAt)}
+              {activity.action} ? {formatDate(activity.createdAt)}
             </span>
           ))}
         </div>
@@ -3725,7 +3858,7 @@ function AccountView(props: {
           <div className="panel-heading compact">
             <div>
               <span className="eyebrow">Reputation</span>
-              <h2>Lịch sử điểm</h2>
+              <h2>Lich su diem</h2>
             </div>
             <ShieldCheck size={18} />
           </div>
@@ -3738,10 +3871,10 @@ function AccountView(props: {
               <small>{formatDate(entry.createdAt)}</small>
             </div>
           ))}
-          {(reputationQuery.data?.reputation.recentLogs ?? []).length === 0 && <small>Chưa có lịch sử điểm.</small>}
+          {(reputationQuery.data?.reputation.recentLogs ?? []).length === 0 && <small>Chua co lich su diem.</small>}
         </div>
         <button className="secondary-button" type="button" onClick={() => logoutMutation.mutate()}>
-          <LogOut size={18} /> Đăng xuất
+          <LogOut size={18} /> ??ng xu?t
         </button>
       </section>
     );
@@ -3751,13 +3884,13 @@ function AccountView(props: {
     <section className={`account-panel auth-card ${mode === "register" ? "register-mode" : ""}`}>
       <div className="auth-card-heading">
         <span className="eyebrow">FPTU Lost & Found</span>
-        <h2>{mode === "register" ? "Tạo tài khoản" : mode === "forgot" ? "Lấy lại mật khẩu" : mode === "reset" ? "Đặt mật khẩu mới" : "Đăng nhập"}</h2>
+        <h2>{mode === "register" ? "Tao tai khoan" : mode === "forgot" ? "Lay lai mat khau" : mode === "reset" ? "Dat mat khau moi" : "Dang nhap"}</h2>
         <p>
           {mode === "register"
-            ? "Xác thực email bằng OTP trước khi tham gia cộng đồng Lost & Found."
+            ? "Xac thuc email bang OTP truoc khi tham gia cong dong Lost & Found."
             : mode === "forgot" || mode === "reset"
-              ? "Nhập email và mã OTP để đặt lại mật khẩu tài khoản của bạn."
-              : "Đăng nhập để đăng tin, claim đồ nhặt được và theo dõi bài viết của bạn."}
+              ? "Nhap email va ma OTP de dat lai mat khau tai khoan cua ban."
+              : "Dang nhap de dang tin, claim do nhat duoc va theo doi bai viet cua ban."}
         </p>
       </div>
 
@@ -3766,7 +3899,7 @@ function AccountView(props: {
           setAuthMessage(null);
           setMode("login");
         }}>
-          Quay lại đăng nhập
+          Quay l?i ??ng nh?p
         </button>
       )}
 
@@ -3805,7 +3938,7 @@ function AccountView(props: {
       {mode === "forgot" && (
         <AuthForm
           fields={["email"]}
-          submitLabel="Gửi mã đặt lại mật khẩu"
+          submitLabel="Gui ma dat lai mat khau"
           pending={forgotMutation.isPending}
           error={forgotMutation.error}
           defaults={{ email: registeredEmail }}
@@ -3815,7 +3948,7 @@ function AccountView(props: {
       {mode === "reset" && (
         <AuthForm
           fields={["email", "otp", "newPassword"]}
-          submitLabel="Đặt lại mật khẩu"
+          submitLabel="Dat lai mat khau"
           pending={resetMutation.isPending}
           error={resetMutation.error}
           defaults={{ email: registeredEmail }}
@@ -3843,19 +3976,19 @@ function ProfileForm({ user, onUpdated }: { user: PublicUser; onUpdated: () => v
       mutation.mutate(new FormData(event.currentTarget));
     }}>
       <label>
-        Họ tên
+        H? t?n
         <input name="fullName" required minLength={2} defaultValue={user.fullName} />
       </label>
       <label>
-        Mã sinh viên
+        M? sinh vi?n
         <input name="studentCode" defaultValue={user.studentCode ?? ""} />
       </label>
       <label>
-        Số điện thoại
+        S? ?i?n tho?i
         <input name="phoneNumber" defaultValue={user.phoneNumber ?? ""} />
       </label>
       <button className="secondary-button" disabled={mutation.isPending} type="submit">
-        Lưu hồ sơ
+        L?u h? s?
       </button>
     </form>
   );
@@ -3878,26 +4011,26 @@ function LoginForm(props: {
         <input name="email" type="email" required />
       </label>
       <label>
-        Mật khẩu
+        M?t kh?u
         <input name="password" type="password" required minLength={8} />
       </label>
       <button className="secondary-button google-login-button" type="button" onClick={() => {
         window.location.href = api.googleLoginUrl();
       }}>
-        <UserCircle size={16} /> Đăng nhập với Google
+        <UserCircle size={16} /> ??ng nh?p v?i Google
       </button>
       <button className="text-link auth-forgot-link" type="button" onClick={props.onForgotPassword}>
-        Quên mật khẩu?
+        Qu?n m?t kh?u?
       </button>
       {props.error instanceof Error && <div className="notice error">{props.error.message}</div>}
       <div className="auth-submit-row">
         <button className="primary-button" disabled={props.pending} type="submit">
-          {props.pending ? "Đang đăng nhập..." : "Đăng nhập"}
+          {props.pending ? "Dang dang nhap..." : "Dang nhap"}
         </button>
         <span>
-          Bạn chưa có tài khoản?{" "}
+          B?n ch?a c? t?i kho?n?{" "}
           <button className="text-link" type="button" onClick={props.onRegister}>
-            Đăng ký
+            ??ng k?
           </button>
         </span>
       </div>
@@ -3923,14 +4056,14 @@ function RegisterForm(props: {
       props.onSubmit(new FormData(event.currentTarget));
     }}>
       <label>
-        Họ tên
+        H? t?n
         <input name="fullName" required minLength={2} />
       </label>
       <label>
-        Loại tài khoản
+        Lo?i t?i kho?n
         <select name="accountType" defaultValue={"STUDENT" satisfies AudienceRole}>
-          <option value="STUDENT">Sinh viên</option>
-          <option value="LECTURER">Giảng viên</option>
+          <option value="STUDENT">Sinh vien</option>
+          <option value="LECTURER">Giang vien</option>
         </select>
       </label>
       <label>
@@ -3949,16 +4082,16 @@ function RegisterForm(props: {
             type="button"
             onClick={() => props.onRequestOtp(email)}
           >
-            {props.requestPending ? "Đang gửi..." : "Nhận mã"}
+            {props.requestPending ? "Dang gui..." : "Nhan ma"}
           </button>
         </div>
       </label>
       <label>
-        Mã sinh viên / giảng viên
+        M? sinh vi?n / gi?ng vi?n
         <input name="studentCode" />
       </label>
       <label>
-        Mật khẩu
+        M?t kh?u
         <input name="password" type="password" required minLength={8} />
       </label>
       <label>
@@ -3969,12 +4102,12 @@ function RegisterForm(props: {
       {props.error instanceof Error && <div className="notice error">{props.error.message}</div>}
       <div className="auth-submit-row">
         <button className="primary-button" disabled={props.pending} type="submit">
-          {props.pending ? "Đang tạo..." : "Tạo tài khoản"}
+          {props.pending ? "Dang tao..." : "Tao tai khoan"}
         </button>
         <span>
-          Đã có tài khoản?{" "}
+          ?? c? t?i kho?n?{" "}
           <button className="text-link" type="button" onClick={props.onLogin}>
-            Đăng nhập
+            ??ng nh?p
           </button>
         </span>
       </div>
@@ -4009,7 +4142,7 @@ function AuthForm(props: {
       ))}
       {props.error instanceof Error && <div className="notice error">{props.error.message}</div>}
       <button className="primary-button wide" disabled={props.pending} type="submit">
-        {props.pending ? "Đang xử lý..." : props.submitLabel}
+        {props.pending ? "?ang x? l?..." : props.submitLabel}
       </button>
     </form>
   );
@@ -4055,7 +4188,7 @@ function AvatarForm({ imageRules, onUploaded }: { imageRules: ImageUploadRules; 
       {previewUrl && <img src={previewUrl} alt="Avatar preview" />}
       <label className="upload-strip">
         <Upload size={18} />
-        {mutation.isPending ? "Đang upload avatar..." : "Upload avatar"}
+        {mutation.isPending ? "?ang upload avatar..." : "Upload avatar"}
         <input type="file" accept={acceptAttribute(imageRules)} onChange={(event) => selectAvatar(event.target.files?.[0])} />
       </label>
       {error && <div className="notice error">{error}</div>}
@@ -4096,14 +4229,14 @@ function PostDrawer(props: {
   const reportMutation = useMutation({
     mutationFn: (input: Record<string, unknown>) => api.reportPost(post!.id, input),
     onSuccess: () => {
-      setReportMessage("Đã gửi báo cáo. Admin sẽ kiểm tra nội dung này.");
+      setReportMessage("Da gui bao cao. Admin se kiem tra noi dung nay.");
       setReportOpen(false);
     }
   });
   const editMutation = useMutation({
     mutationFn: (input: Record<string, unknown>) => api.updatePost(post!.id, input),
     onSuccess: async () => {
-      setActionMessage("Đã cập nhật bài viết.");
+      setActionMessage("Da cap nhat bai viet.");
       setEditOpen(false);
       await queryClient.invalidateQueries({ queryKey: ["post", post?.id] });
       await queryClient.invalidateQueries({ queryKey: ["posts"] });
@@ -4124,7 +4257,7 @@ function PostDrawer(props: {
       if (action === "delete") {
         props.onClose();
       } else {
-        setActionMessage("Đã đóng bài viết.");
+        setActionMessage("Da dong bai viet.");
       }
     }
   });
@@ -4141,7 +4274,7 @@ function PostDrawer(props: {
     const list: string[] = [];
     if (props.detail?.media && props.detail.media.length > 0) {
       props.detail.media.forEach((m) => {
-        if (m.secureUrl) list.push(m.secureUrl);
+        if (m.optimizedUrl || m.secureUrl) list.push(m.optimizedUrl ?? m.secureUrl);
       });
     } else if (post?.coverImageUrl) {
       list.push(post.coverImageUrl);
@@ -4223,23 +4356,23 @@ function PostDrawer(props: {
     const day = date.getDate();
     const month = date.getMonth() + 1;
     const year = date.getFullYear();
-    return `${capitalizedWeekday}, ${day} tháng ${month}, ${year}`;
-  })() : "Chưa rõ thời gian";
+    return `${capitalizedWeekday}, ${day} th?ng ${month}, ${year}`;
+  })() : "Chua ro thoi gian";
 
   const canManagePost = Boolean(post && props.currentUserId === post.userId);
 
   return (
     <>
-      <div className="drawer-backdrop" onClick={props.onClose}>
-        <aside className="drawer" onClick={(event) => event.stopPropagation()}>
-          {props.loading && <div className="notice">Đang tải chi tiết...</div>}
+      <section className="post-detail-page">
+        <div className="post-detail-page-shell">
+          {props.loading && <div className="notice">Dang tai chi tiet...</div>}
           {props.detail && post && (
             <>
               <div className="detail-modal-header">
                 <span className={`detail-type-badge ${post.type.toLowerCase()}`}>
                   {post.type === "FOUND" ? "Found Item" : "Lost Item"}
                 </span>
-                <button className="detail-close-btn" type="button" onClick={props.onClose} aria-label="Đóng">
+                <button className="detail-close-btn" type="button" onClick={props.onClose} aria-label="Dong">
                   <X size={20} />
                 </button>
               </div>
@@ -4262,7 +4395,7 @@ function PostDrawer(props: {
                           e.stopPropagation();
                           setCurrentImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
                         }}
-                        aria-label="Ảnh trước"
+                        aria-label="Anh truoc"
                       >
                         <ChevronLeft size={20} />
                       </button>
@@ -4274,7 +4407,7 @@ function PostDrawer(props: {
                           e.stopPropagation();
                           setCurrentImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
                         }}
-                        aria-label="Ảnh sau"
+                        aria-label="?nh sau"
                       >
                         <ChevronRight size={20} />
                       </button>
@@ -4289,7 +4422,7 @@ function PostDrawer(props: {
                               e.stopPropagation();
                               setCurrentImageIndex(idx);
                             }}
-                            aria-label={`Ảnh ${idx + 1}`}
+                            aria-label={`?nh ${idx + 1}`}
                           />
                         ))}
                       </div>
@@ -4361,7 +4494,7 @@ function PostDrawer(props: {
                   <h4 style={{ margin: "12px 0 6px" }}>AI tags</h4>
                   <div className="tag-list" style={{ marginBottom: "8px" }}>
                     {props.detail.tags.map((tag) => (
-                      <span key={tag.id}>{tag.tag} · {Math.round(tag.confidence * 100)}%</span>
+                      <span key={tag.id}>{tag.tag} ? {Math.round(tag.confidence * 100)}%</span>
                     ))}
                   </div>
                 </div>
@@ -4380,15 +4513,15 @@ function PostDrawer(props: {
 
               <div className="detail-modal-footer-actions">
                 <button className="secondary-button" type="button" onClick={() => void copyShareLink()}>
-                  <Share2 size={16} /> {copied ? "Đã copy link" : "Copy link"}
+                  <Share2 size={16} /> {copied ? "?? copy link" : "Copy link"}
                 </button>
                 <button className="secondary-button" type="button" onClick={() => setReportOpen((value) => !value)}>
-                  <Flag size={16} /> Bao cao
+                  <Flag size={16} /> B?o c?o
                 </button>
                 {canManagePost && (
                   <>
                     <button className="secondary-button" type="button" onClick={() => setEditOpen((value) => !value)}>
-                      <MoreVertical size={16} /> Sua bai
+                      <MoreVertical size={16} /> S?a b?i
                     </button>
                     {(post.status === "OPEN" || post.status === "MATCHED") && (
                       <button
@@ -4397,7 +4530,7 @@ function PostDrawer(props: {
                         type="button"
                         onClick={() => postActionMutation.mutate("close")}
                       >
-                        Dong bai
+                        ??ng b?i
                       </button>
                     )}
                     <button
@@ -4410,36 +4543,36 @@ function PostDrawer(props: {
                         }
                       }}
                     >
-                      Xoa mem
+                      X?a m?m
                     </button>
                   </>
                 )}
                 {post.type === "FOUND" && (
                   <button className="primary-button" type="button" onClick={() => props.onClaim(post)}>
-                    Claim đồ này
+                    Claim ?? n?y
                   </button>
                 )}
               </div>
               {editOpen && (
                 <form className="post-edit-form" onSubmit={submitEdit}>
-                  <input name="title" required minLength={3} maxLength={255} defaultValue={post.title} placeholder="Tiêu đề" />
-                  <textarea name="description" required minLength={10} rows={4} defaultValue={post.description} placeholder="Mô tả" />
-                  <input name="contactInfo" defaultValue={post.contactInfo ?? ""} placeholder="Thông tin liên hệ" />
+                  <input name="title" required minLength={3} maxLength={255} defaultValue={post.title} placeholder="Tieu de" />
+                  <textarea name="description" required minLength={10} rows={4} defaultValue={post.description} placeholder="M? t?" />
+                  <input name="contactInfo" defaultValue={post.contactInfo ?? ""} placeholder="Thong tin lien he" />
                   <div className="post-edit-grid">
-                    <input name="roomText" defaultValue={post.location.roomText ?? ""} placeholder="Phòng/khu vực cụ thể" />
-                    <input name="customLocation" defaultValue={post.location.customLocation ?? ""} placeholder="Vị trí tùy chỉnh" />
+                    <input name="roomText" defaultValue={post.location.roomText ?? ""} placeholder="Phong/khu vuc cu the" />
+                    <input name="customLocation" defaultValue={post.location.customLocation ?? ""} placeholder="Vi tri tuy chinh" />
                   </div>
                   <button className="primary-button" disabled={editMutation.isPending} type="submit">
-                    Lưu thay đổi
+                    L?u thay ??i
                   </button>
                 </form>
               )}
               {reportOpen && (
                 <form className="post-report-form" onSubmit={submitReport}>
-                  <input name="reason" required minLength={3} maxLength={255} placeholder="Lý do báo cáo" />
-                  <textarea name="details" rows={3} maxLength={2000} placeholder="Mô tả thêm cho quản trị viên" />
+                  <input name="reason" required minLength={3} maxLength={255} placeholder="Ly do bao cao" />
+                  <textarea name="details" rows={3} maxLength={2000} placeholder="Mo ta them cho quan tri vien" />
                   <button className="primary-button" disabled={reportMutation.isPending} type="submit">
-                    Gửi báo cáo
+                    G?i b?o c?o
                   </button>
                 </form>
               )}
@@ -4450,15 +4583,15 @@ function PostDrawer(props: {
               {postActionMutation.error instanceof Error && <div className="notice error">{postActionMutation.error.message}</div>}
             </>
           )}
-        </aside>
-      </div>
+        </div>
+      </section>
 
       {activeImageUrl && (
         <div className="lightbox-overlay" onClick={() => setActiveImageUrl(null)}>
           <div className="lightbox-content" onClick={(event) => event.stopPropagation()}>
-            <img src={activeImageUrl} alt="Xem ảnh đầy đủ" />
+            <img src={activeImageUrl} alt="Xem anh day du" />
             <button type="button" className="lightbox-close" onClick={() => setActiveImageUrl(null)}>
-              Đóng
+              ??ng
             </button>
           </div>
         </div>
@@ -4491,7 +4624,7 @@ function ClaimAppointmentPanel(props: {
 
   return (
     <section className="detail-description-section">
-      <div className="detail-description-header">Claim và lịch hẹn trả đồ</div>
+      <div className="detail-description-header">Claim va lich hen tra do</div>
       <div className="claim-appointment-list">
         {props.claims.map((claim) => (
           <article className="claim-appointment-card" key={claim.id}>
@@ -4500,33 +4633,283 @@ function ClaimAppointmentPanel(props: {
               <strong>{claim.claimant.fullName}</strong>
               <ClaimVerificationBadge claimId={claim.id} />
               <ClaimExtraActions claim={claim} currentUserId={props.currentUserId} />
-              <small>{claim.approximateLocation || "Chưa có vị trí mất gần đúng"} · {formatDate(claim.createdAt)}</small>
+              <small>{claim.approximateLocation || "Chua co vi tri mat gan dung"} - {formatDate(claim.createdAt)}</small>
             </div>
             {claim.status === "ACCEPTED" && (
               <form className="claim-appointment-form" onSubmit={(event) => submit(event, claim)}>
                 <input name="proposedAt" required type="datetime-local" />
                 <select name="handoverPointId">
-                  <option value="">Chọn điểm bàn giao</option>
+                  <option value="">Chon diem ban giao</option>
                   {props.handoverPoints.map((point) => (
                     <option key={point.id} value={point.id}>{point.name}</option>
                   ))}
                 </select>
-                <input name="customLocation" placeholder="Hoặc nhập vị trí hẹn khác" />
+                <input name="customLocation" placeholder="Hoac nhap vi tri hen khac" />
                 <button className="primary-button" disabled={props.pending} type="submit">
-                  Tạo lịch hẹn
+                  T?o l?ch h?n
                 </button>
               </form>
             )}
+            <ClaimAppointmentTimeline claimId={claim.id} />
             {(claim.status === "ACCEPTED" || claim.status === "NEED_MORE_INFO") && (
               <ClaimChatBox claimId={claim.id} currentUserId={props.currentUserId} />
             )}
           </article>
         ))}
-        {acceptedClaims.length === 0 && <small>Chưa có claim nào được accepted để tạo lịch hẹn.</small>}
+        {acceptedClaims.length === 0 && <small>Chua co claim nao duoc accepted de tao lich hen.</small>}
         {props.error instanceof Error && <div className="notice error">{props.error.message}</div>}
       </div>
     </section>
   );
+}
+
+function ClaimAppointmentTimeline(props: { claimId: string }) {
+  const queryClient = useQueryClient();
+  const [message, setMessage] = useState<string | null>(null);
+  const appointmentsQuery = useQuery({
+    queryKey: ["claim-appointments", props.claimId],
+    queryFn: () => api.claimAppointments(props.claimId),
+    enabled: hasAccessToken(),
+    retry: false
+  });
+  const feedbackMutation = useMutation({
+    mutationFn: (input: { appointmentId: string; rating: number; comment?: string | null }) =>
+      api.submitAppointmentFeedback(input.appointmentId, {
+        rating: input.rating,
+        comment: input.comment
+      }),
+    onSuccess: async () => {
+      setMessage("Da gui feedback sau ban giao.");
+      await queryClient.invalidateQueries({ queryKey: ["claim-appointments", props.claimId] });
+      await queryClient.invalidateQueries({ queryKey: ["admin-return-feedback"] });
+    }
+  });
+  const proofMutation = useMutation({
+    mutationFn: (input: { appointmentId: string; file: File; note?: string | null }) =>
+      api.uploadAppointmentProof(input.appointmentId, input.file, input.note),
+    onSuccess: async () => {
+      setMessage("Da tai chung tu ban giao.");
+      await queryClient.invalidateQueries({ queryKey: ["claim-appointments", props.claimId] });
+    }
+  });
+
+  function submitFeedback(event: FormEvent<HTMLFormElement>, appointmentId: string) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    feedbackMutation.mutate({
+      appointmentId,
+      rating: Number(data.get("rating") ?? 5),
+      comment: formNullable(data, "comment")
+    });
+    event.currentTarget.reset();
+  }
+
+  function submitProof(event: FormEvent<HTMLFormElement>, appointmentId: string) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const input = event.currentTarget.elements.namedItem("proof") as HTMLInputElement | null;
+    const file = input?.files?.[0] ?? null;
+    if (!file) {
+      setMessage("Chon mot anh chung tu ban giao truoc khi luu.");
+      return;
+    }
+    proofMutation.mutate({
+      appointmentId,
+      file,
+      note: formNullable(data, "note")
+    });
+    event.currentTarget.reset();
+  }
+
+  const appointments = appointmentsQuery.data?.appointments ?? [];
+  if (appointmentsQuery.isLoading) {
+    return <small>Dang tai lich ban giao...</small>;
+  }
+  if (appointments.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="claim-appointment-list nested">
+      {message && <div className="notice">{message}</div>}
+      {appointments.map((appointment) => (
+        <article className="claim-appointment-card" key={appointment.id}>
+          <div>
+            <span className={`status-pill claim-${appointment.status.toLowerCase()}`}>{appointment.status}</span>
+            <strong>{appointment.handoverPoint?.name ?? appointment.customLocation ?? "Campus"}</strong>
+            <small>{formatDate(appointment.proposedAt)}</small>
+          </div>
+          {appointment.proof && (
+            <div className="appointment-proof-preview">
+              <AppointmentProofImage appointmentId={appointment.id} alt="Chung tu ban giao" />
+              <div>
+                <strong>Chung tu ban giao</strong>
+                <small>
+                  {appointment.proof.uploadedBy?.fullName ? `${appointment.proof.uploadedBy.fullName} ? ` : ""}
+                  {appointment.proof.uploadedAt ? formatDate(appointment.proof.uploadedAt) : "Da tai len"}
+                </small>
+                {appointment.proof.note && <small>{appointment.proof.note}</small>}
+              </div>
+            </div>
+          )}
+          {(appointment.status === "ACCEPTED" || appointment.status === "COMPLETED") && (
+            <form className="appointment-proof-form" onSubmit={(event) => submitProof(event, appointment.id)}>
+              <input name="proof" type="file" accept="image/png,image/jpeg,image/webp" />
+              <input name="note" placeholder="Ghi chu chung tu ban giao" />
+              <button className="secondary-button" disabled={proofMutation.isPending} type="submit">
+                T?i ch?ng t?
+              </button>
+            </form>
+          )}
+          {appointment.status === "COMPLETED" && (
+            <form className="claim-appointment-form" onSubmit={(event) => submitFeedback(event, appointment.id)}>
+              <select name="rating" defaultValue="5">
+                <option value="5">5 sao - hai long</option>
+                <option value="4">4 sao</option>
+                <option value="3">3 sao - binh thuong</option>
+                <option value="2">2 sao - can xem lai</option>
+                <option value="1">1 sao - co van de</option>
+              </select>
+              <input name="comment" placeholder="Ghi chu sau ban giao" />
+              <button className="secondary-button" disabled={feedbackMutation.isPending} type="submit">
+                G?i feedback
+              </button>
+            </form>
+          )}
+        </article>
+      ))}
+      {proofMutation.error instanceof Error && <div className="notice error">{proofMutation.error.message}</div>}
+      {feedbackMutation.error instanceof Error && <div className="notice error">{feedbackMutation.error.message}</div>}
+    </div>
+  );
+}
+
+function AppointmentProofImage(props: { appointmentId: string; alt: string }) {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let revokedUrl: string | null = null;
+    let mounted = true;
+    setImageUrl(null);
+    setError(null);
+    api
+      .appointmentProofImage(props.appointmentId)
+      .then((url) => {
+        revokedUrl = url;
+        if (mounted) {
+          setImageUrl(url);
+        } else {
+          URL.revokeObjectURL(url);
+        }
+      })
+      .catch((fetchError: unknown) => {
+        if (mounted) {
+          setError(fetchError instanceof Error ? fetchError.message : "Không tải được ảnh chứng từ");
+        }
+      });
+    return () => {
+      mounted = false;
+      if (revokedUrl) {
+        URL.revokeObjectURL(revokedUrl);
+      }
+    };
+  }, [props.appointmentId]);
+
+  if (error) {
+    return <small className="notice error">{error}</small>;
+  }
+  if (!imageUrl) {
+    return <small>Đang tải ảnh chứng từ...</small>;
+  }
+  return <img src={imageUrl} alt={props.alt} />;
+}
+
+function ClaimEvidenceImage(props: { claimId: string; evidenceId: string; alt: string }) {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let revokedUrl: string | null = null;
+    let mounted = true;
+    setImageUrl(null);
+    setError(null);
+    api
+      .claimEvidenceImage(props.claimId, props.evidenceId)
+      .then((url) => {
+        revokedUrl = url;
+        if (mounted) {
+          setImageUrl(url);
+        } else {
+          URL.revokeObjectURL(url);
+        }
+      })
+      .catch((fetchError: unknown) => {
+        if (mounted) {
+          setError(fetchError instanceof Error ? fetchError.message : "Không tải được ảnh bằng chứng");
+        }
+      });
+    return () => {
+      mounted = false;
+      if (revokedUrl) {
+        URL.revokeObjectURL(revokedUrl);
+      }
+    };
+  }, [props.claimId, props.evidenceId]);
+
+  if (error) {
+    return <small className="notice error">{error}</small>;
+  }
+  if (!imageUrl) {
+    return <small>Đang tải ảnh bằng chứng...</small>;
+  }
+  return <img src={imageUrl} alt={props.alt} />;
+}
+
+function ClaimChatImage(props: { claimId: string; mediaPublicId: string | null; mediaUrl: string | null }) {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!props.mediaPublicId) {
+      setImageUrl(props.mediaUrl);
+      return;
+    }
+
+    let revokedUrl: string | null = null;
+    let mounted = true;
+    setImageUrl(null);
+    setError(null);
+    api
+      .claimChatImage(props.claimId, props.mediaPublicId)
+      .then((url) => {
+        revokedUrl = url;
+        if (mounted) {
+          setImageUrl(url);
+        } else {
+          URL.revokeObjectURL(url);
+        }
+      })
+      .catch((fetchError: unknown) => {
+        if (mounted) {
+          setError(fetchError instanceof Error ? fetchError.message : "Khong the tai anh chat.");
+        }
+      });
+    return () => {
+      mounted = false;
+      if (revokedUrl) {
+        URL.revokeObjectURL(revokedUrl);
+      }
+    };
+  }, [props.claimId, props.mediaPublicId, props.mediaUrl]);
+
+  if (error) {
+    return <small className="notice error">{error}</small>;
+  }
+  if (!imageUrl) {
+    return <small>Dang tai anh...</small>;
+  }
+  return <img src={imageUrl} alt="" />;
 }
 
 function ClaimExtraActions(props: { claim: PostClaimSummary; currentUserId?: string }) {
@@ -4563,7 +4946,7 @@ function ClaimExtraActions(props: { claim: PostClaimSummary; currentUserId?: str
     },
     onSuccess: async (_result, input) => {
       setActionForm(null);
-      setMessage(input.action === "accept" ? "Đã chấp nhận claim." : "Đã cập nhật trạng thái claim.");
+      setMessage(input.action === "accept" ? "Da chap nhan claim." : "Da cap nhat trang thai claim.");
       await queryClient.invalidateQueries({ queryKey: ["post-claims", claim.postId] });
       await queryClient.invalidateQueries({ queryKey: ["claim-detail", claim.id] });
       await queryClient.invalidateQueries({ queryKey: ["claim-verification", claim.id] });
@@ -4578,7 +4961,7 @@ function ClaimExtraActions(props: { claim: PostClaimSummary; currentUserId?: str
       return { uploaded: input.files.length };
     },
     onSuccess: async (result) => {
-      setMessage(`Đã tải ${result.uploaded} bằng chứng.`);
+      setMessage(`?? t?i ${result.uploaded} b?ng ch?ng.`);
       setDetailOpen(true);
       await queryClient.invalidateQueries({ queryKey: ["claim-detail", claim.id] });
       await queryClient.invalidateQueries({ queryKey: ["claim-verification", claim.id] });
@@ -4603,7 +4986,7 @@ function ClaimExtraActions(props: { claim: PostClaimSummary; currentUserId?: str
     const input = event.currentTarget.elements.namedItem("evidence") as HTMLInputElement | null;
     const files = Array.from(input?.files ?? []);
     if (files.length === 0) {
-      setMessage("Chọn ít nhất 1 file bằng chứng.");
+      setMessage("Chon it nhat 1 file bang chung.");
       return;
     }
     evidenceMutation.mutate({
@@ -4617,11 +5000,11 @@ function ClaimExtraActions(props: { claim: PostClaimSummary; currentUserId?: str
 
   return (
     <div className="claim-extra-actions">
-      {claim.moreInfoRequest && <small>Yêu cầu bổ sung: {claim.moreInfoRequest}</small>}
-      {claim.rejectionReason && <small>Lý do từ chối: {claim.rejectionReason}</small>}
+      {claim.moreInfoRequest && <small>Yeu cau bo sung: {claim.moreInfoRequest}</small>}
+      {claim.rejectionReason && <small>Ly do tu choi: {claim.rejectionReason}</small>}
       <div className="claim-action-row">
         <button className="secondary-button" type="button" onClick={() => setDetailOpen((value) => !value)}>
-          <Eye size={15} /> {detailOpen ? "Ẩn bằng chứng" : "Xem bằng chứng"}
+          <Eye size={15} /> {detailOpen ? "An bang chung" : "Xem bang chung"}
         </button>
         {canReview && (claim.status === "PENDING" || claim.status === "NEED_MORE_INFO") && (
           <>
@@ -4631,19 +5014,19 @@ function ClaimExtraActions(props: { claim: PostClaimSummary; currentUserId?: str
               type="button"
               onClick={() => actionMutation.mutate({ action: "accept" })}
             >
-              Chấp nhận
+              Ch?p nh?n
             </button>
             <button className="secondary-button" type="button" onClick={() => setActionForm("more-info")}>
-              Yêu cầu thêm
+              Y?u c?u th?m
             </button>
             <button className="secondary-button danger" type="button" onClick={() => setActionForm("reject")}>
-              Từ chối
+              T? ch?i
             </button>
           </>
         )}
         {canCancel && claim.status !== "ACCEPTED" && claim.status !== "REJECTED" && claim.status !== "CANCELLED" && (
           <button className="secondary-button danger" type="button" onClick={() => setActionForm("cancel")}>
-            Hủy claim
+            H?y claim
           </button>
         )}
       </div>
@@ -4655,10 +5038,10 @@ function ClaimExtraActions(props: { claim: PostClaimSummary; currentUserId?: str
             required
             rows={3}
             minLength={3}
-            placeholder={actionForm === "more-info" ? "Cần bổ sung thông tin gì?" : "Nhập lý do"}
+            placeholder={actionForm === "more-info" ? "Can bo sung thong tin gi?" : "Nhap ly do"}
           />
           <button className="primary-button" disabled={actionMutation.isPending} type="submit">
-            Lưu
+            L?u
           </button>
         </form>
       )}
@@ -4666,28 +5049,28 @@ function ClaimExtraActions(props: { claim: PostClaimSummary; currentUserId?: str
       {canUploadEvidence && (
         <form className="claim-evidence-upload" onSubmit={submitEvidence}>
           <select name="evidenceType" defaultValue="OWNERSHIP_PROOF">
-            <option value="OWNERSHIP_PROOF">Bằng chứng sở hữu</option>
-            <option value="ADDITIONAL_DOC">Tài liệu bổ sung</option>
-            <option value="PHOTO">Ảnh bổ sung</option>
+            <option value="OWNERSHIP_PROOF">Bang chung so huu</option>
+            <option value="ADDITIONAL_DOC">Tai lieu bo sung</option>
+            <option value="PHOTO">?nh b? sung</option>
           </select>
           <input name="evidence" type="file" accept="image/*" multiple />
           <button className="secondary-button" disabled={evidenceMutation.isPending} type="submit">
-            <Upload size={15} /> Tải bằng chứng
+            <Upload size={15} /> T?i b?ng ch?ng
           </button>
         </form>
       )}
 
       {detailOpen && (
         <div className="claim-evidence-panel">
-          {detailQuery.isLoading && <small>Đang tải bằng chứng...</small>}
+          {detailQuery.isLoading && <small>Dang tai bang chung...</small>}
           {detail?.claim.description && <p>{detail.claim.description}</p>}
           {detail?.evidence.map((item) => (
             <figure key={item.id}>
-              <img src={item.secureUrl} alt={item.evidenceType} />
+              <ClaimEvidenceImage claimId={claim.id} evidenceId={item.id} alt={item.evidenceType} />
               <figcaption>{item.evidenceType}{item.description ? ` - ${item.description}` : ""}</figcaption>
             </figure>
           ))}
-          {detail && detail.evidence.length === 0 && <small>Claim chưa có file bằng chứng.</small>}
+          {detail && detail.evidence.length === 0 && <small>Claim chua co file bang chung.</small>}
           {detailQuery.error instanceof Error && <div className="notice error">{detailQuery.error.message}</div>}
         </div>
       )}
@@ -4709,7 +5092,7 @@ function ClaimVerificationBadge(props: { claimId: string }) {
   const verification = verificationQuery.data?.verification;
 
   if (verificationQuery.isLoading) {
-    return <small>Đang tính xác thực...</small>;
+    return <small>Dang tinh xac thuc...</small>;
   }
   if (!verification) {
     return null;
@@ -4817,7 +5200,7 @@ function ClaimChatBox(props: { claimId: string; currentUserId?: string }) {
         }
       );
     } catch (error) {
-      setImageError(error instanceof Error ? error.message : "Không thể tải ảnh chat.");
+      setImageError(error instanceof Error ? error.message : "Khong the tai anh chat.");
     } finally {
       setImageUploading(false);
     }
@@ -4827,29 +5210,33 @@ function ClaimChatBox(props: { claimId: string; currentUserId?: string }) {
     <section className="claim-chat-box">
       <div className="claim-chat-heading">
         <MessageCircle size={15} />
-        {unreadCount > 0 && <span className="chat-unread-badge">{unreadCount} mới</span>}
-        <strong>Trao đổi claim</strong>
-        <small>{status === "ready" ? "Realtime" : status === "connecting" ? "Đang nối" : "Chưa sẵn sàng"}</small>
+        {unreadCount > 0 && <span className="chat-unread-badge">{unreadCount} moi</span>}
+        <strong>Trao doi claim</strong>
+        <small>{status === "ready" ? "Realtime" : status === "connecting" ? "Dang noi" : "Chua san sang"}</small>
       </div>
       <div className="claim-chat-messages">
         {messages.map((message) => (
           <div className="claim-chat-message" key={message.id}>
-            <strong>{message.sender.fullName ?? "Người dùng"}</strong>
-            {message.mediaUrl ? <img src={message.mediaUrl} alt="" /> : <span>{message.content}</span>}
+            <strong>{message.sender.fullName ?? "Nguoi dung"}</strong>
+            {message.mediaUrl ? (
+              <ClaimChatImage claimId={props.claimId} mediaPublicId={message.mediaPublicId} mediaUrl={message.mediaUrl} />
+            ) : (
+              <span>{message.content}</span>
+            )}
           </div>
         ))}
-        {messages.length === 0 && <small>Chưa có tin nhắn.</small>}
+        {messages.length === 0 && <small>Chua co tin nhan.</small>}
       </div>
       <form className="claim-chat-form" onSubmit={send}>
-        <input name="content" placeholder="Nhập tin nhắn" disabled={status !== "ready"} />
+        <input name="content" placeholder="Nhap tin nhan" disabled={status !== "ready"} />
         <button className="secondary-button" disabled={status !== "ready"} type="submit">
-          Gửi
+          G?i
         </button>
       </form>
       <form className="claim-chat-form image" onSubmit={sendImage}>
         <input name="image" type="file" accept="image/*" disabled={status !== "ready" || imageUploading} />
         <button className="secondary-button" disabled={status !== "ready" || imageUploading} type="submit">
-          <Upload size={15} /> Ảnh
+          <Upload size={15} /> ?nh
         </button>
       </form>
       {imageError && <div className="notice error">{imageError}</div>}
@@ -4867,13 +5254,13 @@ function MatchSuggestionsDialog(props: {
       <section className="dialog match-suggestions-dialog" onClick={(event) => event.stopPropagation()}>
         <div className="panel-heading">
           <div>
-            <span className="eyebrow">Matching tự động</span>
-            <h2>Có vật nhặt được giống bài của bạn</h2>
+            <span className="eyebrow">Matching tu dong</span>
+            <h2>Co vat nhat duoc giong bai cua ban</h2>
           </div>
           <Bell size={18} />
         </div>
         <p>
-          Hệ thống tìm thấy {props.suggestions.length} bài FOUND có nhiều điểm tương đồng. Bạn có thể mở từng bài để xem ảnh, vị trí và gửi claim nếu đúng vật của mình.
+          H? th?ng t?m th?y {props.suggestions.length} b?i FOUND c? nhi?u ?i?m t??ng ??ng. B?n c? th? m? t?ng b?i ?? xem ?nh, v? tr? v? g?i claim n?u ??ng v?t c?a m?nh.
         </p>
         <div className="match-suggestion-list">
           {props.suggestions.map((suggestion) => (
@@ -4886,21 +5273,21 @@ function MatchSuggestionsDialog(props: {
                 </div>
               )}
               <div>
-                <span className="status-pill">{Math.round(suggestion.match.totalScore * 100)}% giống nhau</span>
+                <span className="status-pill">{Math.round(suggestion.match.totalScore * 100)}% giong nhau</span>
                 <strong>{suggestion.post.title}</strong>
-                <small>{locationText(suggestion.post)} · {formatDate(suggestion.post.createdAt)}</small>
+                <small>{locationText(suggestion.post)} ? {formatDate(suggestion.post.createdAt)}</small>
                 <span className="match-breakdown">
-                  text {Math.round(suggestion.match.textScore * 100)}% · danh mục {Math.round(suggestion.match.categoryScore * 100)}% · vị trí {Math.round(suggestion.match.locationScore * 100)}%
+                  text {Math.round(suggestion.match.textScore * 100)}% ? danh m?c {Math.round(suggestion.match.categoryScore * 100)}% ? v? tr? {Math.round(suggestion.match.locationScore * 100)}%
                 </span>
               </div>
               <button className="primary-button" type="button" onClick={() => props.onSelect(suggestion.post.id)}>
-                Xem bài
+                Xem b?i
               </button>
             </article>
           ))}
         </div>
         <div className="dialog-actions">
-          <button className="secondary-button" type="button" onClick={props.onClose}>Đóng</button>
+          <button className="secondary-button" type="button" onClick={props.onClose}>Dong</button>
         </div>
       </section>
     </div>
@@ -4956,34 +5343,34 @@ function ClaimDialog(props: {
         mutation.mutate(new FormData(event.currentTarget));
       }}>
         <h2>Claim: {props.post.title}</h2>
-        {!props.signedIn && <div className="notice error">Bạn cần đăng nhập trước khi claim.</div>}
+        {!props.signedIn && <div className="notice error">Ban can dang nhap truoc khi claim.</div>}
         <label>
-          Mô tả bí mật
+          M? t? b? m?t
           <textarea name="secretAnswer" required minLength={3} rows={3} />
         </label>
         <label>
-          Mô tả thêm
+          M? t? th?m
           <textarea name="description" rows={3} />
         </label>
         <label>
-          Thời gian mất ước lượng
+          Th?i gian m?t ??c l??ng
           <input name="approximateLostAt" type="datetime-local" />
         </label>
         <label>
-          Vị trí mất ước lượng
+          V? tr? m?t ??c l??ng
           <input name="approximateLocation" required />
         </label>
         <label>
-          Bằng chứng ảnh
+          B?ng ch?ng ?nh
           <input type="file" accept={acceptAttribute(props.imageRules)} onChange={(event) => selectEvidence(event.target.files?.[0])} />
         </label>
-        {evidence && <div className="notice success">Đã chọn {evidence.name}</div>}
+        {evidence && <div className="notice success">Da chon {evidence.name}</div>}
         {evidenceError && <div className="notice error">{evidenceError}</div>}
         {mutation.error instanceof Error && <div className="notice error">{mutation.error.message}</div>}
         <div className="dialog-actions">
-          <button className="secondary-button" type="button" onClick={props.onClose}>Hủy</button>
+          <button className="secondary-button" type="button" onClick={props.onClose}>Huy</button>
           <button className="primary-button" disabled={!props.signedIn || mutation.isPending} type="submit">
-            {mutation.isPending ? "Đang gửi..." : "Gửi claim"}
+            {mutation.isPending ? "Dang gui..." : "Gui claim"}
           </button>
         </div>
       </form>
@@ -4993,11 +5380,12 @@ function ClaimDialog(props: {
 
 function viewTitle(view: View) {
   const titles: Record<View, string> = {
-    board: "Bảng Lost & Found",
-    "my-posts": "Tin của tôi",
-    create: "Đăng tin mới",
-    handover: "Điểm bàn giao",
-    account: "Tài khoản"
+    board: "Bang Lost & Found",
+    "my-posts": "Tin cua toi",
+    create: "Dang tin moi",
+    handover: "Diem ban giao",
+    account: "Tai khoan",
+    "post-detail": "Chi tiet bai dang"
   };
   return titles[view];
 }
@@ -5039,7 +5427,7 @@ function formNumber(data: FormData, key: string) {
 function validateImageFiles(files: File[], rules: ImageUploadRules, maxFiles: number) {
   const errors: string[] = [];
   if (files.length > maxFiles) {
-    errors.push(`Chỉ được chọn tối đa ${maxFiles} ảnh.`);
+    errors.push(`Ch? ???c ch?n t?i ?a ${maxFiles} ?nh.`);
   }
 
   for (const file of files) {
@@ -5048,10 +5436,10 @@ function validateImageFiles(files: File[], rules: ImageUploadRules, maxFiles: nu
     const typeFormat = file.type.replace("image/", "").replace("jpeg", "jpg").toLowerCase();
     const allowed = rules.allowedFormats.includes(normalizedExtension) || rules.allowedFormats.includes(typeFormat);
     if (!allowed) {
-      errors.push(`${file.name} không đúng định dạng ${rules.allowedFormats.join(", ").toUpperCase()}.`);
+      errors.push(`${file.name} kh?ng ??ng ??nh d?ng ${rules.allowedFormats.join(", ").toUpperCase()}.`);
     }
     if (file.size > rules.maxImageSizeMb * 1024 * 1024) {
-      errors.push(`${file.name} vượt quá ${rules.maxImageSizeMb}MB.`);
+      errors.push(`${file.name} v??t qu? ${rules.maxImageSizeMb}MB.`);
     }
   }
 
@@ -5064,10 +5452,10 @@ function fileKey(file: File) {
 
 function storageLocationText(post: BoardPost) {
   if (post.handoverPoint?.name) {
-    return `Điểm bàn giao: ${post.handoverPoint.name}`;
+    return `?i?m b?n giao: ${post.handoverPoint.name}`;
   }
   const exactLocation = [post.location.areaName, post.location.buildingName, post.location.roomName].filter(Boolean).join(", ");
-  return exactLocation || post.location.customLocation || "Chưa có vị trí lưu trữ cụ thể";
+  return exactLocation || post.location.customLocation || "Chua co vi tri luu tru cu the";
 }
 
 function locationText(post: BoardPost) {
@@ -5075,7 +5463,7 @@ function locationText(post: BoardPost) {
     post.location.customLocation ||
     [post.location.areaName, post.location.buildingName, post.location.roomName].filter(Boolean).join(", ") ||
     post.handoverPoint?.name ||
-    "Chưa rõ vị trí"
+    "Chua ro vi tri"
   );
 }
 
@@ -5087,7 +5475,7 @@ function categorySelectOptions(categories: Category[]) {
     const children = categories.filter((category) => category.parentId === root.id);
     options.push({
       id: root.id,
-      label: children.length > 0 ? `${root.name} (tất cả)` : root.name
+      label: children.length > 0 ? `${root.name} (t?t c?)` : root.name
     });
     for (const child of children) {
       options.push({ id: child.id, label: `- ${child.name}` });
@@ -5125,7 +5513,7 @@ function warehouseLocationText(item: AdminWarehouseItem) {
     item.location.roomText ||
     [item.location.areaName, item.location.buildingName].filter(Boolean).join(", ") ||
     item.handoverPoint?.name ||
-    "Chưa rõ vị trí kho"
+    "Chua ro vi tri kho"
   );
 }
 
@@ -5164,11 +5552,11 @@ function dateInputValue(value: string | undefined) {
 
 function fieldLabel(field: string) {
   const labels: Record<string, string> = {
-    fullName: "Họ tên",
+    fullName: "Ho ten",
     email: "Email",
-    studentCode: "Mã sinh viên",
-    password: "Mật khẩu",
-    newPassword: "Mật khẩu mới",
+    studentCode: "Ma sinh vien",
+    password: "Mat khau",
+    newPassword: "Mat khau moi",
     otp: "OTP"
   };
   return labels[field] ?? field;

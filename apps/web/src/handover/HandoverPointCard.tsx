@@ -1,4 +1,4 @@
-import { Boxes, Clock, Edit3, Eye, MapPin, Navigation, Power, Trash2, UserCircle } from "lucide-react";
+import { Boxes, Clock, Eye, MapPin, Navigation, UserCircle } from "lucide-react";
 import type { HandoverPointView } from "./types";
 
 export function HandoverPointCard(props: {
@@ -34,10 +34,8 @@ export function HandoverPointCard(props: {
         </button>
       </div>
       {props.canManage && (
-        <div className="handover-admin-actions" aria-label="Thao tác quản trị điểm bàn giao">
-          <button type="button"><Edit3 size={15} /> Sửa</button>
-          <button type="button"><Power size={15} /> {props.point.status === "active" ? "Tạm đóng" : "Mở lại"}</button>
-          <button type="button" className="danger"><Trash2 size={15} /> Xóa mềm</button>
+        <div className="handover-admin-note">
+          Quản trị điểm bàn giao ở tab Admin để đảm bảo thao tác được ghi nhận đầy đủ.
         </div>
       )}
     </article>

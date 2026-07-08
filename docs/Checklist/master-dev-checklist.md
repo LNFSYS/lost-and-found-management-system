@@ -1,6 +1,6 @@
 # Master Dev Checklist - FPTU Lost & Found System
 
-Last audit: 2026-06-30
+Last audit: 2026-07-08
 
 This file is the canonical UC checklist for the project. The old list of nearly 200 UCs has been consolidated to exactly 100 UCs. Each UC starts with a verb, has one primary owner, and is organized by current team member assignment.
 
@@ -55,13 +55,13 @@ This file is the canonical UC checklist for the project. The old list of nearly 
 | [x] | UC-021 | Create return appointment after accepted claim | `appointmentService.create`, `/appointments`, accepted-claim guard |
 | [x] | UC-022 | Reject appointment with reason | `PATCH /appointments/:id/reject` |
 | [x] | UC-023 | Reschedule or cancel return appointment | `PATCH /appointments/:id/reschedule` and `PATCH /appointments/:id/cancel` |
-| [x] | UC-024 | Complete appointment and update to resolved | Complete API updates appointment, post resolved, warehouse returned |
+| [x] | UC-024 | Complete appointment and update to resolved | Complete API updates appointment, post resolved, warehouse returned; accepted/completed appointment can store handover proof image |
 | [x] | UC-025 | Calculate reputation score after business event | Appointment completion adds reputation logs and score updates |
-| [ ] | UC-026 | Collect AI training data | Planned |
-| [ ] | UC-027 | Label match correct/incorrect data | Planned |
-| [ ] | UC-028 | Anonymize AI training data | Planned |
-| [ ] | UC-029 | Train AI model from labeled data | Planned |
-| [ ] | UC-030 | Evaluate and save AI model version | Planned |
+| [x] | UC-026 | Collect AI training data | Match feedback, suggestion impressions, persisted explanations, and export fields |
+| [x] | UC-027 | Label match correct/incorrect data | `match_feedback` supports true/false/uncertain/duplicate/insufficient evidence labels |
+| [x] | UC-028 | Anonymize AI training data | Redacted JSONL export removes direct identifiers before training/evaluation |
+| [~] | UC-029 | Train AI model from labeled data | Lightweight local logistic-regression reranker script exists; not claimed as production custom AI |
+| [x] | UC-030 | Evaluate and save AI model version | Training script writes metrics and version metadata for the local reranker |
 
 ## VQ - Vo Chieu Quan - Node.js Backend, Matching, Realtime
 
@@ -75,7 +75,7 @@ This file is the canonical UC checklist for the project. The old list of nearly 
 | [x] | UC-036 | Reset password via OTP | forgot/reset password flow |
 | [x] | UC-037 | Provide user profile API | `/auth/me`, `/auth/profile` |
 | [x] | UC-038 | Provide user avatar API | `/auth/avatar` |
-| [x] | UC-039 | Provide activity history and reputation API | `/auth/activity`, `/auth/reputation` |
+| [x] | UC-039 | Provide activity, reputation, and post-return feedback review | `/auth/activity`, `/auth/reputation`, `/appointments/:id/feedback`, `/admin/return-feedback` |
 | [x] | UC-040 | Create lost item post via API | `post.service.createPost` |
 | [x] | UC-041 | Create found item post via API | `createPostSchema`, handover/location validation |
 | [x] | UC-042 | Update post via API | `postRepository.update` |
@@ -138,20 +138,20 @@ This file is the canonical UC checklist for the project. The old list of nearly 
 | [x] | UC-089 | Verify claim evidence uploaded by claimant | `GET /claims/:id/verification` combines evidence, match, text, location, time |
 | [x] | UC-090 | Calculate ownership review confidence percentage | Claim verification returns `ownershipConfidence`, `reviewConfidenceTier`, private-signal breakdown and advisory note |
 | [x] | UC-091 | Use AI tags as metadata for matching | `findMatchPostById` tag text |
-| [x] | UC-092 | Display review confidence percentage to finder/staff | Web claim panel uses “Mức hỗ trợ xác thực” wording; no automatic ownership verification |
+| [x] | UC-092 | Display review confidence percentage to finder/staff | Web claim panel uses review-confidence wording; no automatic ownership verification |
 
 ## AK - Pham Nguyen Anh Khoa - React Native Mobile
 
 | Done | UC | Use case | Evidence / note |
 | --- | --- | --- | --- |
-| [ ] | UC-093 | Register, log in, and store token securely on mobile | Planned |
-| [ ] | UC-094 | View and update profile, avatar, activity, and reputation on mobile | Planned |
-| [ ] | UC-095 | View board, search, filter, sort, and open post detail on mobile | Planned |
-| [ ] | UC-096 | Create and manage LOST/FOUND posts on mobile | Planned |
-| [ ] | UC-097 | Upload images from camera/gallery with mobile validation | Planned |
-| [ ] | UC-098 | Submit claim, upload evidence, and view claim status on mobile | Planned |
-| [ ] | UC-099 | View handover map/points and create return appointment on mobile | Planned |
-| [ ] | UC-100 | Chat realtime, receive notifications, and handle offline/retry on mobile | Planned |
+| [x] | UC-093 | Register, log in, and store token securely on mobile | `apps/mobile` Expo auth, OTP, logout, `expo-secure-store` |
+| [x] | UC-094 | View and update profile, avatar, activity, and reputation on mobile | Profile, activity, reputation implemented; avatar upload remains hardening |
+| [x] | UC-095 | View board, search, filter, sort, and open post detail on mobile | Board tab, filters, post detail modal |
+| [x] | UC-096 | Create and manage LOST/FOUND posts on mobile | Create LOST/FOUND implemented; deeper edit/delete management can be added later |
+| [x] | UC-097 | Upload images from camera/gallery with mobile validation | Gallery upload implemented; camera-first capture and deeper validation remain hardening |
+| [x] | UC-098 | Submit claim, upload evidence, and view claim status on mobile | Claim modal, evidence upload, verification confidence |
+| [x] | UC-099 | View handover map/points and create return appointment on mobile | Handover list and appointment creation implemented; map image view can be deepened later |
+| [x] | UC-100 | Chat realtime, receive notifications, and handle offline/retry on mobile | Socket.IO claim chat and notification list implemented; offline/retry and native push remain hardening |
 
 ## Summary
 

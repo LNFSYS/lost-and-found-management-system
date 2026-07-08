@@ -1,0 +1,116 @@
+const API_BASE_URL = process.env.E2E_API_URL ?? "http://localhost:3001/api";
+const ownerEmail = process.env.E2E_EMAIL ?? "adminlnf@gmail.com";
+const ownerPassword = process.env.E2E_PASSWORD ?? "12345678";
+const claimantEmail = process.env.E2E_CLAIMANT_EMAIL ?? "stafflnf@gmail.com";
+const claimantPassword = process.env.E2E_CLAIMANT_PASSWORD ?? "12345678";
+
+interface Envelope<T> {
+  success: boolean;
+  data?: T;
+  message?: string;
+  error?: string;
+}
+
+async function request<T>(path: string, init: RequestInit = {}, token?: string, expectedStatus = 200) {
+  const headers = new Headers(init.headers);
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  if (init.body && !(init.body instanceof FormData)) {
+    headers.set("Content-Type", "application/json");
+  }
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+  const payload = (await response.json().catch(() => ({}))) as Envelope<T>;
+  if (response.status !== expectedStatus || (expectedStatus < 400 && !payload.success)) {
+    throw new Error(`${path} expected ${expectedStatus}, got ${response.status}: ${payload.message ?? payload.error ?? "unknown"}`);
+  }
+  return payload.data as T;
+}
+
+async function rawRequest(path: string, init: RequestInit = {}, token?: string) {
+  const headers = new Headers(init.headers);
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  if (init.body && !(init.body instanceof FormData)) {
+    headers.set("Content-Type", "application/json");
+  }
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+  return {
+    status: response.status,
+    payload: (await response.json().catch(() => ({}))) as Envelope<unknown>
+  };
+}
+
+async function login(email: string, password: string) {
+  const data = await request<{ tokens: { accessToken: string } }>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password })
+  });
+  return data.tokens.accessToken;
+}
+
+async function main() {
+  const ownerToken = await login(ownerEmail, ownerPassword);
+  const claimantToken = await login(claimantEmail, claimantPassword);
+  const categories = await request<{ categories: Array<{ id: string; name: string }> }>("/categories", {}, ownerToken);
+  const categoryId = categories.categories[0]?.id;
+  if (!categoryId) {
+    throw new Error("No category available for claim race smoke.");
+  }
+
+  const uniqueToken = `e2e-claim-race-${Date.now()}`;
+  const foundPost = await request<{ post: { id: string } }>("/posts", {
+    method: "POST",
+    body: JSON.stringify({
+      type: "FOUND",
+      title: `E2E claim race ${uniqueToken}`,
+      description: `Race smoke found item ${uniqueToken}`,
+      categoryId,
+      roomText: "E2E race storage",
+      contactInfo: "e2e@example.com",
+      lostFoundAt: new Date(Date.now() - 20 * 60 * 1000).toISOString()
+    })
+  }, ownerToken, 201);
+
+  const claim = await request<{ claim: { id: string } }>("/claims", {
+    method: "POST",
+    body: JSON.stringify({
+      postId: foundPost.post.id,
+      secretAnswer: "E2E race private proof",
+      description: "E2E race claim proof",
+      approximateLocation: "E2E race campus"
+    })
+  }, claimantToken, 201);
+
+  const results = await Promise.allSettled([
+    rawRequest(`/claims/${claim.claim.id}/accept`, { method: "PATCH" }, ownerToken),
+    rawRequest(`/claims/${claim.claim.id}/reject`, {
+      method: "PATCH",
+      body: JSON.stringify({ reason: "E2E concurrent reject should not win if accept wins" })
+    }, ownerToken)
+  ]);
+
+  const statuses = results.map((result) => {
+    if (result.status === "rejected") {
+      throw result.reason;
+    }
+    return result.value.status;
+  });
+  const successCount = statuses.filter((status) => status === 200).length;
+  const conflictCount = statuses.filter((status) => status === 409).length;
+  if (successCount !== 1 || conflictCount !== 1) {
+    throw new Error(`Expected exactly one claim transition to win with one 409 loser, got statuses: ${statuses.join(", ")}`);
+  }
+
+  await request(`/posts/${foundPost.post.id}`, { method: "DELETE" }, ownerToken).catch((error: unknown) => {
+    console.warn(`Claim race e2e cleanup skipped: ${error instanceof Error ? error.message : "unknown error"}`);
+  });
+
+  console.log(`Claim race smoke passed. CLAIM=${claim.claim.id}`);
+}
+
+main().catch((error: unknown) => {
+  console.error(error);
+  process.exit(1);
+});

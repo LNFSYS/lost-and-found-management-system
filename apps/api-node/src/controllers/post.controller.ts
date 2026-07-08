@@ -6,6 +6,7 @@ import { HttpError } from "../utils/http-error.js";
 import {
   createPostSchema,
   listPostsQuerySchema,
+  matchFeedbackSchema,
   reportPostSchema,
   updatePostSchema,
   updatePostStatusSchema
@@ -64,6 +65,14 @@ export const postController = {
     const postId = requireStringParam(request.params.id, "id");
     const explanations = await matchingService.explainMatches(postId);
     response.json(ok({ explanations }));
+  },
+
+  async matchFeedback(request: Request, response: Response) {
+    const postId = requireStringParam(request.params.id, "id");
+    const matchId = requireStringParam(request.params.matchId, "matchId");
+    const input = matchFeedbackSchema.parse(request.body);
+    const feedback = await postService.recordMatchFeedback(request.auth!, postId, matchId, input);
+    response.json(ok({ feedback }, "Match feedback saved"));
   },
 
   async rerunMatches(request: Request, response: Response) {

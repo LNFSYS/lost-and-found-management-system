@@ -1,6 +1,6 @@
 # MVP Scope And Future Work
 
-Last updated: 2026-07-02
+Last updated: 2026-07-08
 
 ## Current MVP Positioning
 
@@ -29,11 +29,13 @@ Implemented scope:
 
 Not claimed as current MVP:
 
-- Custom trained AI model.
+- Production custom trained AI model.
 - Production MLOps pipeline.
-- Dataset labeling, model registry, deployment, or continuous retraining.
+- Model registry, deployed inference endpoint, or continuous retraining.
 
 Use wording such as "AI-assisted OCR", "Google Vision assisted recognition", and "rule-based/hybrid matching" in demo slides and UI explanations.
+
+See [ai-training-roadmap.md](ai-training-roadmap.md) for the future custom AI training order: data foundation, explicit feedback labels, redacted exports, lightweight model evaluation, optional inference, and rule-based fallback.
 
 ## Verification Model
 
@@ -74,9 +76,24 @@ Important defense wording:
 
 ## Mobile Scope
 
-Mobile is a future enhancement. The current deliverable should be evaluated through the responsive web app.
+An Expo React Native mobile MVP is now available in `apps/mobile`.
 
-Do not present the React Native folder as a completed mobile application unless the mobile auth, board, post, claim, appointment, chat, notification, secure storage, and offline/retry flows are implemented.
+Implemented mobile scope:
+
+- Login, register OTP, logout, and secure token storage.
+- LOST/FOUND board, search, filter, sort, and post detail.
+- Create LOST/FOUND posts and upload item images from the gallery.
+- Match suggestions with feedback labels for future training data.
+- Submit claims, upload claim evidence, view verification confidence, create appointments, and submit post-return feedback after completed handovers.
+- Handover point list, notifications, profile, activity, reputation, staff dashboard, warehouse/report snapshots, and Socket.IO claim chat.
+
+Still not claimed as fully production mobile:
+
+- Native push notification delivery.
+- Offline queue/retry and reconnect test matrix.
+- Deeper mobile upload validation.
+- App store release, device farm testing, and mobile observability.
+- Separate Flutter app. Flutter is a different stack from Expo and should be tracked as a separate project only if the team chooses to build it.
 
 ## Node.js And Java Boundary
 
@@ -90,13 +107,11 @@ See [node-java-service-boundary.md](node-java-service-boundary.md) for the owner
 
 ## Known Future Work
 
-- Config rollback UI.
 - Stronger enrollment verification can be added later through student-code/admin approval, but FPT/edu email must not be mandatory for current students.
 - Realtime chat reconnect/offline/socket-room isolation hardening.
 - Notification digest and anti-noise tuning beyond current score tiers.
-- Handover proof image upload.
-- Feedback after successful return and negative-feedback review.
+- Overdue disposition paperwork/report forms for real campus approval workflows.
 - Background matching queue for large data.
-- Role matrix, warehouse lifecycle, claim race condition, migration, and realtime room isolation tests.
-- Native mobile app.
-- Custom AI training/MLOps pipeline.
+- More automated coverage for OTP registration, admin CRUD, blank-DB migration rehearsal, realtime room isolation, reconnect and offline behavior.
+- Native mobile hardening: push notifications, offline retry, device testing, app store packaging, and optional separate Flutter app.
+- Production custom AI training/MLOps pipeline.

@@ -1,6 +1,8 @@
 import type { ResultSetHeader, RowDataPacket } from "mysql2/promise";
 import { dbPool } from "../config/db.js";
 
+type ClaimStatus = "PENDING" | "NEED_MORE_INFO" | "ACCEPTED" | "REJECTED" | "CANCELLED";
+
 interface ClaimPostRow extends RowDataPacket {
   id: string;
   user_id: string;
@@ -184,6 +186,7 @@ export const claimRepository = {
     id: string;
     actorId: string;
     status: "NEED_MORE_INFO" | "ACCEPTED" | "REJECTED" | "CANCELLED";
+    allowedStatuses?: ClaimStatus[];
     rejectionReason?: string | null;
     moreInfoRequest?: string | null;
     note?: string | null;
@@ -193,6 +196,8 @@ export const claimRepository = {
       return null;
     }
 
+    const allowedStatuses = input.allowedStatuses?.length ? input.allowedStatuses : undefined;
+    const statusGuardSql = allowedStatuses ? ` AND status IN (${allowedStatuses.map(() => "?").join(", ")})` : "";
     const [result] = await dbPool.execute<ResultSetHeader>(
       `
         UPDATE claims
@@ -203,7 +208,7 @@ export const claimRepository = {
             rejected_at = CASE WHEN ? = 'REJECTED' THEN COALESCE(rejected_at, UTC_TIMESTAMP()) ELSE rejected_at END,
             cancelled_at = CASE WHEN ? = 'CANCELLED' THEN COALESCE(cancelled_at, UTC_TIMESTAMP()) ELSE cancelled_at END,
             updated_at = UTC_TIMESTAMP()
-        WHERE id = ?
+        WHERE id = ?${statusGuardSql}
       `,
       [
         input.status,
@@ -214,7 +219,8 @@ export const claimRepository = {
         input.status,
         input.status,
         input.status,
-        input.id
+        input.id,
+        ...(allowedStatuses ?? [])
       ]
     );
     if (result.affectedRows === 0) {

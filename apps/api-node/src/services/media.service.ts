@@ -139,6 +139,8 @@ export const mediaService = {
         id: mediaId,
         postId,
         secureUrl: uploaded.secureUrl,
+        thumbnailUrl: uploaded.thumbnailUrl ?? null,
+        optimizedUrl: uploaded.optimizedUrl ?? null,
         publicId: uploaded.publicId,
         resourceType: uploaded.resourceType,
         mediaKind: upload.mediaKind,
@@ -262,6 +264,23 @@ export const mediaService = {
     return result;
   },
 
+  async getClaimEvidenceImageUrl(auth: AccessTokenPayload, claimId: string, evidenceId: string) {
+    const currentClaim = await claimRepository.findById(claimId);
+    if (!currentClaim) {
+      throw new HttpError(404, "Claim not found");
+    }
+    if (!canViewClaim(auth, currentClaim.claim)) {
+      throw new HttpError(403, "You do not have permission to view evidence for this claim");
+    }
+
+    const evidence = currentClaim.evidence.find((item) => item.id === evidenceId);
+    if (!evidence) {
+      throw new HttpError(404, "Claim evidence not found");
+    }
+
+    return { imageUrl: evidence.secureUrl };
+  },
+
   async uploadClaimChatImage(auth: AccessTokenPayload, claimId: string, file: Express.Multer.File | undefined) {
     const image = requireFile(file, "image");
     await assertImageFile(image);
@@ -283,5 +302,18 @@ export const mediaService = {
     });
 
     return { image: uploaded };
+  },
+
+  async getClaimChatImageUrl(auth: AccessTokenPayload, claimId: string, mediaPublicId: string) {
+    if (!(await chatRepository.canAccessClaim(claimId, auth.sub, auth.roles))) {
+      throw new HttpError(403, "You do not have permission to view chat images for this claim");
+    }
+
+    const image = await chatRepository.findImageForClaim(claimId, mediaPublicId);
+    if (!image?.mediaUrl) {
+      throw new HttpError(404, "Claim chat image not found");
+    }
+
+    return { imageUrl: image.mediaUrl };
   }
 };

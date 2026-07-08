@@ -1714,6 +1714,20 @@ label {
   font-weight: 600;
 }
 
+.compact-button {
+  min-height: 34px;
+  padding: 0.45rem 0.75rem;
+  white-space: nowrap;
+}
+
+.panel-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .admin-config-list {
   display: grid;
   gap: 10px;
@@ -4517,6 +4531,45 @@ label {
   font-weight: 650;
 }
 
+.appointment-proof-preview {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #f8fbff;
+}
+
+.appointment-proof-preview img {
+  display: block;
+  width: 92px;
+  height: 68px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.appointment-proof-preview > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.appointment-proof-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto;
+  gap: 8px;
+}
+
+.appointment-proof-form input {
+  min-height: 42px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 8px 12px;
+}
+
 .claim-extra-actions {
   display: grid;
   gap: 8px;
@@ -4888,6 +4941,19 @@ label {
   .post-edit-grid,
   .claim-appointment-form {
     grid-template-columns: 1fr;
+  }
+
+  .appointment-proof-form {
+    grid-template-columns: 1fr;
+  }
+
+  .appointment-proof-preview {
+    grid-template-columns: 1fr;
+  }
+
+  .appointment-proof-preview img {
+    width: 100%;
+    height: 160px;
   }
 }
 
@@ -5475,5 +5541,282 @@ label {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+}
+
+/* UI/UX polish pass - campus operation surfaces */
+.primary-button:focus-visible,
+.secondary-button:focus-visible,
+.danger-button:focus-visible,
+.mode-switch:focus-visible,
+.text-button:focus-visible,
+.icon-button:focus-visible,
+.filter-toggle-btn:focus-visible,
+.type-tab-btn:focus-visible,
+.quick-category-card:focus-visible,
+.feed-post-card:focus-visible,
+.handover-card-main:focus-visible,
+.campus-map-marker:focus-visible,
+.handover-admin-actions button:focus-visible,
+.handover-route-note button:focus-visible {
+  outline: 3px solid rgba(0, 90, 171, 0.28);
+  outline-offset: 3px;
+}
+
+.fpt-community-banner {
+  min-height: 0;
+  padding: clamp(20px, 3vw, 28px);
+  margin-bottom: 18px;
+  border-radius: 12px;
+  background:
+    linear-gradient(135deg, rgba(255, 247, 241, 0.96), rgba(241, 249, 255, 0.94)),
+    #ffffff;
+}
+
+.banner-title {
+  max-width: 760px;
+  font-size: clamp(1.65rem, 3vw, 2.05rem);
+}
+
+.banner-description {
+  max-width: 700px;
+  margin: 10px 0 18px;
+}
+
+.banner-right-image img {
+  max-height: 160px;
+}
+
+.feed-post-card {
+  min-height: 0;
+  border-color: rgba(0, 90, 171, 0.1);
+}
+
+.feed-post-card:hover {
+  border-color: rgba(0, 90, 171, 0.22);
+}
+
+.card-media {
+  height: auto;
+  aspect-ratio: 16 / 10;
+  background:
+    linear-gradient(135deg, rgba(0, 90, 171, 0.08), rgba(243, 112, 33, 0.08)),
+    #f8fafc;
+}
+
+.card-media img {
+  object-fit: cover;
+}
+
+.card-placeholder-image {
+  background:
+    radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.96) 0 34%, transparent 35%),
+    linear-gradient(135deg, rgba(0, 90, 171, 0.1), rgba(94, 181, 70, 0.1));
+  color: var(--fpt-blue);
+}
+
+.card-type-badge.lost {
+  background: var(--fpt-orange);
+}
+
+.card-type-badge.found {
+  background: var(--fpt-green);
+}
+
+.lost-items .stat-card-value,
+.red-icon {
+  color: var(--fpt-orange);
+}
+
+.found-items .stat-card-value,
+.green-icon {
+  color: var(--fpt-green);
+}
+
+.total-items .stat-card-value,
+.blue-icon {
+  color: var(--fpt-blue);
+}
+
+.lost-items .stat-card-right-icon {
+  background: var(--soft-orange);
+}
+
+.found-items .stat-card-right-icon {
+  background: var(--soft-green);
+}
+
+.quick-category-card {
+  min-height: 112px;
+}
+
+.handover-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.handover-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 6px;
+  background: linear-gradient(180deg, var(--fpt-orange), var(--fpt-green), var(--fpt-blue));
+}
+
+.handover-hero > * {
+  position: relative;
+}
+
+.handover-admin-banner {
+  align-items: start;
+}
+
+.handover-admin-banner p {
+  max-width: 760px;
+  margin: 0;
+  color: #7c2d12;
+  font-size: 0.9rem;
+  font-weight: 750;
+  line-height: 1.5;
+}
+
+.handover-point-card.selected {
+  border-color: rgba(243, 113, 36, 0.55);
+  box-shadow: 0 14px 34px rgba(243, 113, 36, 0.13);
+}
+
+.handover-point-card.selected::before {
+  content: "";
+  width: 44px;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--fpt-orange), var(--fpt-green));
+}
+
+.handover-admin-note {
+  border-top: 1px dashed var(--line);
+  padding-top: 10px;
+  color: #7c2d12;
+  font-size: 0.8rem;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.campus-image-map::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.08), transparent 24%, rgba(15, 23, 42, 0.1));
+}
+
+.campus-map-marker {
+  z-index: 4;
+}
+
+.campus-map-popup {
+  z-index: 5;
+}
+
+.post-detail-page {
+  display: grid;
+  gap: 18px;
+  width: 100%;
+}
+
+.post-detail-page-shell {
+  display: grid;
+  gap: 18px;
+  width: min(980px, 100%);
+  margin: 0 auto;
+  padding: clamp(18px, 3vw, 28px);
+  border: 1px solid rgba(0, 90, 171, 0.12);
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 18px 42px rgba(22, 32, 51, 0.07);
+}
+
+.post-detail-page .detail-modal-header {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  margin: calc(clamp(18px, 3vw, 28px) * -1) calc(clamp(18px, 3vw, 28px) * -1) 0;
+  padding: 14px clamp(18px, 3vw, 28px);
+  border-bottom: 1px solid #eef2f7;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+}
+
+.post-detail-page .detail-close-btn {
+  width: auto;
+  min-width: 42px;
+  padding: 0 12px;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--fpt-blue);
+}
+
+.post-detail-page .detail-close-btn::after {
+  content: "Quay lại";
+  margin-left: 6px;
+  font-size: 0.86rem;
+  font-weight: 850;
+}
+
+.post-detail-page .detail-image-container {
+  max-height: none;
+  background: #f8fafc;
+}
+
+.post-detail-page .detail-image-container img {
+  max-height: min(62vh, 620px);
+}
+
+.post-detail-page .detail-modal-footer-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  margin: 0 calc(clamp(18px, 3vw, 28px) * -1) calc(clamp(18px, 3vw, 28px) * -1);
+  padding: 14px clamp(18px, 3vw, 28px);
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(12px);
+}
+
+@media (max-width: 1120px) {
+  .handover-map-panel {
+    order: -1;
+  }
+}
+
+@media (max-width: 720px) {
+  .fpt-community-banner {
+    padding: 20px;
+  }
+
+  .banner-right-image img {
+    max-height: 132px;
+  }
+
+  .card-media {
+    aspect-ratio: 4 / 3;
+  }
+
+  .post-detail-page-shell {
+    padding: 14px;
+  }
+
+  .post-detail-page .detail-modal-header,
+  .post-detail-page .detail-modal-footer-actions {
+    margin-right: -14px;
+    margin-left: -14px;
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
+  .post-detail-page .detail-modal-footer-actions {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 }

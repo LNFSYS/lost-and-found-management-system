@@ -18,6 +18,14 @@ const reminderSchema = z.object({
 const reasonSchema = z.object({
   reason: z.string().trim().min(2).max(500)
 });
+const feedbackSchema = z.object({
+  rating: z.coerce.number().int().min(1).max(5),
+  comment: z.string().trim().max(1000).nullable().optional(),
+  targetUserId: z.string().uuid().nullable().optional()
+});
+const proofSchema = z.object({
+  note: z.string().trim().max(1000).nullable().optional()
+});
 
 function claimIdParam(request: Request) {
   const { claimId } = request.params;
@@ -77,6 +85,32 @@ export const appointmentController = {
 
   async complete(request: Request, response: Response) {
     response.json(ok(await appointmentService.complete(request.auth!, appointmentIdParam(request)), "Appointment completed"));
+  },
+
+  async feedback(request: Request, response: Response) {
+    response
+      .status(201)
+      .json(created(await appointmentService.submitFeedback(request.auth!, appointmentIdParam(request), feedbackSchema.parse(request.body))));
+  },
+
+  async proof(request: Request, response: Response) {
+    const input = proofSchema.parse(request.body);
+    response
+      .status(201)
+      .json(created(await appointmentService.uploadProof(request.auth!, appointmentIdParam(request), request.file, input.note)));
+  },
+
+  async proofImage(request: Request, response: Response) {
+    const { imageUrl } = await appointmentService.getProofImageUrl(request.auth!, appointmentIdParam(request));
+    const upstream = await fetch(imageUrl);
+    if (!upstream.ok) {
+      throw new HttpError(502, "Unable to load appointment proof image");
+    }
+    const contentType = upstream.headers.get("content-type") ?? "image/jpeg";
+    const bytes = Buffer.from(await upstream.arrayBuffer());
+    response.setHeader("Content-Type", contentType);
+    response.setHeader("Cache-Control", "private, no-store");
+    response.send(bytes);
   },
 
   async remind(request: Request, response: Response) {

@@ -53,6 +53,9 @@ async function main() {
     "notifications",
     "chat_rooms",
     "chat_messages",
+    "match_feedback",
+    "match_suggestion_impressions",
+    "return_feedback",
     "config_entries",
     "config_history"
   ]) {
@@ -64,14 +67,27 @@ async function main() {
     ["handover_points", "map_position_y"],
     ["warehouse_items", "retention_deadline"],
     ["post_media", "media_kind"],
-    ["chat_messages", "is_read"]
+    ["post_media", "thumbnail_url"],
+    ["post_media", "optimized_url"],
+    ["chat_messages", "is_read"],
+    ["match_results", "image_score"],
+    ["match_results", "ocr_score"],
+    ["match_results", "score_tier"],
+    ["match_results", "matcher_version"],
+    ["match_results", "explanation_json"],
+    ["return_feedback", "rating"],
+    ["return_feedback", "status"],
+    ["return_appointments", "proof_image_url"],
+    ["return_appointments", "proof_uploaded_by"],
+    ["return_appointments", "proof_uploaded_at"],
+    ["return_appointments", "proof_note"]
   ] as const) {
     await assertColumn(tableName, columnName);
   }
 
   const migrationCount = await count("SELECT COUNT(*) AS total FROM schema_migrations", []);
-  if (migrationCount < 14) {
-    throw new Error(`Expected at least 14 applied migrations, got ${migrationCount}`);
+  if (migrationCount < 19) {
+    throw new Error(`Expected at least 19 applied migrations, got ${migrationCount}`);
   }
 
   console.log(`Migration smoke passed on database ${env.db.name}. Applied migrations: ${migrationCount}.`);

@@ -5,7 +5,13 @@ import { postRepository } from "../repositories/post.repository.js";
 import { normalizeText } from "../utils/normalize-text.js";
 import { HttpError } from "../utils/http-error.js";
 import type { AccessTokenPayload } from "../middlewares/auth.middleware.js";
-import type { CreatePostInput, ListPostsQuery, ReportPostInput, UpdatePostInput } from "../validators/post.validator.js";
+import type {
+  CreatePostInput,
+  ListPostsQuery,
+  MatchFeedbackInput,
+  ReportPostInput,
+  UpdatePostInput
+} from "../validators/post.validator.js";
 import { matchingService } from "./matching.service.js";
 
 function assertPostOwnerOrAdmin(auth: AccessTokenPayload, ownerId: string) {
@@ -16,6 +22,16 @@ function assertPostOwnerOrAdmin(auth: AccessTokenPayload, ownerId: string) {
 
 function canViewContactInfo(auth: AccessTokenPayload | undefined, ownerId: string) {
   return Boolean(auth && (auth.sub === ownerId || auth.roles.includes("ADMIN") || auth.roles.includes("STAFF")));
+}
+
+function feedbackSource(auth: AccessTokenPayload): "USER" | "STAFF" | "ADMIN" {
+  if (auth.roles.includes("ADMIN")) {
+    return "ADMIN";
+  }
+  if (auth.roles.includes("STAFF")) {
+    return "STAFF";
+  }
+  return "USER";
 }
 
 function redactContactInfo<T extends { userId: string; contactInfo?: string | null }>(
@@ -88,6 +104,28 @@ function normalizeQuery(query: ListPostsQuery): ListPostsQuery {
   };
 }
 
+async function recordSuggestionImpressions(
+  auth: AccessTokenPayload,
+  sourcePostId: string,
+  suggestions: Array<{ match: { id: string; totalScore: number }; post: { id: string } }>,
+  surface: "CREATE_POST" | "SUGGESTION_LIST"
+) {
+  try {
+    await postRepository.recordMatchSuggestionImpressions(
+      suggestions.map((suggestion) => ({
+        matchId: suggestion.match.id,
+        userId: auth.sub,
+        sourcePostId,
+        suggestedPostId: suggestion.post.id,
+        surface,
+        scoreSnapshot: suggestion.match.totalScore
+      }))
+    );
+  } catch (error: unknown) {
+    console.warn(`Match impression logging failed: ${error instanceof Error ? error.message : "unknown error"}`);
+  }
+}
+
 export const postService = {
   async createPost(auth: AccessTokenPayload, input: CreatePostInput) {
     await validateReferences(input);
@@ -127,6 +165,7 @@ export const postService = {
     try {
       const matches = await matchingService.runForPost(post.id);
       const matchSuggestions = input.type === "LOST" ? await matchingService.buildSuggestions(post.id, matches) : [];
+      await recordSuggestionImpressions(auth, post.id, matchSuggestions, "CREATE_POST");
       return { post, matchSuggestions };
     } catch (error: unknown) {
       console.warn(`Post matching failed after create: ${error instanceof Error ? error.message : "unknown error"}`);
@@ -153,6 +192,7 @@ export const postService = {
     for (const postId of lostPostIds) {
       const matches = await matchingService.runForPost(postId);
       const postSuggestions = await matchingService.buildSuggestions(postId, matches);
+      await recordSuggestionImpressions(auth, postId, postSuggestions, "SUGGESTION_LIST");
       suggestions.push(...postSuggestions.map((suggestion) => ({ ...suggestion, sourcePostId: postId })));
     }
 
@@ -176,7 +216,36 @@ export const postService = {
       throw new HttpError(404, "Post not found");
     }
 
-    return { ...detail, post: redactContactInfo(detail.post, auth) };
+    const canViewPrivateMedia = canViewContactInfo(auth, detail.post.userId);
+    return {
+      ...detail,
+      post: redactContactInfo(detail.post, auth),
+      media: detail.media.filter((media) => media.mediaKind !== "EVIDENCE" || canViewPrivateMedia)
+    };
+  },
+
+  async recordMatchFeedback(auth: AccessTokenPayload, postId: string, matchId: string, input: MatchFeedbackInput) {
+    const access = await postRepository.findMatchAccess(matchId, postId);
+    if (!access) {
+      throw new HttpError(404, "Match not found");
+    }
+
+    const canReview =
+      access.lost_owner_id === auth.sub ||
+      access.found_owner_id === auth.sub ||
+      auth.roles.includes("STAFF") ||
+      auth.roles.includes("ADMIN");
+    if (!canReview) {
+      throw new HttpError(403, "You do not have permission to review this match");
+    }
+
+    return postRepository.upsertMatchFeedback({
+      matchId,
+      userId: auth.sub,
+      label: input.label,
+      note: input.note?.trim() || null,
+      source: feedbackSource(auth)
+    });
   },
 
   async updatePost(auth: AccessTokenPayload, postId: string, input: UpdatePostInput) {

@@ -13,6 +13,10 @@ export const configService = {
     return configRepository.updateConfig(key, value, actorId);
   },
 
+  async rollback(historyId: string, actorId: string) {
+    return configRepository.rollback(historyId, actorId);
+  },
+
   async history(limit?: number) {
     return configRepository.history(limit);
   }

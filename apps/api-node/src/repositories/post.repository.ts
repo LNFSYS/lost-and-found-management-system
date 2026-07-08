@@ -38,6 +38,8 @@ interface PostRow extends RowDataPacket {
 interface MediaRow extends RowDataPacket {
   id: string;
   secure_url: string;
+  thumbnail_url: string | null;
+  optimized_url: string | null;
   public_id: string;
   resource_type: string;
   media_kind: "ITEM" | "EVIDENCE";
@@ -66,8 +68,21 @@ interface MatchRow extends RowDataPacket {
   category_score: number;
   location_score: number;
   time_score: number;
+  image_score: number;
+  ocr_score: number;
+  score_tier: "WEAK" | "SUGGESTION" | "NOTIFY" | "HIGH_CONFIDENCE";
+  matcher_version: string;
+  explanation_json: string | null;
   is_notified: number;
   created_at: string;
+}
+
+interface MatchAccessRow extends RowDataPacket {
+  id: string;
+  lost_post_id: string;
+  found_post_id: string;
+  lost_owner_id: string;
+  found_owner_id: string;
 }
 
 interface MatchPostRow extends RowDataPacket {
@@ -211,7 +226,7 @@ function basePostSelect() {
       p.resolved_at, p.view_count, p.created_at, p.updated_at,
       u.full_name AS owner_name,
       (
-        SELECT pm.secure_url
+        SELECT COALESCE(pm.thumbnail_url, pm.optimized_url, pm.secure_url)
         FROM post_media pm
         WHERE pm.post_id = p.id
         ORDER BY pm.sort_order ASC, pm.created_at ASC, pm.id ASC
@@ -292,6 +307,24 @@ function mapMatchPost(row: MatchPostRow): MatchCandidatePost {
   };
 }
 
+function parseJson(value: unknown) {
+  if (!value) {
+    return null;
+  }
+  if (typeof value === "object") {
+    return value;
+  }
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
 function mapMatch(row: MatchRow) {
   return {
     id: row.id,
@@ -302,6 +335,11 @@ function mapMatch(row: MatchRow) {
     categoryScore: row.category_score,
     locationScore: row.location_score,
     timeScore: row.time_score,
+    imageScore: row.image_score ?? 0,
+    ocrScore: row.ocr_score ?? 0,
+    scoreTier: row.score_tier ?? "WEAK",
+    matcherVersion: row.matcher_version ?? "rule-v1",
+    explanation: parseJson(row.explanation_json),
     isNotified: row.is_notified === 1,
     createdAt: row.created_at
   };
@@ -407,7 +445,7 @@ export const postRepository = {
 
     const [mediaRows] = await dbPool.query<MediaRow[]>(
       `
-        SELECT id, secure_url, public_id, resource_type, media_kind, format, width, height, bytes, sort_order, created_at
+        SELECT id, secure_url, thumbnail_url, optimized_url, public_id, resource_type, media_kind, format, width, height, bytes, sort_order, created_at
         FROM post_media
         WHERE post_id = ?
         ORDER BY sort_order, created_at
@@ -426,7 +464,8 @@ export const postRepository = {
     const [matchRows] = await dbPool.query<MatchRow[]>(
       `
         SELECT id, lost_post_id, found_post_id, total_score, text_score, category_score,
-               location_score, time_score, is_notified, created_at
+               location_score, time_score, image_score, ocr_score, score_tier,
+               matcher_version, explanation_json, is_notified, created_at
         FROM match_results
         WHERE lost_post_id = ? OR found_post_id = ?
         ORDER BY total_score DESC
@@ -439,6 +478,8 @@ export const postRepository = {
       media: mediaRows.map((row) => ({
         id: row.id,
         secureUrl: row.secure_url,
+        thumbnailUrl: row.thumbnail_url,
+        optimizedUrl: row.optimized_url,
         publicId: row.public_id,
         resourceType: row.resource_type,
         mediaKind: row.media_kind,
@@ -471,6 +512,8 @@ export const postRepository = {
     id: string;
     postId: string;
     secureUrl: string;
+    thumbnailUrl?: string | null;
+    optimizedUrl?: string | null;
     publicId: string;
     resourceType: string;
     mediaKind?: "ITEM" | "EVIDENCE";
@@ -483,14 +526,16 @@ export const postRepository = {
     await dbPool.execute(
       `
         INSERT INTO post_media (
-          id, post_id, secure_url, public_id, resource_type, media_kind, format, width, height, bytes, sort_order
+          id, post_id, secure_url, thumbnail_url, optimized_url, public_id, resource_type, media_kind, format, width, height, bytes, sort_order
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         input.id,
         input.postId,
         input.secureUrl,
+        input.thumbnailUrl ?? null,
+        input.optimizedUrl ?? null,
         input.publicId,
         input.resourceType,
         input.mediaKind ?? "ITEM",
@@ -647,20 +692,31 @@ export const postRepository = {
     categoryScore: number;
     locationScore: number;
     timeScore: number;
+    imageScore: number;
+    ocrScore: number;
+    scoreTier: "WEAK" | "SUGGESTION" | "NOTIFY" | "HIGH_CONFIDENCE";
+    matcherVersion: string;
+    explanation: unknown;
   }) {
     await dbPool.execute(
       `
         INSERT INTO match_results (
           id, lost_post_id, found_post_id, total_score, text_score,
-          category_score, location_score, time_score
+          category_score, location_score, time_score, image_score, ocr_score,
+          score_tier, matcher_version, explanation_json
         )
-        VALUES (UUID(), ?, ?, ?, ?, ?, ?, ?)
+        VALUES (UUID(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
           total_score = VALUES(total_score),
           text_score = VALUES(text_score),
           category_score = VALUES(category_score),
           location_score = VALUES(location_score),
           time_score = VALUES(time_score),
+          image_score = VALUES(image_score),
+          ocr_score = VALUES(ocr_score),
+          score_tier = VALUES(score_tier),
+          matcher_version = VALUES(matcher_version),
+          explanation_json = VALUES(explanation_json),
           updated_at = UTC_TIMESTAMP()
       `,
       [
@@ -670,14 +726,20 @@ export const postRepository = {
         input.textScore,
         input.categoryScore,
         input.locationScore,
-        input.timeScore
+        input.timeScore,
+        input.imageScore,
+        input.ocrScore,
+        input.scoreTier,
+        input.matcherVersion,
+        JSON.stringify(input.explanation)
       ]
     );
 
     const [rows] = await dbPool.query<MatchRow[]>(
       `
         SELECT id, lost_post_id, found_post_id, total_score, text_score, category_score,
-               location_score, time_score, is_notified, created_at
+               location_score, time_score, image_score, ocr_score, score_tier,
+               matcher_version, explanation_json, is_notified, created_at
         FROM match_results
         WHERE lost_post_id = ? AND found_post_id = ?
         LIMIT 1
@@ -742,7 +804,8 @@ export const postRepository = {
     const [rows] = await dbPool.query<MatchRow[]>(
       `
         SELECT id, lost_post_id, found_post_id, total_score, text_score, category_score,
-               location_score, time_score, is_notified, created_at
+               location_score, time_score, image_score, ocr_score, score_tier,
+               matcher_version, explanation_json, is_notified, created_at
         FROM match_results
         WHERE lost_post_id = ? OR found_post_id = ?
         ORDER BY total_score DESC, created_at DESC
@@ -751,6 +814,95 @@ export const postRepository = {
     );
 
     return rows.map(mapMatch);
+  },
+
+  async findMatchAccess(matchId: string, postId?: string) {
+    const values: string[] = [matchId];
+    const postFilter = postId ? "AND (m.lost_post_id = ? OR m.found_post_id = ?)" : "";
+    if (postId) {
+      values.push(postId, postId);
+    }
+
+    const [rows] = await dbPool.query<MatchAccessRow[]>(
+      `
+        SELECT
+          m.id, m.lost_post_id, m.found_post_id,
+          lost.user_id AS lost_owner_id,
+          found.user_id AS found_owner_id
+        FROM match_results m
+        INNER JOIN posts lost ON lost.id = m.lost_post_id
+        INNER JOIN posts found ON found.id = m.found_post_id
+        WHERE m.id = ?
+          ${postFilter}
+          AND lost.deleted_at IS NULL
+          AND found.deleted_at IS NULL
+        LIMIT 1
+      `,
+      values
+    );
+
+    return rows[0] ?? null;
+  },
+
+  async upsertMatchFeedback(input: {
+    matchId: string;
+    userId: string;
+    label: "TRUE_MATCH" | "FALSE_MATCH" | "UNCERTAIN" | "DUPLICATE" | "INSUFFICIENT_EVIDENCE";
+    note?: string | null;
+    source: "USER" | "STAFF" | "ADMIN";
+  }) {
+    const id = randomUUID();
+    await dbPool.execute(
+      `
+        INSERT INTO match_feedback (id, match_id, user_id, label, note, source)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+          label = VALUES(label),
+          note = VALUES(note),
+          source = VALUES(source),
+          updated_at = UTC_TIMESTAMP()
+      `,
+      [id, input.matchId, input.userId, input.label, input.note ?? null, input.source]
+    );
+
+    return { id, matchId: input.matchId, label: input.label };
+  },
+
+  async recordMatchSuggestionImpressions(
+    inputs: Array<{
+      matchId: string;
+      userId: string;
+      sourcePostId: string;
+      suggestedPostId: string;
+      surface: "CREATE_POST" | "SUGGESTION_LIST" | "DETAIL" | "NOTIFICATION" | "ADMIN";
+      action?: "SHOWN" | "CLICKED" | "DISMISSED" | "CLAIM_STARTED";
+      scoreSnapshot: number;
+    }>
+  ) {
+    if (inputs.length === 0) {
+      return;
+    }
+
+    await dbPool.query(
+      `
+        INSERT INTO match_suggestion_impressions (
+          id, match_id, user_id, source_post_id, suggested_post_id, surface, action, score_snapshot
+        )
+        VALUES ?
+      `,
+      [
+        inputs.map((input) => [
+          randomUUID(),
+          input.matchId,
+          input.userId,
+          input.sourcePostId,
+          input.suggestedPostId,
+          input.surface,
+          input.action ?? "SHOWN",
+          input.scoreSnapshot
+        ])
+      ]
+    );
   },
 
   async listActiveLostPostIdsByUser(userId: string) {

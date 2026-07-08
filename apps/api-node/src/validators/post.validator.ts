@@ -66,6 +66,11 @@ export const reportPostSchema = z.object({
   details: z.string().trim().max(2000).nullable().optional()
 });
 
+export const matchFeedbackSchema = z.object({
+  label: z.enum(["TRUE_MATCH", "FALSE_MATCH", "UNCERTAIN", "DUPLICATE", "INSUFFICIENT_EVIDENCE"]),
+  note: z.string().trim().max(500).nullable().optional()
+});
+
 export const listPostsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
@@ -84,4 +89,5 @@ export type CreatePostInput = z.infer<typeof createPostSchema>;
 export type UpdatePostInput = z.infer<typeof updatePostSchema>;
 export type UpdatePostStatusInput = z.infer<typeof updatePostStatusSchema>;
 export type ReportPostInput = z.infer<typeof reportPostSchema>;
+export type MatchFeedbackInput = z.infer<typeof matchFeedbackSchema>;
 export type ListPostsQuery = z.infer<typeof listPostsQuerySchema>;

@@ -165,6 +165,13 @@ export const openApiDocument = {
         responses: { "200": { description: "System config updated" } }
       }
     },
+    "/admin/config/history/{id}/rollback": {
+      post: {
+        security: [{ bearerAuth: [] }],
+        summary: "Admin rollback a system configuration change",
+        responses: { "200": { description: "System config rolled back" } }
+      }
+    },
     "/admin/users": {
       get: {
         security: [{ bearerAuth: [] }],
@@ -227,6 +234,13 @@ export const openApiDocument = {
         responses: { "200": { description: "Overdue items expired" } }
       }
     },
+    "/admin/warehouse-items/export.csv": {
+      get: {
+        security: [{ bearerAuth: [] }],
+        summary: "Export warehouse items as CSV",
+        responses: { "200": { description: "Warehouse CSV export" } }
+      }
+    },
     "/admin/warehouse/capacity": {
       get: {
         security: [{ bearerAuth: [] }],
@@ -253,6 +267,20 @@ export const openApiDocument = {
         security: [{ bearerAuth: [] }],
         summary: "Process an expired warehouse item as disposed, donated, or transferred",
         responses: { "200": { description: "Expired item processed" } }
+      }
+    },
+    "/admin/return-feedback": {
+      get: {
+        security: [{ bearerAuth: [] }],
+        summary: "Staff/Admin list feedback submitted after completed handovers",
+        responses: { "200": { description: "Return feedback list" } }
+      }
+    },
+    "/admin/return-feedback/{id}/review": {
+      patch: {
+        security: [{ bearerAuth: [] }],
+        summary: "Admin review or flag return feedback",
+        responses: { "200": { description: "Return feedback reviewed" } }
       }
     },
     "/posts": {
@@ -407,7 +435,35 @@ export const openApiDocument = {
         responses: { "201": { description: "Claim evidence uploaded" } }
       }
     },
+    "/claims/{id}/evidence/{evidenceId}/image": {
+      get: {
+        security: [{ bearerAuth: [] }],
+        summary: "Download a protected claim evidence image",
+        parameters: [
+          { name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+          { name: "evidenceId", in: "path", required: true, schema: { type: "string", format: "uuid" } }
+        ],
+        responses: {
+          "200": { description: "Protected claim evidence image stream" },
+          "403": { description: "Current user cannot view this claim evidence" },
+          "404": { description: "Claim or evidence image not found" }
+        }
+      }
+    },
     "/claims/{id}/chat-image": {
+      get: {
+        security: [{ bearerAuth: [] }],
+        summary: "Download a protected claim chat image",
+        parameters: [
+          { name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+          { name: "publicId", in: "query", required: true, schema: { type: "string" } }
+        ],
+        responses: {
+          "200": { description: "Protected claim chat image stream" },
+          "403": { description: "Current user cannot view this claim chat image" },
+          "404": { description: "Claim chat image not found" }
+        }
+      },
       post: {
         security: [{ bearerAuth: [] }],
         summary: "Upload a private image for claim chat before sending a realtime image message",
@@ -467,6 +523,48 @@ export const openApiDocument = {
         security: [{ bearerAuth: [] }],
         summary: "Complete an accepted appointment",
         responses: { "200": { description: "Appointment completed" } }
+      }
+    },
+    "/appointments/{id}/feedback": {
+      post: {
+        security: [{ bearerAuth: [] }],
+        summary: "Submit feedback after a completed handover appointment",
+        responses: { "201": { description: "Return feedback submitted" } }
+      }
+    },
+    "/appointments/{id}/proof": {
+      post: {
+        security: [{ bearerAuth: [] }],
+        summary: "Upload a handover or return proof image for an accepted/completed appointment",
+        parameters: [{ in: "path", name: "id", required: true, schema: { type: "string", format: "uuid" } }],
+        requestBody: {
+          required: true,
+          content: {
+            "multipart/form-data": {
+              schema: {
+                type: "object",
+                required: ["proof"],
+                properties: {
+                  proof: { type: "string", format: "binary", description: "JPG, PNG or WEBP handover proof image" },
+                  note: { type: "string", maxLength: 1000, nullable: true }
+                }
+              }
+            }
+          }
+        },
+        responses: { "201": { description: "Appointment proof uploaded" } }
+      }
+    },
+    "/appointments/{id}/proof-image": {
+      get: {
+        security: [{ bearerAuth: [] }],
+        summary: "Load a protected handover proof image for authorized appointment participants/staff/admin",
+        parameters: [{ in: "path", name: "id", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: {
+          "200": { description: "Image bytes" },
+          "403": { description: "Not authorized to view this proof image" },
+          "404": { description: "Proof image not found" }
+        }
       }
     },
     "/appointments/jobs/send-reminders": {

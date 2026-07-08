@@ -44,6 +44,12 @@ async function main() {
   await request("/admin/reports", {}, staffToken, 403);
   await request("/admin/config", {}, staffToken, 403);
   await request("/admin/warehouse-items", {}, staffToken, 200);
+  await request("/admin/return-feedback", {}, staffToken, 200);
+  await request("/admin/return-feedback/00000000-0000-4000-8000-000000000000/review", {
+    method: "PATCH",
+    body: JSON.stringify({ status: "REVIEWED" })
+  }, staffToken, 403);
+  await request("/admin/return-feedback", {}, adminToken, 200);
   await request("/admin/dashboard/overview", {}, staffToken, 200);
 
   if (claimId) {

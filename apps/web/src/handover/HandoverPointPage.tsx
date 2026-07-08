@@ -1,4 +1,4 @@
-import { Plus, Route, ShieldCheck } from "lucide-react";
+import { Route, ShieldCheck } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { HandoverPoint } from "../services/api";
 import { CampusImageMap } from "./CampusImageMap";
@@ -56,8 +56,8 @@ export function HandoverPointPage(props: {
           <span className="eyebrow">Campus operations</span>
           <h2>Điểm bàn giao</h2>
           <p>
-            Xem nhanh các quầy tiếp nhận và lưu giữ đồ thất lạc trong FPT University Đà Nẵng,
-            chọn điểm trên danh sách hoặc trực tiếp trên bản đồ campus.
+            Xem nhanh các quầy tiếp nhận và lưu giữ đồ thất lạc trong FPT University Đà Nẵng.
+            Chọn một điểm trên danh sách hoặc trực tiếp trên bản đồ campus để xem hướng dẫn.
           </p>
         </div>
         <div className="handover-hero-stats">
@@ -70,15 +70,13 @@ export function HandoverPointPage(props: {
       {props.canManage && (
         <section className="handover-admin-banner">
           <span><ShieldCheck size={18} /> Chế độ Admin/Staff</span>
-          <button className="primary-button" type="button">
-            <Plus size={17} /> Thêm điểm bàn giao
-          </button>
+          <p>Quản lý tạo, sửa, tạm đóng và xóa mềm điểm bàn giao trong trang quản trị để tránh thao tác nhầm trên bản đồ công khai.</p>
         </section>
       )}
 
       {props.error instanceof Error && (
         <div className="notice error">
-          Chưa kết nối được API điểm bàn giao, đang hiển thị dữ liệu mẫu để tiếp tục trải nghiệm bản đồ.
+          Chưa kết nối được API điểm bàn giao. Trang đang hiển thị dữ liệu mẫu để bạn vẫn có thể xem bản đồ campus.
         </div>
       )}
 

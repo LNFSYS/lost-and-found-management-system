@@ -21,6 +21,11 @@ interface ChatMessageRow extends RowDataPacket {
   created_at: string;
 }
 
+interface ChatImageRow extends RowDataPacket {
+  media_url: string;
+  media_public_id: string;
+}
+
 function mapMessage(row: ChatMessageRow) {
   return {
     id: row.id,
@@ -134,5 +139,27 @@ export const chatRepository = {
       [roomId, readerId]
     );
     return { updated: true };
+  },
+
+  async findImageForClaim(claimId: string, mediaPublicId: string) {
+    const [rows] = await dbPool.query<ChatImageRow[]>(
+      `
+        SELECT cm.media_url, cm.media_public_id
+        FROM chat_messages cm
+        INNER JOIN chat_rooms cr ON cr.id = cm.room_id
+        WHERE cr.claim_id = ?
+          AND cm.media_public_id = ?
+          AND cm.message_type = 'IMAGE'
+        LIMIT 1
+      `,
+      [claimId, mediaPublicId]
+    );
+    const row = rows[0];
+    return row
+      ? {
+          mediaUrl: row.media_url,
+          mediaPublicId: row.media_public_id
+        }
+      : null;
   }
 };

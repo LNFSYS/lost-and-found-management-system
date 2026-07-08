@@ -1,6 +1,6 @@
 # Thesis Defense Guide 2026 - FPTU Lost & Found System
 
-Last updated: 2026-06-30
+Last updated: 2026-07-08
 
 ## 1. Project Positioning
 
@@ -8,7 +8,7 @@ Last updated: 2026-06-30
 
 FPTU Lost & Found Management System is a web/backend MVP for managing the Lost & Found process inside FPT University Da Nang campus. The system supports LOST/FOUND posts, hybrid/rule-based matching with Google Vision assisted OCR/tags, claim evidence review confidence, appointment scheduling, warehouse/handover point management, realtime notifications/chat, and admin/staff dashboards.
 
-Mobile support and custom AI training/MLOps are treated as future extensions, not the core deliverable of the current project.
+Expo mobile support exists as an MVP/prototype, but the core deliverable remains the web/backend workflow. Native mobile hardening and custom AI training/MLOps are treated as future extensions.
 
 ### Project Scope
 
@@ -35,8 +35,8 @@ The project focuses on a campus pilot-ready MVP for the complete web/backend flo
 
 ### Out Of Scope For Current MVP
 
-- Completed native mobile app.
-- Custom trained AI model.
+- Production native mobile app.
+- Production custom trained AI model.
 - Production MLOps pipeline.
 - Fully production-grade microservice deployment.
 - Enterprise monitoring, backup, load testing, and complete audit/compliance hardening.
@@ -47,7 +47,7 @@ The project focuses on a campus pilot-ready MVP for the complete web/backend flo
 - Add custom AI model only after enough labeled data exists.
 - Add MLOps: dataset labeling, anonymization, model registry, evaluation, deployment, retraining.
 - Add stronger production hardening: monitoring, logs, backup, e2e tests, load tests, role matrix tests.
-- Improve realtime reconnect/offline hardening, config rollback UI, and richer analytics.
+- Improve realtime reconnect/offline hardening, blank-DB rehearsal, admin CRUD tests, and richer analytics.
 
 ### Difference From Basic CRUD
 
@@ -61,7 +61,7 @@ This project is not only CRUD because it models a full real campus workflow: mat
 | AI model | Hybrid/rule-based matching with image/OCR tag support |
 | AI-powered system | AI-assisted Lost & Found MVP |
 | Production-ready | MVP-ready, campus pilot-ready |
-| Mobile app completed | Mobile extension planned / mobile prototype, verify in code |
+| Mobile app completed | Expo mobile MVP/prototype; native push/offline/device hardening is future work |
 | Complete microservices | Node.js core backend plus Java business-service extension, verify integration boundary |
 | Automatic ownership decision | Evidence review confidence is advisory; staff/user decision is still required |
 | Fully secure | Role-based access and JWT guards are implemented; production hardening remains future work |
@@ -82,7 +82,7 @@ The key features are role-based access, LOST/FOUND post management, matching sug
 
 In the demo, we will first log in as a user, create a lost post, then create a found post. Next, we show matching suggestions. After that, we submit a claim with evidence, review the claim as staff/admin, create an appointment, and show the handover/warehouse and dashboard views. If realtime is running, we also show notification or chat updates.
 
-There are limitations. Mobile is planned as an extension and is not the main deliverable. Custom AI training and MLOps are also future work. The current system uses Google Vision assisted OCR/tags and rule-based matching. For production, we still need stronger monitoring, backup, load testing, full e2e coverage, and more detailed audit hardening.
+There are limitations. Expo mobile is available as an MVP/prototype, but native mobile hardening is not the main deliverable. Custom AI training and MLOps are also future work. The current system uses Google Vision assisted OCR/tags and rule-based matching. For production, we still need stronger monitoring, backup, load testing, full e2e coverage, and more detailed audit hardening.
 
 In conclusion, our project delivers a realistic campus Lost & Found MVP, not just a CRUD app. It connects the complete workflow from reporting an item to verifying ownership and returning the item through staff-controlled handover and warehouse operations.
 
@@ -90,7 +90,7 @@ In conclusion, our project delivers a realistic campus Lost & Found MVP, not jus
 
 | Step | Demo action | What to say | Judge may ask | Safe answer |
 | --- | --- | --- | --- | --- |
-| 1 | Login as Student/Lecturer | This role can create posts, search, submit claims, and receive notifications. Google OAuth can be shown if credentials are configured. | How do you protect role access? | JWT and role guards are implemented; role/privacy smoke exists, but full role matrix tests still need expansion. |
+| 1 | Login as Student/Lecturer | This role can create posts, search, submit claims, and receive notifications. Google OAuth can be shown if credentials are configured. | How do you protect role access? | JWT and role guards are implemented; role/privacy smoke exists, but full role matrix and admin CRUD tests still need expansion. |
 | 2 | Create LOST post | LOST post includes description, location, time, contact, and private ownership details. | Why private evidence? | It helps verify ownership without exposing sensitive details publicly. |
 | 3 | Create FOUND post | FOUND post records where the item is held or which handover point is used. | Who can create FOUND posts? | Users can report found items; Staff/Admin can manage storage and handover. |
 | 4 | Show matching result | Matching compares text, category, location, time, image tags, OCR/tag metadata, and score tiers. | Is this AI? | It is hybrid/rule-based matching with Google Vision assisted OCR/tags, not a custom trained model. |
@@ -220,16 +220,16 @@ As a pilot with controlled users and monitoring, yes after final environment che
 
 The current limitation is not a weakness if explained correctly. The project intentionally focuses on the full web/backend campus flow first.
 
-- Mobile app: planned extension, not current core.
+- Mobile app: Expo MVP/prototype exists, but native push/offline/device hardening is not current core.
 - Custom AI training/MLOps: future work after enough labeled data exists.
 - Matching: currently hybrid/rule-based/OCR-assisted with score tiers, not a self-trained ML model.
 - Production hardening: needs monitoring, backup, load testing, better audit logs, and stronger e2e test coverage.
-- Testing: role/privacy and migration smoke scripts exist; still needs broader warehouse lifecycle, claim race condition, realtime isolation, clean blank-DB, and load tests.
+- Testing: build/typecheck, migration smoke, role/privacy, claim race, warehouse lifecycle, media privacy, matching threshold and core e2e scripts exist; OTP registration, admin CRUD, realtime isolation, clean blank-DB and load tests still need expansion.
 - Java/Node boundary: documented as Node core web API plus Java business-service extension; production microservices still require stricter routing and integration tests.
 
 ## 7. One-Liner If Judge Says The Scope Is Too Big
 
-Nhóm em có nhiều module, nhưng core deliverable của nhóm là web/backend MVP cho quy trình Lost & Found campus. Các phần như mobile và custom AI training được đặt là hướng mở rộng, không phải phạm vi chính để đánh giá hoàn thành.
+Nhóm em có nhiều module, nhưng core deliverable của nhóm là web/backend MVP cho quy trình Lost & Found campus. Expo mobile hiện ở mức MVP/prototype, còn native mobile hardening và custom AI training được đặt là hướng mở rộng, không phải phạm vi chính để đánh giá hoàn thành.
 
 ## 8. Slide Correction Checklist
 

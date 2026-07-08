@@ -25,6 +25,9 @@ adminRoutes.get("/config", requireAdmin, (request, response, next) => {
 adminRoutes.get("/config/history", requireAdmin, (request, response, next) => {
   adminController.configHistory(request, response).catch(next);
 });
+adminRoutes.post("/config/history/:id/rollback", requireAdmin, (request, response, next) => {
+  adminController.rollbackConfig(request, response).catch(next);
+});
 adminRoutes.put("/config/:key", requireAdmin, (request, response, next) => {
   adminController.updateConfig(request, response).catch(next);
 });
@@ -98,6 +101,9 @@ adminRoutes.patch("/handover-points/:id/active", requireAdmin, (request, respons
 adminRoutes.get("/warehouse-items", requireStaffOrAdmin, (request, response, next) => {
   adminController.warehouseItems(request, response).catch(next);
 });
+adminRoutes.get("/warehouse-items/export.csv", requireStaffOrAdmin, (request, response, next) => {
+  adminController.exportWarehouseItems(request, response).catch(next);
+});
 adminRoutes.get("/warehouse/capacity", requireStaffOrAdmin, (request, response, next) => {
   adminController.warehouseCapacity(request, response).catch(next);
 });
@@ -131,4 +137,11 @@ adminRoutes.get("/reports", requireAdmin, (request, response, next) => {
 });
 adminRoutes.patch("/reports/:id/handle", requireAdmin, (request, response, next) => {
   adminController.handleReport(request, response).catch(next);
+});
+
+adminRoutes.get("/return-feedback", requireStaffOrAdmin, (request, response, next) => {
+  adminController.returnFeedback(request, response).catch(next);
+});
+adminRoutes.patch("/return-feedback/:id/review", requireAdmin, (request, response, next) => {
+  adminController.reviewReturnFeedback(request, response).catch(next);
 });

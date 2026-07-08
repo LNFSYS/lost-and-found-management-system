@@ -518,7 +518,12 @@ export const matchingService = {
         textScore: detail.textScore,
         categoryScore: detail.categoryScore,
         locationScore: detail.locationScore,
-        timeScore: detail.timeScore
+        timeScore: detail.timeScore,
+        imageScore: detail.imageScore,
+        ocrScore: detail.ocrScore,
+        scoreTier: detail.explanation.tier,
+        matcherVersion: "rule-v1",
+        explanation: detail.explanation
       });
       const enrichedMatch: MatchRunResult = {
         ...match,

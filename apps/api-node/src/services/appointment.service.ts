@@ -1,8 +1,17 @@
 import type { AccessTokenPayload } from "../middlewares/auth.middleware.js";
 import { appointmentRepository, type AppointmentInput } from "../repositories/appointment.repository.js";
+import { feedbackRepository } from "../repositories/feedback.repository.js";
 import { notificationRepository } from "../repositories/notification.repository.js";
+import { postRepository } from "../repositories/post.repository.js";
 import { userRepository } from "../repositories/user.repository.js";
 import { HttpError } from "../utils/http-error.js";
+import { cloudinaryService } from "./cloudinary.service.js";
+
+const proofMimeToFormat = new Map([
+  ["image/jpeg", "jpg"],
+  ["image/png", "png"],
+  ["image/webp", "webp"]
+]);
 
 function canUseClaim(auth: AccessTokenPayload, claim: { claimant_id: string; post_owner_id: string }) {
   return (
@@ -27,26 +36,94 @@ async function requireAppointmentForAction(appointmentId: string) {
   return appointment;
 }
 
+function requireProofFile(file: Express.Multer.File | undefined) {
+  if (!file) {
+    throw new HttpError(400, "Missing uploaded file field: proof");
+  }
+  return file;
+}
+
+async function assertProofImageFile(file: Express.Multer.File) {
+  const format = proofMimeToFormat.get(file.mimetype);
+  if (!format) {
+    throw new HttpError(422, "Only JPG, PNG and WEBP proof images are allowed");
+  }
+
+  const allowedFormats = (await postRepository.getConfigString("post.allowed_image_formats", "jpg,png,webp"))
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+  if (!allowedFormats.includes(format)) {
+    throw new HttpError(422, `Image format ${format} is not allowed by current config`);
+  }
+
+  const maxImageSizeMb = await postRepository.getConfigNumber("post.max_image_size_mb", 10);
+  if (file.size > maxImageSizeMb * 1024 * 1024) {
+    throw new HttpError(422, `Image size exceeds ${maxImageSizeMb} MB`);
+  }
+}
+
+function appointmentNotificationText(type: string, title: string, body: string) {
+  if (type === "APPOINTMENT_CREATED") {
+    return {
+      title: "Lịch hẹn bàn giao mới",
+      body: "Một lịch hẹn bàn giao vừa được tạo. Hãy kiểm tra và xác nhận thời gian phù hợp."
+    };
+  }
+  if (type === "APPOINTMENT_ACCEPTED") {
+    return {
+      title: "Lịch hẹn đã được xác nhận",
+      body: "Lịch hẹn bàn giao đã được xác nhận. Vui lòng đến đúng thời gian và địa điểm đã hẹn."
+    };
+  }
+  if (type === "APPOINTMENT_REJECTED") {
+    return { title: "Lịch hẹn bị từ chối", body };
+  }
+  if (type === "APPOINTMENT_CANCELLED") {
+    return { title: "Lịch hẹn đã bị hủy", body };
+  }
+  if (type === "APPOINTMENT_RESCHEDULED") {
+    return {
+      title: "Lịch hẹn đã được đổi",
+      body: "Lịch hẹn bàn giao vừa được đề xuất lại. Hãy kiểm tra và xác nhận nếu thời gian phù hợp."
+    };
+  }
+  if (type === "APPOINTMENT_COMPLETED") {
+    return {
+      title: "Bàn giao đã hoàn tất",
+      body: "Lịch hẹn bàn giao đã hoàn tất. Bài đăng và kho được cập nhật theo trạng thái mới."
+    };
+  }
+  if (type === "APPOINTMENT_REMINDER") {
+    return {
+      title: "Sắp đến lịch bàn giao",
+      body: "Lịch bàn giao sắp diễn ra. Hãy kiểm tra lại địa điểm và mang theo bằng chứng cần thiết."
+    };
+  }
+  return { title, body };
+}
+
 async function notifyAppointmentUsers(
   appointment: { claimant_id: string; post_owner_id: string; id: string },
   type: string,
   title: string,
   body: string
 ) {
+  const normalized = appointmentNotificationText(type, title, body);
   await notificationRepository.createMany([
     {
       userId: appointment.claimant_id,
       type,
-      title,
-      body,
+      title: normalized.title,
+      body: normalized.body,
       entityType: "APPOINTMENT",
       entityId: appointment.id
     },
     {
       userId: appointment.post_owner_id,
       type,
-      title,
-      body,
+      title: normalized.title,
+      body: normalized.body,
       entityType: "APPOINTMENT",
       entityId: appointment.id
     }
@@ -206,10 +283,132 @@ export const appointmentService = {
     await notifyAppointmentUsers(
       { ...appointment, id: appointmentId },
       "APPOINTMENT_COMPLETED",
-      "Ban giao da hoan tat",
+      "Bàn giao đã hoàn tất",
       "Lịch hẹn bàn giao đã hoàn tất. Bài đăng và kho được cập nhật theo trạng thái mới."
     );
     return { appointment: completed };
+  },
+
+  async uploadProof(
+    auth: AccessTokenPayload,
+    appointmentId: string,
+    file: Express.Multer.File | undefined,
+    note?: string | null
+  ) {
+    const appointment = await requireAppointmentForAction(appointmentId);
+    assertCanUseAppointment(auth, appointment);
+    if (appointment.status !== "ACCEPTED" && appointment.status !== "COMPLETED") {
+      throw new HttpError(409, "Proof can only be uploaded for accepted or completed appointments");
+    }
+
+    const image = requireProofFile(file);
+    await assertProofImageFile(image);
+
+    const uploaded = await cloudinaryService.uploadImage(image.buffer, `lnfs/private/appointment-proofs/${appointmentId}`);
+    const updated = await appointmentRepository.saveProof(appointmentId, {
+      imageUrl: uploaded.secureUrl,
+      publicId: uploaded.publicId,
+      uploadedBy: auth.sub,
+      note
+    });
+    if (!updated) {
+      throw new HttpError(404, "Appointment not found");
+    }
+
+    if (appointment.proof_public_id) {
+      try {
+        await cloudinaryService.deleteAsset(appointment.proof_public_id);
+      } catch (error) {
+        console.warn(`Failed to delete replaced appointment proof: ${error instanceof Error ? error.message : "unknown"}`);
+      }
+    }
+
+    await userRepository.createActivityLog({
+      userId: auth.sub,
+      action: "APPOINTMENT_PROOF_UPLOADED",
+      entityType: "APPOINTMENT",
+      entityId: appointmentId,
+      metadata: {
+        publicId: uploaded.publicId,
+        bytes: uploaded.bytes ?? null
+      }
+    });
+    await notifyAppointmentUsers(
+      { ...appointment, id: appointmentId },
+      "APPOINTMENT_PROOF_UPLOADED",
+      "Đã tải chứng từ bàn giao",
+      "Lịch hẹn vừa được cập nhật ảnh chứng từ bàn giao. Bạn có thể kiểm tra trong chi tiết claim."
+    );
+
+    return { appointment: updated };
+  },
+
+  async getProofImageUrl(auth: AccessTokenPayload, appointmentId: string) {
+    const appointment = await requireAppointmentForAction(appointmentId);
+    assertCanUseAppointment(auth, appointment);
+    if (!appointment.proof_image_url) {
+      throw new HttpError(404, "Appointment proof image not found");
+    }
+    return { imageUrl: appointment.proof_image_url };
+  },
+
+  async submitFeedback(
+    auth: AccessTokenPayload,
+    appointmentId: string,
+    input: { rating: number; comment?: string | null; targetUserId?: string | null }
+  ) {
+    const appointment = await feedbackRepository.findAppointmentContext(appointmentId);
+    if (!appointment) {
+      throw new HttpError(404, "Appointment not found");
+    }
+
+    const isClaimant = auth.sub === appointment.claimant_id;
+    const isPostOwner = auth.sub === appointment.post_owner_id;
+    const isStaffOrAdmin = auth.roles.includes("STAFF") || auth.roles.includes("ADMIN");
+    if (!isClaimant && !isPostOwner && !isStaffOrAdmin) {
+      throw new HttpError(403, "You do not have permission to review this appointment");
+    }
+    if (appointment.status !== "COMPLETED") {
+      throw new HttpError(409, "Feedback can only be submitted after the handover is completed");
+    }
+
+    const participantIds = new Set([appointment.claimant_id, appointment.post_owner_id]);
+    const targetUserId = input.targetUserId?.trim() || (isClaimant ? appointment.post_owner_id : isPostOwner ? appointment.claimant_id : null);
+    if (!targetUserId) {
+      throw new HttpError(422, "Choose a participant to review");
+    }
+    if (targetUserId === auth.sub) {
+      throw new HttpError(422, "You cannot review yourself");
+    }
+    if (!participantIds.has(targetUserId)) {
+      throw new HttpError(422, "Feedback target must be one of the appointment participants");
+    }
+
+    const existing = await feedbackRepository.findByAppointmentAndReviewer(appointmentId, auth.sub);
+    if (existing) {
+      throw new HttpError(409, "You already submitted feedback for this appointment");
+    }
+
+    const feedback = await feedbackRepository.createReturnFeedback({
+      appointmentId,
+      claimId: appointment.claim_id,
+      postId: appointment.post_id,
+      reviewerId: auth.sub,
+      targetUserId,
+      rating: input.rating,
+      comment: input.comment
+    });
+
+    await notificationRepository.create({
+      userId: targetUserId,
+      type: "RETURN_FEEDBACK_RECEIVED",
+      title: "Có feedback sau bàn giao",
+      body: `Bạn vừa nhận được đánh giá ${input.rating}/5 sau lịch bàn giao.`,
+      entityType: "APPOINTMENT",
+      entityId: appointmentId
+    });
+
+    return { feedback };
   },
 
   async sendReminders(hoursAhead = 24) {

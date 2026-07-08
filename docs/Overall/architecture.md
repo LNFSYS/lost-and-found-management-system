@@ -10,7 +10,7 @@ Build a campus-first Lost & Found platform for FPT University with public boards
 apps/
   web/                  React + TypeScript + Vite web app
   api-node/             Node.js core web-facing API for the current MVP demo flow
-  mobile/               Planned React Native/mobile support
+  mobile/               Expo React Native mobile MVP
   java-admin-service/   Spring Boot business/admin extension
 shared/                 Shared TypeScript models and constants
 docs/
@@ -22,7 +22,7 @@ docs/
 | Area | Owner | Responsibility |
 | --- | --- | --- |
 | Web App | VQ-supported implementation surface | Guest/User/Staff/Admin UI currently lives in the React web app; no dedicated UI owner is assigned in the canonical UC checklist |
-| Mobile App | AK | Planned/future mobile support; not part of the current MVP demo deliverable |
+| Mobile App | AK | Expo React Native MVP for auth, board, post creation, image upload, matching feedback, claims, appointments, handover points, notifications, chat, profile, and staff snapshots |
 | Node API | VQ | Core web-facing REST API, auth, user profile, posts, Cloudinary, claim base, admin/staff API, matching, Socket.IO, chat history, and current web demo orchestration |
 | AI / Evidence / Warehouse Algorithm | QD | Vision/OCR, auto tags, evidence verification, ownership confidence percentage, overdue warehouse processing, disposal/donation algorithm |
 | Java Admin Service | TL | Parallel Spring Boot business/admin extension for selected rule-heavy operations; not presented as a complete production microservice split until flow ownership is single-source |
@@ -91,11 +91,12 @@ Current Node API endpoints:
 | `PATCH` | `/api/claims/:id/reject` | Reject claim with reason |
 | `PATCH` | `/api/claims/:id/cancel` | Cancel claim with reason |
 | `GET` | `/api/posts/:id/claims` | List claims for a post owner, staff or admin |
-| `POST/PATCH/GET` | `/api/appointments...` | Create, accept, reject, cancel, reschedule, complete and remind return appointments |
+| `POST/PATCH/GET` | `/api/appointments...` | Create, accept, reject, cancel, reschedule, complete, collect return feedback and remind return appointments |
 | `GET` | `/api/config/public` | Return public config entries for web/mobile validation |
 | `GET` | `/api/admin/config` | Admin-only config list for operational settings |
 | `PUT` | `/api/admin/config/:key` | Admin-only typed config update with history |
 | `GET` | `/api/admin/config/history` | Admin-only config history |
+| `POST` | `/api/admin/config/history/:id/rollback` | Admin-only rollback of a config change with audit history |
 | `GET` | `/api/categories` | Return active item categories |
 | `GET` | `/api/locations/areas` | Return active campus areas |
 | `GET` | `/api/locations/areas/:id/buildings` | Return active buildings in an area |
@@ -110,6 +111,7 @@ Current Node API endpoints:
 | `GET/POST/PUT/PATCH` | `/api/admin/locations/...` | Admin-only area and building CRUD |
 | `GET/POST/PUT/PATCH` | `/api/admin/handover-points...` | Admin-only handover point CRUD, map image/marker coordinates and stored-item counts |
 | `GET/POST/PUT/PATCH/DELETE` | `/api/admin/warehouse-items...` | Admin-only warehouse item list, create, update, status update and soft delete |
+| `GET` | `/api/admin/warehouse-items/export.csv` | Staff/Admin warehouse CSV export |
 | `POST` | `/api/admin/warehouse-items/expire-overdue` | Mark overdue warehouse items as expired |
 | `POST` | `/api/admin/warehouse-items/alert-near-expiry` | Notify staff/admin about near-expiry items |
 | `GET` | `/api/admin/warehouse/capacity` | Return warehouse capacity snapshot |
@@ -117,6 +119,8 @@ Current Node API endpoints:
 | `POST` | `/api/admin/jobs/expire-posts` | Expire overdue posts |
 | `GET` | `/api/admin/reports` | Admin-only report queue |
 | `PATCH` | `/api/admin/reports/:id/handle` | Admin-only report handling and moderation action |
+| `GET` | `/api/admin/return-feedback` | Staff/Admin review queue for feedback after completed handovers |
+| `PATCH` | `/api/admin/return-feedback/:id/review` | Admin-only update of return-feedback review status |
 | `GET` | `/api/health` | API health check |
 
 All Node API responses use `{ success, data?, error?, message? }`.
@@ -142,6 +146,10 @@ All Node API responses use `{ success, data?, error?, message? }`.
 | `013_handover_map_location.sql` | Add `handover_points.map_image_url`, `map_position_x`, and `map_position_y` for campus map placement |
 | `014_warehouse_retention_and_appointments.sql` | Add warehouse retention, return appointments, and chat/realtime lifecycle support |
 | `015_matching_and_warehouse_policy.sql` | Add matching score tiers, image/OCR weights, auto-match safety flag, and warehouse retention/disposition policy config |
+| `016_ai_training_feedback.sql` | Add match feedback, suggestion impression logging, persisted score explanations, and export-friendly training data fields |
+| `017_media_derivatives.sql` | Add thumbnail and optimized media URLs for faster web/mobile image rendering |
+| `018_return_feedback.sql` | Add return feedback after completed appointments and Admin/Staff review queue |
+| `019_appointment_return_proof.sql` | Add proof image, uploader, timestamp and note metadata to return appointments |
 
 Run migrations with:
 
@@ -190,9 +198,9 @@ Because Node currently also implements several demo-critical APIs, including adm
 | Matching | MatchResult, MatchScoreBreakdown, AiTag, OcrText |
 | Claims | Claim, ClaimEvidence, ClaimDecision, ClaimStateLog |
 | Handover | HandoverPoint, WarehouseItem, WarehouseCapacity, ExpiredItemDisposition, StorageLog, ItemCustodyStatus |
-| Appointment | ReturnAppointment, AppointmentParticipant, Reminder |
+| Appointment | ReturnAppointment, AppointmentProof, AppointmentParticipant, Reminder |
 | Communication | ChatRoom, ChatMessage, Notification |
-| Governance | Report, ModerationAction, ReputationScore, ConfigEntry, ConfigHistory |
+| Governance | Report, ModerationAction, ReputationScore, ReturnFeedback, ConfigEntry, ConfigHistory |
 
 ## Project Documents
 
@@ -215,7 +223,8 @@ Because Node currently also implements several demo-critical APIs, including adm
 5. Claimant submits evidence; finder/staff/admin reviews it.
 6. Accepted claim creates chat room and return appointment.
 7. Appointment completion updates return state, post/warehouse status, notifications and reputation where applicable.
-8. Scheduled Node jobs handle overdue posts, overdue warehouse items, near-expiry alerts, capacity alerts and appointment reminders.
+8. Users can submit feedback after completed handovers; Staff/Admin can monitor it and Admin can mark items reviewed, flagged or dismissed.
+9. Scheduled Node jobs handle overdue posts, overdue warehouse items, near-expiry alerts, capacity alerts and appointment reminders.
 
 ## Frontend Foundation
 

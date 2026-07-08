@@ -167,6 +167,65 @@ export const configRepository = {
     return { key, value: parseConfigValue(serialized, current.value_type), rawValue: serialized };
   },
 
+  async rollback(historyId: string, actorId: string) {
+    const [historyRows] = await dbPool.query<ConfigHistoryRow[]>(
+      `
+        SELECT ch.id, ch.config_key, ch.old_value, ch.new_value, ch.changed_by, u.full_name AS changed_by_name, ch.changed_at
+        FROM config_history ch
+        LEFT JOIN users u ON u.id = ch.changed_by
+        WHERE ch.id = ?
+        LIMIT 1
+      `,
+      [historyId]
+    );
+    const history = historyRows[0];
+    if (!history) {
+      throw new HttpError(404, "Config history entry not found");
+    }
+    if (history.old_value === null) {
+      throw new HttpError(422, "This config history entry cannot be rolled back");
+    }
+
+    const [entryRows] = await dbPool.query<ConfigEntryRow[]>(
+      `
+        SELECT id, config_key, config_value, value_type, description, is_public, updated_by, updated_at
+        FROM config_entries
+        WHERE config_key = ?
+        LIMIT 1
+      `,
+      [history.config_key]
+    );
+    const current = entryRows[0];
+    if (!current) {
+      throw new HttpError(404, "Config entry not found");
+    }
+
+    await dbPool.execute(
+      `
+        UPDATE config_entries
+        SET config_value = ?,
+            updated_by = ?,
+            updated_at = UTC_TIMESTAMP()
+        WHERE config_key = ?
+      `,
+      [history.old_value, actorId, history.config_key]
+    );
+    await dbPool.execute(
+      `
+        INSERT INTO config_history (id, config_key, old_value, new_value, changed_by)
+        VALUES (?, ?, ?, ?, ?)
+      `,
+      [randomUUID(), history.config_key, current.config_value, history.old_value, actorId]
+    );
+
+    return {
+      key: history.config_key,
+      value: parseConfigValue(history.old_value, current.value_type),
+      rawValue: history.old_value,
+      rolledBackFromHistoryId: historyId
+    };
+  },
+
   async history(limit = 50) {
     const [rows] = await dbPool.query<ConfigHistoryRow[]>(
       `

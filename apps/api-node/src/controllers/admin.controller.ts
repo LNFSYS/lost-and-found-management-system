@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { env } from "../config/env.js";
 import { adminRepository } from "../repositories/admin.repository.js";
+import { feedbackRepository } from "../repositories/feedback.repository.js";
 import { configService } from "../services/config.service.js";
 import { postService } from "../services/post.service.js";
 import { ok } from "../utils/api-response.js";
@@ -98,6 +99,9 @@ const reportHandleSchema = z.object({
   note: z.string().trim().max(500).nullable().optional(),
   actionType: z.enum(["WARN_USER", "HIDE_POST", "DELETE_POST", "BAN_USER", "UNBAN_USER"]).nullable().optional()
 });
+const feedbackReviewSchema = z.object({
+  status: z.enum(["NEW", "REVIEWED", "FLAGGED", "DISMISSED"])
+});
 const configUpdateSchema = z.object({
   value: z.unknown()
 });
@@ -154,6 +158,48 @@ export const adminController = {
 
     response.setHeader("Content-Type", "text/csv; charset=utf-8");
     response.setHeader("Content-Disposition", `attachment; filename="lost-found-dashboard-${Date.now()}.csv"`);
+    response.send(rows.map(csvRow).join("\n"));
+  },
+
+  async exportWarehouseItems(_request: Request, response: Response) {
+    const items = await adminRepository.warehouseItems();
+    const rows: unknown[][] = [
+      [
+        "id",
+        "itemName",
+        "status",
+        "storageCode",
+        "handoverPoint",
+        "category",
+        "area",
+        "building",
+        "room",
+        "finder",
+        "receivedAt",
+        "retentionDeadline",
+        "returnedAt"
+      ]
+    ];
+    for (const item of items) {
+      rows.push([
+        item.id,
+        item.itemName,
+        item.status,
+        item.storageCode,
+        item.handoverPoint?.name ?? "",
+        item.category?.name ?? "",
+        item.location.areaName ?? "",
+        item.location.buildingName ?? "",
+        item.location.roomText ?? "",
+        item.finder.fullName ?? item.finder.name ?? "",
+        item.receivedAt,
+        item.retentionDeadline,
+        item.returnedAt
+      ]);
+    }
+
+    response.setHeader("Content-Type", "text/csv; charset=utf-8");
+    response.setHeader("Content-Disposition", `attachment; filename="lost-found-warehouse-${Date.now()}.csv"`);
     response.send(rows.map(csvRow).join("\n"));
   },
 
@@ -318,6 +364,16 @@ export const adminController = {
     response.json(ok(await adminRepository.handleReport(idParam(request), request.auth!.sub, reportHandleSchema.parse(request.body))));
   },
 
+  async returnFeedback(_request: Request, response: Response) {
+    response.json(ok({ feedback: await feedbackRepository.listReturnFeedback() }));
+  },
+
+  async reviewReturnFeedback(request: Request, response: Response) {
+    response.json(
+      ok(await feedbackRepository.reviewReturnFeedback(idParam(request), request.auth!.sub, feedbackReviewSchema.parse(request.body)))
+    );
+  },
+
   async config(_request: Request, response: Response) {
     response.json(ok({ entries: await configService.getAllConfig() }));
   },
@@ -325,6 +381,10 @@ export const adminController = {
   async updateConfig(request: Request, response: Response) {
     const input = configUpdateSchema.parse(request.body);
     response.json(ok(await configService.updateConfig(String(request.params.key), input.value, request.auth!.sub)));
+  },
+
+  async rollbackConfig(request: Request, response: Response) {
+    response.json(ok(await configService.rollback(idParam(request), request.auth!.sub)));
   },
 
   async configHistory(request: Request, response: Response) {

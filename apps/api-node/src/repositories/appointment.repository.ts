@@ -32,6 +32,12 @@ interface AppointmentRow extends RowDataPacket {
   cancellation_reason: string | null;
   accepted_at: string | null;
   completed_at: string | null;
+  proof_image_url: string | null;
+  proof_public_id: string | null;
+  proof_uploaded_by: string | null;
+  proof_uploader_name: string | null;
+  proof_uploaded_at: string | null;
+  proof_note: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -43,6 +49,8 @@ interface AppointmentForActionRow extends RowDataPacket {
   status: "PENDING" | "ACCEPTED" | "REJECTED" | "CANCELLED" | "COMPLETED" | "RESCHEDULED";
   post_owner_id: string;
   claimant_id: string;
+  proof_image_url: string | null;
+  proof_public_id: string | null;
 }
 
 interface ReminderAppointmentRow extends RowDataPacket {
@@ -66,6 +74,15 @@ function mapAppointment(row: AppointmentRow) {
     cancellationReason: row.cancellation_reason,
     acceptedAt: row.accepted_at,
     completedAt: row.completed_at,
+    proof: row.proof_image_url
+      ? {
+          imageUrl: `/api/appointments/${row.id}/proof-image`,
+          publicId: row.proof_public_id,
+          uploadedBy: row.proof_uploaded_by ? { id: row.proof_uploaded_by, fullName: row.proof_uploader_name } : null,
+          uploadedAt: row.proof_uploaded_at,
+          note: row.proof_note
+        }
+      : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -76,9 +93,12 @@ const appointmentSelect = `
     ra.id, ra.claim_id, ra.post_id, ra.proposer_id, proposer.full_name AS proposer_name,
     ra.status, ra.proposed_at, ra.handover_point_id, hp.name AS handover_point_name,
     ra.custom_location, ra.rejection_reason, ra.cancellation_reason,
-    ra.accepted_at, ra.completed_at, ra.created_at, ra.updated_at
+    ra.accepted_at, ra.completed_at, ra.proof_image_url, ra.proof_public_id,
+    ra.proof_uploaded_by, proof_uploader.full_name AS proof_uploader_name,
+    ra.proof_uploaded_at, ra.proof_note, ra.created_at, ra.updated_at
   FROM return_appointments ra
   LEFT JOIN users proposer ON proposer.id = ra.proposer_id
+  LEFT JOIN users proof_uploader ON proof_uploader.id = ra.proof_uploaded_by
   LEFT JOIN handover_points hp ON hp.id = ra.handover_point_id
 `;
 
@@ -158,7 +178,8 @@ export const appointmentRepository = {
   async findForAction(id: string) {
     const [rows] = await dbPool.query<AppointmentForActionRow[]>(
       `
-        SELECT ra.id, ra.claim_id, ra.post_id, ra.status, p.user_id AS post_owner_id, c.claimant_id
+        SELECT ra.id, ra.claim_id, ra.post_id, ra.status, p.user_id AS post_owner_id, c.claimant_id,
+               ra.proof_image_url, ra.proof_public_id
         FROM return_appointments ra
         INNER JOIN claims c ON c.id = ra.claim_id
         INNER JOIN posts p ON p.id = ra.post_id
@@ -168,6 +189,26 @@ export const appointmentRepository = {
       [id]
     );
     return rows[0] ?? null;
+  },
+
+  async saveProof(
+    id: string,
+    input: { imageUrl: string; publicId: string; uploadedBy: string; note?: string | null }
+  ) {
+    await dbPool.execute(
+      `
+        UPDATE return_appointments
+        SET proof_image_url = ?,
+            proof_public_id = ?,
+            proof_uploaded_by = ?,
+            proof_uploaded_at = UTC_TIMESTAMP(),
+            proof_note = ?,
+            updated_at = UTC_TIMESTAMP()
+        WHERE id = ?
+      `,
+      [input.imageUrl, input.publicId, input.uploadedBy, input.note?.trim() || null, id]
+    );
+    return this.findById(id);
   },
 
   async accept(id: string) {

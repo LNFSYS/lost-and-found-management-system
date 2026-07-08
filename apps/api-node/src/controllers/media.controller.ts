@@ -55,9 +55,39 @@ export const mediaController = {
     response.status(201).json(created(result, "Claim evidence uploaded"));
   },
 
+  async claimEvidenceImage(request: Request, response: Response) {
+    const claimId = requireStringParam(request.params.id, "id");
+    const evidenceId = requireStringParam(request.params.evidenceId, "evidenceId");
+    const { imageUrl } = await mediaService.getClaimEvidenceImageUrl(request.auth!, claimId, evidenceId);
+    const upstream = await fetch(imageUrl);
+    if (!upstream.ok) {
+      throw new HttpError(502, "Unable to load claim evidence image");
+    }
+    const contentType = upstream.headers.get("content-type") ?? "image/jpeg";
+    const bytes = Buffer.from(await upstream.arrayBuffer());
+    response.setHeader("Content-Type", contentType);
+    response.setHeader("Cache-Control", "private, no-store");
+    response.send(bytes);
+  },
+
   async claimChatImage(request: Request, response: Response) {
     const claimId = requireStringParam(request.params.id, "id");
     const result = await mediaService.uploadClaimChatImage(request.auth!, claimId, request.file);
     response.status(201).json(created(result, "Claim chat image uploaded"));
+  },
+
+  async claimChatImageFile(request: Request, response: Response) {
+    const claimId = requireStringParam(request.params.id, "id");
+    const mediaPublicId = requireStringParam(request.query.publicId as string | undefined, "publicId");
+    const { imageUrl } = await mediaService.getClaimChatImageUrl(request.auth!, claimId, mediaPublicId);
+    const upstream = await fetch(imageUrl);
+    if (!upstream.ok) {
+      throw new HttpError(502, "Unable to load claim chat image");
+    }
+    const contentType = upstream.headers.get("content-type") ?? "image/jpeg";
+    const bytes = Buffer.from(await upstream.arrayBuffer());
+    response.setHeader("Content-Type", contentType);
+    response.setHeader("Cache-Control", "private, no-store");
+    response.send(bytes);
   }
 };

@@ -39,6 +39,10 @@ postRoutes.get("/:id/matches/explanations", requireAuth, (request, response, nex
   postController.matchExplanations(request, response).catch(next);
 });
 
+postRoutes.post("/:id/matches/:matchId/feedback", requireAuth, (request, response, next) => {
+  postController.matchFeedback(request, response).catch(next);
+});
+
 postRoutes.post("/:id/matches/re-run", requireAuth, requireAnyRole(["ADMIN"]), (request, response, next) => {
   postController.rerunMatches(request, response).catch(next);
 });

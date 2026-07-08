@@ -8,10 +8,16 @@
     "dev:all": "concurrently -n API,WEB,JAVA -c blue,green,yellow \"npm run dev:api\" \"npm run dev:web\" \"npm run dev:java\"",
     "dev:web": "npm --workspace apps/web run dev",
     "dev:api": "npm --workspace apps/api-node run dev",
+    "dev:mobile": "npm --workspace apps/mobile run start",
     "dev:java": "mvn -f apps/java-admin-service/pom.xml spring-boot:run",
     "check:db": "npm --workspace apps/api-node run check:db",
+    "export:training-data": "npm --workspace apps/api-node run export:training-data",
+    "train:match-model": "npm --workspace apps/api-node run train:match-model",
     "e2e:core": "npm --workspace apps/api-node run e2e:core",
     "e2e:roles": "npm --workspace apps/api-node run e2e:roles",
+    "e2e:warehouse": "npm --workspace apps/api-node run e2e:warehouse",
+    "e2e:claim-race": "npm --workspace apps/api-node run e2e:claim-race",
+    "e2e:media-privacy": "npm --workspace apps/api-node run e2e:media-privacy",
     "migrate:api": "npm --workspace apps/api-node run migrate",
     "seed:demo": "npm --workspace apps/api-node run seed:demo",
     "smoke:migration": "npm --workspace apps/api-node run smoke:migration",
@@ -22,7 +28,10 @@
     "build:web": "npm --workspace apps/web run build",
     "build:api": "npm --workspace apps/api-node run build",
     "build:java": "mvn -f apps/java-admin-service/pom.xml package -DskipTests",
-    "lint:web": "npm --workspace apps/web run lint"
+    "typecheck:mobile": "npm --workspace apps/mobile run typecheck",
+    "lint:web": "npm --workspace apps/web run lint",
+    "scan:text": "node scripts/release-quality-check.mjs",
+    "quality:release": "node scripts/release-quality-check.mjs && npm run build:api && npm run build:web && npm run typecheck:mobile && npm run smoke:migration"
   },
   "workspaces": [
     "apps/*",

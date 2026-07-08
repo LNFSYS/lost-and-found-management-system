@@ -1,6 +1,8 @@
 const API_BASE_URL = process.env.E2E_API_URL ?? "http://localhost:3001/api";
 const email = process.env.E2E_EMAIL;
 const password = process.env.E2E_PASSWORD;
+const claimantEmail = process.env.E2E_CLAIMANT_EMAIL ?? "stafflnf@gmail.com";
+const claimantPassword = process.env.E2E_CLAIMANT_PASSWORD ?? "12345678";
 const acceptedClaimId = process.env.E2E_ACCEPTED_CLAIM_ID;
 
 interface Envelope<T> {
@@ -46,7 +48,7 @@ async function main() {
   // Login as a second user to submit the claim (avoid claiming own item)
   const login2 = await request<{ tokens: { accessToken: string } }>("/auth/login", {
     method: "POST",
-    body: JSON.stringify({ email: "vochieuquan@gmail.com", password: "Password123!" })
+    body: JSON.stringify({ email: claimantEmail, password: claimantPassword })
   });
   const token2 = login2.tokens.accessToken;
 
@@ -56,12 +58,29 @@ async function main() {
     throw new Error("No category available for e2e post creation.");
   }
 
-  const lostPost = await request<{ post: { id: string } }>("/posts", {
+  const uniqueToken = `e2e-match-${Date.now()}`;
+  const foundPost = await request<{ post: { id: string } }>("/posts", {
+    method: "POST",
+    body: JSON.stringify({
+      type: "FOUND",
+      title: `E2E FOUND ${uniqueToken}`,
+      description: `E2E smoke found item with unique marker ${uniqueToken}`,
+      categoryId,
+      roomText: "E2E temporary storage",
+      contactInfo: "e2e@example.com",
+      lostFoundAt: new Date(Date.now() - 30 * 60 * 1000).toISOString()
+    })
+  }, token, 201);
+
+  const lostPost = await request<{
+    post: { id: string };
+    matchSuggestions: Array<{ match: { totalScore: number; scoreTier?: string }; post: { id: string } }>;
+  }>("/posts", {
     method: "POST",
     body: JSON.stringify({
       type: "LOST",
-      title: `E2E LOST ${Date.now()}`,
-      description: "E2E smoke lost item",
+      title: `E2E LOST ${uniqueToken}`,
+      description: `E2E smoke lost item with unique marker ${uniqueToken}`,
       categoryId,
       secretVerification: "E2E private ownership proof",
       customLocation: "E2E campus",
@@ -69,19 +88,10 @@ async function main() {
       lostFoundAt: new Date(Date.now() - 60 * 60 * 1000).toISOString()
     })
   }, token, 201);
-
-  const foundPost = await request<{ post: { id: string } }>("/posts", {
-    method: "POST",
-    body: JSON.stringify({
-      type: "FOUND",
-      title: `E2E FOUND ${Date.now()}`,
-      description: "E2E smoke found item",
-      categoryId,
-      roomText: "E2E temporary storage",
-      contactInfo: "e2e@example.com",
-      lostFoundAt: new Date(Date.now() - 30 * 60 * 1000).toISOString()
-    })
-  }, token, 201);
+  const bestSuggestion = lostPost.matchSuggestions[0];
+  if (!bestSuggestion || bestSuggestion.match.totalScore < 0.45 || !bestSuggestion.match.scoreTier) {
+    throw new Error("Expected at least one tiered match suggestion for the E2E LOST/FOUND pair.");
+  }
 
   const claim = await request<{ claim: { id: string } }>("/claims", {
     method: "POST",
@@ -102,6 +112,25 @@ async function main() {
     })
   }, token, 409);
 
+  await request(`/claims/${claim.claim.id}/accept`, { method: "PATCH" }, token);
+  const appointment = await request<{ appointment: { id: string } }>("/appointments", {
+    method: "POST",
+    body: JSON.stringify({
+      claimId: claim.claim.id,
+      proposedAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      customLocation: "E2E completed appointment"
+    })
+  }, token, 201);
+  await request(`/appointments/${appointment.appointment.id}/accept`, { method: "PATCH" }, token2);
+  await request(`/appointments/${appointment.appointment.id}/complete`, { method: "PATCH" }, token);
+  await request(`/appointments/${appointment.appointment.id}/feedback`, {
+    method: "POST",
+    body: JSON.stringify({
+      rating: 5,
+      comment: "E2E return feedback"
+    })
+  }, token2, 201);
+
   if (acceptedClaimId) {
     await request("/appointments", {
       method: "POST",
@@ -112,6 +141,16 @@ async function main() {
       })
     }, token, 201);
   }
+
+  await Promise.allSettled([
+    request(`/posts/${lostPost.post.id}`, { method: "DELETE" }, token),
+    request(`/posts/${foundPost.post.id}`, { method: "DELETE" }, token)
+  ]).then((results) => {
+    const skipped = results.filter((result) => result.status === "rejected").length;
+    if (skipped > 0) {
+      console.warn(`Core e2e cleanup skipped for ${skipped} post(s).`);
+    }
+  });
 
   console.log(`Core smoke passed. LOST=${lostPost.post.id} FOUND=${foundPost.post.id} CLAIM=${claim.claim.id}`);
 }

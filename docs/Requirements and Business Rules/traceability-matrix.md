@@ -1,6 +1,6 @@
 # Traceability Matrix
 
-Last audit: 2026-07-02
+Last audit: 2026-07-08
 
 This document links Business Rules, Requirements, and the canonical 100-UC set in `docs/Checklist/master-dev-checklist.md`. Each UC has exactly one primary owner.
 
@@ -14,8 +14,8 @@ This document links Business Rules, Requirements, and the canonical 100-UC set i
 | BR-06 | FR-POST-01 | UC-040, UC-041, UC-042, UC-043 | Implemented |
 | BR-07 | FR-POST-01 | UC-040, UC-041 | Implemented |
 | BR-08 | FR-POST-01, FR-HANDOVER-01 | UC-040, UC-041, UC-055, UC-058 | Implemented |
-| BR-09 | FR-MEDIA-01, NFR-PRIV-01 | UC-048, UC-049, UC-050, UC-051, UC-087 | Partial |
-| BR-10 | FR-MEDIA-01, FR-CLAIM-01, NFR-PRIV-01, NFR-RT-01 | UC-049, UC-054, UC-078, UC-079, UC-083 | Partial |
+| BR-09 | FR-MEDIA-01, NFR-PRIV-01 | UC-048, UC-049, UC-050, UC-051, UC-087 | Implemented for MVP |
+| BR-10 | FR-MEDIA-01, FR-CLAIM-01, NFR-PRIV-01, NFR-RT-01 | UC-049, UC-054, UC-078, UC-079, UC-083 | Implemented for MVP |
 | BR-11 | FR-AI-01, FR-AI-02, FR-CLAIM-03, NFR-AI-01 | UC-070, UC-076, UC-089, UC-090, UC-092 | Implemented |
 | BR-12 | FR-MATCH-01, FR-NOTI-01, NFR-PERF-01 | UC-068, UC-069, UC-070, UC-071, UC-072, UC-073, UC-076 | Implemented |
 | BR-13 | FR-MATCH-01, FR-NOTI-01 | UC-073, UC-074, UC-083 | Implemented |
@@ -31,11 +31,11 @@ This document links Business Rules, Requirements, and the canonical 100-UC set i
 | BR-23 | FR-RT-01, NFR-RT-01 | UC-079, UC-080, UC-081, UC-082 | Implemented |
 | BR-24 | FR-NOTI-01, NFR-PRIV-01 | UC-020, UC-073, UC-083 | Partial |
 | BR-25 | FR-HANDOVER-01, FR-ADMIN-01, NFR-SEC-02 | UC-056, UC-063, UC-064, UC-065, UC-066, UC-067, UC-084, UC-085 | Partial |
-| BR-26 | FR-REP-01, NFR-AI-01 | UC-025, UC-039 | Partial |
-| BR-27 | FR-AI-02, NFR-AI-01 | UC-026, UC-027, UC-028, UC-029, UC-030 | Planned |
-| BR-28 | FR-MOBILE-01, NFR-SEC-02, NFR-RT-01 | UC-093, UC-094, UC-095, UC-096, UC-097, UC-098, UC-099, UC-100 | Planned |
+| BR-26 | FR-REP-01, NFR-AI-01 | UC-025, UC-039 | Implemented |
+| BR-27 | FR-AI-02, NFR-AI-01 | UC-026, UC-027, UC-028, UC-029, UC-030 | Partial foundation |
+| BR-28 | FR-MOBILE-01, NFR-SEC-02, NFR-RT-01 | UC-093, UC-094, UC-095, UC-096, UC-097, UC-098, UC-099, UC-100 | Partial |
 | BR-29 | FR-DEMO-01 | UC-031, UC-032, UC-040, UC-041, UC-059 | Implemented |
-| BR-30 | NFR-AUDIT-01, NFR-DATA-01, NFR-PERF-01, NFR-RT-01, NFR-PRIV-01 | UC-007, UC-015, UC-054, UC-071, UC-078, UC-089 | Partial |
+| BR-30 | NFR-AUDIT-01, NFR-DATA-01, NFR-PERF-01, NFR-RT-01, NFR-PRIV-01 | UC-007, UC-015, UC-054, UC-071, UC-078, UC-089 | Partial hardening |
 
 ## UC Count
 

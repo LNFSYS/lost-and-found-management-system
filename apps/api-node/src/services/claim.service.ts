@@ -222,16 +222,17 @@ export const claimService = {
       id: claimId,
       actorId: auth.sub,
       status: "NEED_MORE_INFO",
+      allowedStatuses: ["PENDING", "NEED_MORE_INFO"],
       moreInfoRequest: message.trim(),
       note: message.trim()
     });
     if (!result) {
-      throw new HttpError(404, "Claim not found");
+      throw new HttpError(409, "Claim status changed; refresh before continuing");
     }
     await notifyClaimUsers(
       detail.claim,
       "CLAIM_NEED_MORE_INFO",
-      "Claim can bo sung thong tin",
+      "Claim cần bổ sung thông tin",
       message.trim()
     );
     return result;
@@ -249,10 +250,11 @@ export const claimService = {
       id: claimId,
       actorId: auth.sub,
       status: "ACCEPTED",
+      allowedStatuses: ["PENDING", "NEED_MORE_INFO"],
       note: "Claim accepted"
     });
     if (!result) {
-      throw new HttpError(404, "Claim not found");
+      throw new HttpError(409, "Claim status changed; refresh before continuing");
     }
     await notifyClaimUsers(
       detail.claim,
@@ -276,11 +278,12 @@ export const claimService = {
       id: claimId,
       actorId: auth.sub,
       status: "REJECTED",
+      allowedStatuses: ["PENDING", "NEED_MORE_INFO"],
       rejectionReason: reason.trim(),
       note: reason.trim()
     });
     if (!result) {
-      throw new HttpError(404, "Claim not found");
+      throw new HttpError(409, "Claim status changed; refresh before continuing");
     }
     await notifyClaimUsers(detail.claim, "CLAIM_REJECTED", "Claim bị từ chối", reason.trim());
     const rejectedCount = await claimRepository.countRejectedClaimsForUser(detail.claim.claimant.id);
@@ -308,10 +311,11 @@ export const claimService = {
       id: claimId,
       actorId: auth.sub,
       status: "CANCELLED",
+      allowedStatuses: ["PENDING", "NEED_MORE_INFO"],
       note: reason.trim()
     });
     if (!result) {
-      throw new HttpError(404, "Claim not found");
+      throw new HttpError(409, "Claim status changed; refresh before continuing");
     }
     await notifyClaimUsers(detail.claim, "CLAIM_CANCELLED", "Claim đã bị hủy", reason.trim());
     return result;

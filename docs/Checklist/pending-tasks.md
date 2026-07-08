@@ -1,17 +1,18 @@
 # Pending Task Checklist
 
-Last audit: 2026-07-02
+Last audit: 2026-07-08
 
 ## Current Audit Summary
 
 | Metric | Count |
 | --- | ---: |
-| Completed checklist items | 74 |
-| Open checklist items | 47 |
+| Completed checklist items | 113 |
+| Open MVP-blocking items | 0 |
+| Open future/hardening items | 21 |
 
-Open work is concentrated in advanced AI category selection, thumbnail optimization, Java/Node integration tests, background matching queue, notification digest/anti-noise tuning, disposition proof images/forms, config rollback, feedback/negative-feedback review, mobile app, custom AI training/MLOps, and deeper automated hardening tests.
+Open work is now concentrated in hardening/future work: advanced AI category selection, optional Java auth extension, background matching queue, notification digest/anti-noise tuning, overdue disposition paperwork, mobile hardening, custom AI inference/MLOps, and deeper automated tests.
 
-Scope note: the current MVP should be demoed as web + Node backend with Google Vision assisted OCR/tags and rule-based/hybrid matching. Mobile and custom AI training remain future work unless completed later.
+Scope note: the current MVP should be demoed as web + Node backend with Google Vision assisted OCR/tags and rule-based/hybrid matching. Expo mobile MVP and training-data baseline scripts are present, while native mobile hardening and production custom AI inference remain future work.
 
 
 ## Auth / Account
@@ -35,7 +36,7 @@ Scope note: the current MVP should be demoed as web + Node backend with Google V
 ## Media
 
 - [x] Allow image upload in chat.
-- [ ] Create thumbnail/optimized images if needed.
+- [x] Create thumbnail/optimized images if needed.
 - [x] Allow claim to upload multiple evidence files.
 
 ## Claim / Evidence
@@ -69,7 +70,7 @@ Scope note: the current MVP should be demoed as web + Node backend with Google V
 - [x] Add warehouse capacity management.
 - [x] Alert when warehouse reaches 80% capacity.
 - [x] Block selecting a full warehouse or suggest alternatives.
-- [ ] Add handover/proof image upload.
+- [x] Add handover/proof image upload.
 - [x] Build API/UI to view current storage location more clearly.
 
 ## Appointment
@@ -110,7 +111,7 @@ Scope note: the current MVP should be demoed as web + Node backend with Google V
 - [x] Add top trusted users table.
 - [x] Export report as CSV.
 - [x] Build full config page on web.
-- [ ] Add config rollback.
+- [x] Add config rollback.
 - [x] Add UI for post expiration configuration.
 - [x] Add UI for matching threshold configuration.
 - [x] Add UI for matching weight adjustment.
@@ -125,58 +126,70 @@ Scope note: the current MVP should be demoed as web + Node backend with Google V
 - [x] Deduct points when a post is deleted by admin for violation.
 - [x] Calculate reputation level.
 - [x] Build reputation history page.
-- [ ] Build feedback form after item return.
-- [ ] Build admin screen to review negative feedback and flag users.
+- [x] Build feedback form after item return.
+- [x] Build admin screen to review negative feedback and flag users.
 
 ## Mobile App
 
-Future enhancement, not current MVP core.
+Expo React Native MVP exists in `apps/mobile`. Remaining work is hardening, native push, offline behavior, and optional Flutter as a separate app.
 
-- [ ] Build mobile auth: register, OTP, login, logout.
-- [ ] Build mobile profile/edit profile/avatar.
-- [ ] Build mobile LOST/FOUND feed.
-- [ ] Build mobile create LOST/FOUND post.
-- [ ] Build mobile image upload from camera/gallery.
-- [ ] Build mobile search/filter/sort.
-- [ ] Build mobile claim and evidence upload.
-- [ ] Build mobile handover point list.
-- [ ] Build mobile appointment flow.
-- [ ] Build mobile realtime chat.
-- [ ] Build mobile notification.
-- [ ] Store mobile token using secure storage.
-- [ ] Add retry/offline handling for mobile.
+- [x] Build mobile auth: register, OTP, login, logout.
+- [x] Build mobile profile/edit profile, activity, and reputation.
+- [x] Build mobile LOST/FOUND feed.
+- [x] Build mobile create LOST/FOUND post.
+- [x] Build mobile image upload from gallery.
+- [x] Build mobile search/filter/sort.
+- [x] Build mobile claim and evidence upload.
+- [x] Build mobile handover point list.
+- [x] Build mobile appointment flow.
+- [x] Build mobile realtime chat.
+- [x] Build mobile notification list.
+- [x] Store mobile token using secure storage.
+- [x] Add camera-first capture flow for post and claim evidence images.
+- [ ] Add native push notification delivery.
+- [x] Add basic retry handling for mobile read requests.
+- [ ] Add offline queue handling for mobile write/upload actions.
+- [ ] Add device/emulator e2e test matrix.
+- [ ] Build separate Flutter app only if the team chooses a second mobile codebase.
 
 ## Custom AI Model Training / MLOps
 
 Future enhancement, not current MVP core. Current code uses Google Vision assisted OCR/tags plus rule-based/hybrid matching.
 
-- [ ] Collect training data from posts, images, AI tags, matches, and feedback.
+Recommended order is documented in `docs/Overall/ai-training-roadmap.md`: collect explicit labels, structure/redact data, export versioned datasets, evaluate lightweight rankers, then add optional inference with rule-based fallback.
+
+- [x] Collect training data from posts, images, AI tags, matches, and feedback.
+- [x] Add explicit match feedback table for true match, false match, uncertain, duplicate, and insufficient evidence.
+- [x] Log match suggestion impressions and prepare action fields for clicks, dismissals, claim starts, and outcomes.
+- [x] Persist image/OCR scores, penalties, explanation JSON, score tier, and matcher version for each match.
 - [ ] Build admin tool for labeling category/tag/match correct/incorrect.
-- [ ] Build dataset export pipeline.
-- [ ] Clean and anonymize dataset before training.
+- [x] Build dataset export pipeline for redacted JSONL match-training data.
+- [x] Clean and anonymize dataset before training.
 - [ ] Train image/category classification model.
-- [ ] Train or fine-tune semantic matching model.
+- [x] Add small logistic regression training script for match reranking from labeled JSONL exports.
+- [ ] Train or fine-tune semantic matching model after enough labeled campus data exists.
 - [ ] Add AI Lens for item name recognition, image description, OCR/text, brand/logo.
 - [ ] Add direct image comparison between LOST and FOUND.
-- [ ] After AI returns metadata, re-run rule-based matching for double-check.
-- [ ] Evaluate model with precision/recall/F1/top-k.
-- [ ] Save model version, dataset snapshot, and training metadata.
+- [x] After AI returns metadata, re-run rule-based matching for double-check.
+- [x] Evaluate model with precision/recall/F1/top-k.
+- [x] Save model version, dataset snapshot, and training metadata.
 - [ ] Add model status registry: draft, approved, deployed.
 - [ ] Deploy inference endpoint for custom model.
 - [ ] Fallback to Google Vision/rule matching when custom model fails.
 - [ ] Build dashboard for tracking dataset/training/model metrics.
-- [ ] Record correct/incorrect feedback for retraining.
-- [ ] Filter spam/dirty feedback before adding to dataset.
+- [x] Record correct/incorrect feedback for retraining.
+- [x] Filter spam/dirty feedback before adding to dataset.
 
 ## Testing / Hardening
 
 - [ ] Write e2e test for OTP registration, login, post creation, claim.
 - [ ] Write tests for admin CRUD of categories/areas/handover/users/reports.
 - [x] Add role/privacy smoke test for Admin vs Staff permissions.
-- [ ] Write tests for claim transition and race condition.
-- [ ] Write tests for warehouse lifecycle.
-- [ ] Write tests for appointment when implemented.
-- [ ] Write tests for notification/matching threshold and score tiers.
+- [x] Add media privacy smoke test for public post evidence/contact filtering.
+- [x] Write tests for claim transition and race condition.
+- [x] Write tests for warehouse lifecycle.
+- [x] Write tests for appointment when implemented.
+- [x] Write tests for notification/matching threshold and score tiers.
 - [x] Standardize demo seed data.
 - [x] Add migration smoke verification script.
 - [ ] Run migration smoke against a freshly created blank demo DB before final submission.

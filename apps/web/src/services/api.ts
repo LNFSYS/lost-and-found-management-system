@@ -170,6 +170,13 @@ export interface ReturnAppointment {
   cancellationReason: string | null;
   acceptedAt: string | null;
   completedAt: string | null;
+  proof: {
+    imageUrl: string;
+    publicId: string | null;
+    uploadedBy: { id: string; fullName: string | null } | null;
+    uploadedAt: string | null;
+    note: string | null;
+  } | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -200,6 +207,24 @@ export interface AdminConfigEntry extends PublicConfigEntry {
   rawValue: string;
   isPublic: boolean;
   updatedBy: string | null;
+  updatedAt: string;
+}
+
+export interface ReturnFeedback {
+  id: string;
+  appointmentId: string;
+  claimId: string;
+  postId: string;
+  postTitle: string | null;
+  reviewer: { id: string; fullName: string | null; email: string | null };
+  targetUser: { id: string; fullName: string | null; email: string | null };
+  rating: number;
+  comment: string | null;
+  isNegative: boolean;
+  status: "NEW" | "REVIEWED" | "FLAGGED" | "DISMISSED";
+  reviewedBy: { id: string; fullName: string | null } | null;
+  reviewedAt: string | null;
+  createdAt: string;
   updatedAt: string;
 }
 
@@ -261,7 +286,15 @@ export interface PostMatchSuggestion {
 
 export interface PostDetail {
   post: BoardPost;
-  media: Array<{ id: string; secureUrl: string; publicId: string; mediaKind?: "ITEM" | "EVIDENCE"; createdAt: string }>;
+  media: Array<{
+    id: string;
+    secureUrl: string;
+    thumbnailUrl?: string | null;
+    optimizedUrl?: string | null;
+    publicId: string;
+    mediaKind?: "ITEM" | "EVIDENCE";
+    createdAt: string;
+  }>;
   tags: Array<{ id: string; tag: string; confidence: number; source: string; createdAt: string }>;
   matches: MatchResult[];
 }
@@ -428,6 +461,24 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return payload.data;
 }
 
+async function downloadFile(path: string) {
+  const headers = new Headers();
+  const token = getToken();
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  const response = await fetch(`${API_BASE_URL}${path}`, { headers });
+  if (!response.ok) {
+    throw new Error(`Download failed with HTTP ${response.status}`);
+  }
+  return response.blob();
+}
+
+async function fetchAuthorizedBlobUrl(path: string) {
+  const blob = await downloadFile(path);
+  return URL.createObjectURL(blob);
+}
+
 export const api = {
   listPosts(params: ListPostsParams) {
     return request<{ items: BoardPost[]; page: number; pageSize: number; total: number }>(
@@ -512,6 +563,9 @@ export const api = {
       body: data
     });
   },
+  claimEvidenceImage(claimId: string, evidenceId: string) {
+    return fetchAuthorizedBlobUrl(`/claims/${claimId}/evidence/${evidenceId}/image`);
+  },
   uploadClaimChatImage(id: string, file: File) {
     const data = new FormData();
     data.append("image", file);
@@ -519,6 +573,9 @@ export const api = {
       method: "POST",
       body: data
     });
+  },
+  claimChatImage(claimId: string, mediaPublicId: string) {
+    return fetchAuthorizedBlobUrl(`/claims/${claimId}/chat-image?publicId=${encodeURIComponent(mediaPublicId)}`);
   },
   claimVerification(id: string) {
     return request<{ verification: ClaimVerification }>(`/claims/${id}/verification`);
@@ -554,6 +611,26 @@ export const api = {
   },
   claimAppointments(claimId: string) {
     return request<{ appointments: ReturnAppointment[] }>(`/appointments/claim/${claimId}`);
+  },
+  submitAppointmentFeedback(id: string, input: { rating: number; comment?: string | null; targetUserId?: string | null }) {
+    return request<{ feedback: ReturnFeedback }>(`/appointments/${id}/feedback`, {
+      method: "POST",
+      body: JSON.stringify(input)
+    });
+  },
+  uploadAppointmentProof(id: string, file: File, note?: string | null) {
+    const data = new FormData();
+    data.append("proof", file);
+    if (note?.trim()) {
+      data.append("note", note.trim());
+    }
+    return request<{ appointment: ReturnAppointment }>(`/appointments/${id}/proof`, {
+      method: "POST",
+      body: data
+    });
+  },
+  appointmentProofImage(id: string) {
+    return fetchAuthorizedBlobUrl(`/appointments/${id}/proof-image`);
   },
   rescheduleAppointment(id: string, input: Record<string, unknown>) {
     return request<{ appointment: ReturnAppointment }>(`/appointments/${id}/reschedule`, {
@@ -697,8 +774,19 @@ export const api = {
   adminConfigHistory(limit = 50) {
     return request<{ history: AdminConfigHistoryEntry[] }>(`/admin/config/history?limit=${limit}`);
   },
+  adminRollbackConfigHistory(id: string) {
+    return request<{ key: string; value: unknown; rawValue: string; rolledBackFromHistoryId: string }>(
+      `/admin/config/history/${id}/rollback`,
+      {
+        method: "POST"
+      }
+    );
+  },
   adminDashboardExportUrl() {
     return `${API_BASE_URL}/admin/dashboard/export.csv`;
+  },
+  adminDownloadWarehouseCsv() {
+    return downloadFile("/admin/warehouse-items/export.csv");
   },
   adminUsers() {
     return request<{ users: AdminUser[] }>("/admin/users");
@@ -859,6 +947,15 @@ export const api = {
   },
   adminReports() {
     return request<{ reports: AdminReport[] }>("/admin/reports");
+  },
+  adminReturnFeedback() {
+    return request<{ feedback: ReturnFeedback[] }>("/admin/return-feedback");
+  },
+  adminReviewReturnFeedback(id: string, status: ReturnFeedback["status"]) {
+    return request<ReturnFeedback | null>(`/admin/return-feedback/${id}/review`, {
+      method: "PATCH",
+      body: JSON.stringify({ status })
+    });
   },
   adminHandleReport(id: string, input: Record<string, unknown>) {
     return request<{ updated: boolean }>(`/admin/reports/${id}/handle`, {

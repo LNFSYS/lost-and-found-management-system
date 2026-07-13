@@ -10,12 +10,14 @@ interface RateLimitOptions {
   windowMs: number;
   max: number;
   keyPrefix: string;
+  key?: (request: Request) => string;
 }
 
 const buckets = new Map<string, Bucket>();
 
-function clientKey(request: Request, keyPrefix: string) {
-  return `${keyPrefix}:${request.ip ?? request.socket.remoteAddress ?? "unknown"}`;
+function clientKey(request: Request, options: RateLimitOptions) {
+  const identifier = options.key?.(request) ?? request.ip ?? request.socket.remoteAddress ?? "unknown";
+  return `${options.keyPrefix}:${identifier}`;
 }
 
 function pruneExpiredBuckets(now: number) {
@@ -34,7 +36,7 @@ export function rateLimit(options: RateLimitOptions) {
     const now = Date.now();
     pruneExpiredBuckets(now);
 
-    const key = clientKey(request, options.keyPrefix);
+    const key = clientKey(request, options);
     const current = buckets.get(key);
     const bucket = current && current.resetAt > now ? current : { count: 0, resetAt: now + options.windowMs };
     bucket.count += 1;
@@ -52,4 +54,3 @@ export function rateLimit(options: RateLimitOptions) {
     next();
   };
 }
-

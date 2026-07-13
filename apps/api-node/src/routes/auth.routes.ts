@@ -7,6 +7,16 @@ import { memoryUpload } from "../middlewares/upload.middleware.js";
 
 export const authRoutes = Router();
 const authSensitiveLimit = rateLimit({ keyPrefix: "auth-sensitive", windowMs: 15 * 60 * 1000, max: 20 });
+const authLoginIpLimit = rateLimit({ keyPrefix: "auth-login-ip", windowMs: 15 * 60 * 1000, max: 100 });
+const authLoginAccountLimit = rateLimit({
+  keyPrefix: "auth-login-account",
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  key: (request) => {
+    const email = typeof request.body?.email === "string" ? request.body.email.trim().toLowerCase() : "unknown";
+    return `${request.ip ?? request.socket.remoteAddress ?? "unknown"}:${email}`;
+  }
+});
 const authOtpLimit = rateLimit({ keyPrefix: "auth-otp", windowMs: 10 * 60 * 1000, max: 5 });
 const mediaUploadLimit = rateLimit({ keyPrefix: "auth-media-upload", windowMs: 10 * 60 * 1000, max: 20 });
 
@@ -34,7 +44,7 @@ authRoutes.post("/resend-otp", authOtpLimit, (request, response, next) => {
   authController.resendOtp(request, response).catch(next);
 });
 
-authRoutes.post("/login", authSensitiveLimit, (request, response, next) => {
+authRoutes.post("/login", authLoginIpLimit, authLoginAccountLimit, (request, response, next) => {
   authController.login(request, response).catch(next);
 });
 
@@ -50,7 +60,7 @@ authRoutes.post("/refresh", (request, response, next) => {
   authController.refresh(request, response).catch(next);
 });
 
-authRoutes.post("/logout", requireAuth, (request, response, next) => {
+authRoutes.post("/logout", authSensitiveLimit, (request, response, next) => {
   authController.logout(request, response).catch(next);
 });
 

@@ -26,9 +26,6 @@ public class ClaimEntity {
 
   private String description;
 
-  @Column(name = "secret_answer")
-  private String secretAnswer;
-
   @Column(name = "rejection_reason")
   private String rejectionReason;
 
@@ -65,10 +62,6 @@ public class ClaimEntity {
 
   public String getDescription() {
     return description;
-  }
-
-  public String getSecretAnswer() {
-    return secretAnswer;
   }
 
   public void setStatus(ClaimStatus status) {

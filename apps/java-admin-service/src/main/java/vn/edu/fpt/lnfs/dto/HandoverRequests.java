@@ -15,8 +15,7 @@ public final class HandoverRequests {
       Double mapPositionX,
       Double mapPositionY,
       String areaId,
-      String buildingId,
-      String roomId) {
+      String buildingId) {
   }
 
   public record StorageActionRequest(@NotBlank String postId, String conditionNotes) {

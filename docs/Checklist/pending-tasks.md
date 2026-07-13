@@ -1,14 +1,16 @@
 # Pending Task Checklist
 
-Last audit: 2026-07-08
+Last audit: 2026-07-11
+
+> Current delivery priority (2026-07-11): finish and harden Web + Node/Java backend first. Mobile implementation/refactor remains deferred by product decision and is not part of this work phase.
 
 ## Current Audit Summary
 
 | Metric | Count |
 | --- | ---: |
-| Completed checklist items | 113 |
+| Completed checklist items | 126 |
 | Open MVP-blocking items | 0 |
-| Open future/hardening items | 21 |
+| Open future/hardening items | 22 |
 
 Open work is now concentrated in hardening/future work: advanced AI category selection, optional Java auth extension, background matching queue, notification digest/anti-noise tuning, overdue disposition paperwork, mobile hardening, custom AI inference/MLOps, and deeper automated tests.
 
@@ -25,13 +27,25 @@ Scope note: the current MVP should be demoed as web + Node backend with Google V
 
 - [x] Add cron job to transition expired posts to `EXPIRED`.
 - [x] Build post edit screen for users.
+- [x] Open post detail through a dedicated `/posts/:id` route instead of a detail popup; preserve browser back/forward behavior.
 - [x] Build close post button for users.
 - [x] Build soft-delete post button for users.
 - [x] Build violation report from user side.
-- [ ] Complete AI suggested category selection/editing.
+- [x] Complete AI suggested category selection/editing with a user confirmation before applying the top Vision suggestion.
 - [x] Add gallery/lightbox for post images.
-- [ ] Consider category multi-select if advanced search is needed.
+- [x] Add category multi-select for advanced search while keeping the legacy single-category query compatible.
 - [x] Review index/query plans for feed with large datasets.
+
+## Frontend Architecture Hardening
+
+The current web and mobile MVPs are demo-ready but still carry "God file" debt. Do not block the MVP on this refactor, but plan it before long-term maintenance or team scaling.
+
+- [x] Extract shared web app types/constants/helpers, shell widgets, admin widgets, and private media widgets out of `apps/web/src/App.tsx` as the first low-risk refactor phase.
+- [ ] Continue splitting `apps/web/src/App.tsx` into route-level pages and domain components; shared app modules, `features/posts/PostCard.tsx`, `features/posts/BoardView.tsx`, and the complete `features/account` view/forms are already extracted. `App.tsx` is now about 4.2k lines, so Create/Admin/Claim remain open.
+- [ ] Continue splitting `apps/web/src/styles.css` into feature CSS modules or a consistent utility/component styling strategy. Account/auth/profile styles now live in `features/account/account.css`; the remaining global file is still large.
+- [x] Replace manual web `view` state navigation with `react-router-dom`; board/create/account/handover/my-posts/detail now use real URLs and browser history.
+- [ ] Split `apps/mobile/App.tsx` into screens/components/hooks.
+- [ ] Replace manual mobile tab/modal state navigation with React Navigation or Expo Router.
 
 ## Media
 
@@ -50,7 +64,7 @@ Scope note: the current MVP should be demoed as web + Node backend with Google V
 
 ## Matching / Notification
 
-- [ ] Move heavy matching to background queue.
+- [x] Move heavy matching to a retryable MySQL-backed background queue; suggestion reads use materialized results.
 - [x] Add admin manual re-run matching feature.
 - [x] Add realtime toast when a good match is found.
 - [x] Add notification when a new claim is submitted.
@@ -64,7 +78,7 @@ Scope note: the current MVP should be demoed as web + Node backend with Google V
 - [x] Add configurable retention period by item type/policy.
 - [x] Alert for items nearing expiry.
 - [x] Build overdue item management screen.
-- [ ] Build overdue item disposition report form.
+- [x] Build overdue item disposition form and require terminal actions to use the guarded process API.
 - [x] Allow overdue processing: dispose, donate, transfer, extend.
 - [x] Block overdue disposal/donation/transfer while active claims or accepted/pending appointments exist.
 - [x] Add warehouse capacity management.
@@ -101,6 +115,8 @@ Scope note: the current MVP should be demoed as web + Node backend with Google V
 - [x] Send image messages in chat.
 - [x] Display seen/read status.
 - [x] Add realtime unread badge for messages.
+- [x] Gate claim chat to `ACCEPTED` status and reject client-supplied image URLs.
+- [x] Add unit and e2e regression coverage for claim chat status gating.
 
 ## Admin Dashboard / Report / Config
 
@@ -132,6 +148,8 @@ Scope note: the current MVP should be demoed as web + Node backend with Google V
 ## Mobile App
 
 Expo React Native MVP exists in `apps/mobile`. Remaining work is hardening, native push, offline behavior, and optional Flutter as a separate app.
+
+Status for the current work phase: deferred by product decision; keep these items unchanged while Web/backend is the active priority.
 
 - [x] Build mobile auth: register, OTP, login, logout.
 - [x] Build mobile profile/edit profile, activity, and reputation.
@@ -182,8 +200,14 @@ Recommended order is documented in `docs/Overall/ai-training-roadmap.md`: collec
 
 ## Testing / Hardening
 
-- [ ] Write e2e test for OTP registration, login, post creation, claim.
-- [ ] Write tests for admin CRUD of categories/areas/handover/users/reports.
+- [ ] Add OTP mailbox/provider e2e; login, post creation and claim are already covered by `e2e:core`.
+- [x] Add GitHub Actions CI for release text/config scan, API build, web build, and mobile typecheck.
+- [x] Add database-backed CI for migration, seed, schema smoke, core flow, role, warehouse, claim-race, and chat-gating using isolated MySQL.
+- [x] Add Java 21/Maven build to CI quality gates.
+- [x] Add API policy unit tests with Node's built-in test runner.
+- [x] Add validation regression coverage for category multi-select query parsing and legacy compatibility.
+- [x] Add Playwright web routing/auth session smoke; CI runs it against isolated MySQL/API seed data.
+- [x] Add isolated-CI E2E for admin CRUD of categories/areas/buildings/handover/users and report handling.
 - [x] Add role/privacy smoke test for Admin vs Staff permissions.
 - [x] Add media privacy smoke test for public post evidence/contact filtering.
 - [x] Write tests for claim transition and race condition.
@@ -192,5 +216,5 @@ Recommended order is documented in `docs/Overall/ai-training-roadmap.md`: collec
 - [x] Write tests for notification/matching threshold and score tiers.
 - [x] Standardize demo seed data.
 - [x] Add migration smoke verification script.
-- [ ] Run migration smoke against a freshly created blank demo DB before final submission.
+- [x] Verify blank-schema migration automatically in CI MySQL; rerun locally before final submission when Docker/MySQL is available.
 - [x] Verify full build before submission.

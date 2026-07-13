@@ -1,6 +1,6 @@
 # Documentation Index
 
-Last updated: 2026-07-08
+Last updated: 2026-07-11
 
 This folder is intentionally kept small. Use these files as the canonical documentation set for the thesis/demo.
 
@@ -13,6 +13,8 @@ This folder is intentionally kept small. Use these files as the canonical docume
 | `Overall/ai-training-roadmap.md` | Future AI training readiness, dataset, privacy, and service-boundary plan |
 | `Overall/architecture.md` | Technical architecture, API groups, migrations |
 | `Overall/node-java-service-boundary.md` | Node.js and Java ownership rules |
+| `Overall/adr-001-node-java-write-ownership.md` | One-writer-per-flow architecture decision |
+| `Overall/demo-release-runbook.md` | Secret, database, migration, test, and demo preparation |
 | `Overall/thesis-defense-guide-2026.md` | Defense script, demo flow, judge Q&A |
 
 ## Requirements And Tracking

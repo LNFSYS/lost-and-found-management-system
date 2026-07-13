@@ -22,6 +22,66 @@ function requestMeta(request: Request) {
   };
 }
 
+const REFRESH_COOKIE_NAME = "lnfs.refresh";
+
+function readCookie(request: Request, name: string) {
+  const header = request.header("cookie");
+  if (!header) {
+    return undefined;
+  }
+  for (const part of header.split(";")) {
+    const [key, ...valueParts] = part.trim().split("=");
+    if (key === name) {
+      return decodeURIComponent(valueParts.join("="));
+    }
+  }
+  return undefined;
+}
+
+function refreshTokenInput(request: Request) {
+  return refreshTokenSchema.parse({
+    refreshToken: request.body?.refreshToken ?? readCookie(request, REFRESH_COOKIE_NAME)
+  });
+}
+
+function refreshCookieMaxAge() {
+  const match = /^(\d+)([smhd])$/.exec(env.jwtRefreshExpiresIn.trim());
+  if (!match) {
+    return 30 * 24 * 60 * 60 * 1000;
+  }
+  const amount = Number(match[1]);
+  const unitMs = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 }[match[2] as "s" | "m" | "h" | "d"];
+  return amount * unitMs;
+}
+
+function setRefreshCookie(response: Response, refreshToken: string) {
+  response.cookie(REFRESH_COOKIE_NAME, refreshToken, {
+    httpOnly: true,
+    secure: env.nodeEnv === "production",
+    sameSite: "lax",
+    path: "/api/auth",
+    maxAge: refreshCookieMaxAge()
+  });
+}
+
+function clearRefreshCookie(response: Response) {
+  response.clearCookie(REFRESH_COOKIE_NAME, {
+    httpOnly: true,
+    secure: env.nodeEnv === "production",
+    sameSite: "lax",
+    path: "/api/auth"
+  });
+}
+
+function webSafeAuthResult<T extends { tokens: { refreshToken: string } }>(request: Request, response: Response, result: T) {
+  setRefreshCookie(response, result.tokens.refreshToken);
+  if (request.header("x-client-platform") !== "web") {
+    return result;
+  }
+  const { refreshToken: _refreshToken, ...safeTokens } = result.tokens;
+  return { ...result, tokens: safeTokens };
+}
+
 export const authController = {
   async googleStart(_request: Request, response: Response) {
     response.redirect(authService.googleAuthorizationUrl());
@@ -39,10 +99,10 @@ export const authController = {
 
     try {
       const result = await authService.loginWithGoogle(code, requestMeta(request));
+      setRefreshCookie(response, result.tokens.refreshToken);
       redirectUrl.hash = new URLSearchParams({
         oauth: "google",
         accessToken: result.tokens.accessToken,
-        refreshToken: result.tokens.refreshToken,
         accessTokenExpiresIn: result.tokens.accessTokenExpiresIn,
         refreshTokenExpiresIn: result.tokens.refreshTokenExpiresIn
       }).toString();
@@ -58,7 +118,7 @@ export const authController = {
   async register(request: Request, response: Response) {
     const input = registerSchema.parse(request.body);
     const result = await authService.register(input, requestMeta(request));
-    response.status(201).json(created(result, "Registration completed"));
+    response.status(201).json(created(webSafeAuthResult(request, response, result), "Registration completed"));
   },
 
   async requestRegistrationOtp(request: Request, response: Response) {
@@ -70,7 +130,7 @@ export const authController = {
   async verifyOtp(request: Request, response: Response) {
     const input = verifyOtpSchema.parse(request.body);
     const result = await authService.verifyOtp(input, requestMeta(request));
-    response.json(ok(result, "Email verified"));
+    response.json(ok(webSafeAuthResult(request, response, result), "Email verified"));
   },
 
   async resendOtp(request: Request, response: Response) {
@@ -82,7 +142,7 @@ export const authController = {
   async login(request: Request, response: Response) {
     const input = loginSchema.parse(request.body);
     const result = await authService.login(input, requestMeta(request));
-    response.json(ok(result, "Login successful"));
+    response.json(ok(webSafeAuthResult(request, response, result), "Login successful"));
   },
 
   async forgotPassword(request: Request, response: Response) {
@@ -98,14 +158,15 @@ export const authController = {
   },
 
   async refresh(request: Request, response: Response) {
-    const input = refreshTokenSchema.parse(request.body);
+    const input = refreshTokenInput(request);
     const result = await authService.refresh(input, requestMeta(request));
-    response.json(ok(result, "Token refreshed"));
+    response.json(ok(webSafeAuthResult(request, response, result), "Token refreshed"));
   },
 
   async logout(request: Request, response: Response) {
-    const input = refreshTokenSchema.parse(request.body);
+    const input = refreshTokenInput(request);
     await authService.logout(input);
+    clearRefreshCookie(response);
     response.json(ok({ revoked: true }, "Logout successful"));
   },
 

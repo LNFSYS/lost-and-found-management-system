@@ -337,7 +337,7 @@ export const appointmentService = {
       { ...appointment, id: appointmentId },
       "APPOINTMENT_PROOF_UPLOADED",
       "Đã tải chứng từ bàn giao",
-      "Lịch hẹn vừa được cập nhật ảnh chứng từ bàn giao. Bạn có thể kiểm tra trong chi tiết claim."
+      "Lịch hẹn vừa được cập nhật ảnh chứng từ bàn giao. Bạn có thể kiểm tra trong chi tiết yêu cầu nhận đồ."
     );
 
     return { appointment: updated };

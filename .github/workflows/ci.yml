@@ -1,0 +1,147 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Scan tracked files for secrets
+        run: npm run scan:secrets
+
+      - name: Audit runtime dependencies (advisory until Vite/Expo major upgrade)
+        run: npm audit --omit=dev --audit-level=high
+        continue-on-error: true
+
+      - name: Release text/config scan
+        run: node scripts/release-quality-check.mjs
+
+      - name: Build API
+        run: npm run build:api
+
+      - name: Test API policies
+        run: npm run test:api
+
+      - name: Build web
+        run: npm run build:web
+
+      - name: Typecheck mobile
+        run: npm run typecheck:mobile
+
+      - name: Test mobile auth concurrency
+        run: npm run test:mobile
+
+  database-smoke:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci-root-password
+          MYSQL_DATABASE: fptu_lost_found_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci-root-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_NAME: fptu_lost_found_ci
+      DB_USER: root
+      DB_PASSWORD: ci-root-password
+      DB_SSL: "false"
+      JWT_ACCESS_SECRET: ci-access-secret-at-least-32-characters
+      JWT_REFRESH_SECRET: ci-refresh-secret-at-least-32-characters
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Migrate isolated MySQL
+        run: npm run migrate:api
+
+      - name: Verify migrated schema
+        run: npm run smoke:migration
+
+      - name: Seed isolated test data
+        run: npm run seed:demo
+
+      - name: Run database-backed core E2E
+        env:
+          NODE_ENV: test
+          API_PORT: 3001
+          FRONTEND_URL: http://localhost:5173
+          SOCKET_CORS_ORIGIN: http://localhost:5173
+          E2E_API_URL: http://localhost:3001/api
+          E2E_SOCKET_URL: http://localhost:3001
+          E2E_EMAIL: adminlnf@gmail.com
+          E2E_PASSWORD: "12345678"
+          E2E_CLAIMANT_EMAIL: studentlnf@gmail.com
+          E2E_CLAIMANT_PASSWORD: "12345678"
+        run: |
+          npm run build:api
+          npm --workspace apps/api-node run start > /tmp/lnfs-api.log 2>&1 &
+          API_PID=$!
+          trap 'kill $API_PID 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://localhost:3001/api/health > /dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl --fail http://localhost:3001/api/health
+          npm run e2e:core
+          npm run e2e:roles
+          npm run e2e:warehouse
+          npm run e2e:claim-race
+          npm run e2e:media-privacy
+          npm run e2e:chat-gating
+          npm run e2e:claim-evidence-policy
+          npm run e2e:admin-crud
+          npm run e2e:web
+
+  java-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Build Java extension
+        run: npm run build:java

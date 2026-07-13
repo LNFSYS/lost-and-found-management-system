@@ -1,6 +1,9 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001/api";
-const TOKEN_KEY = "lnfs.accessToken";
-const REFRESH_TOKEN_KEY = "lnfs.refreshToken";
+const LEGACY_TOKEN_KEY = "lnfs.accessToken";
+const LEGACY_REFRESH_TOKEN_KEY = "lnfs.refreshToken";
+const SESSION_HINT_KEY = "lnfs.hasSession";
+let accessToken: string | null = null;
+let refreshPromise: Promise<boolean> | null = null;
 
 export type PostType = "LOST" | "FOUND";
 export type PostStatus = "OPEN" | "MATCHED" | "RESOLVED" | "CLOSED" | "EXPIRED" | "HIDDEN";
@@ -19,7 +22,7 @@ export interface PublicUser {
 
 export interface Tokens {
   accessToken: string;
-  refreshToken: string;
+  refreshToken?: string;
   accessTokenExpiresIn: string;
   refreshTokenExpiresIn: string;
 }
@@ -311,7 +314,7 @@ export interface ClaimDetail {
     approximateLocation: string | null;
     createdAt: string;
   };
-  evidence: Array<{ id: string; secureUrl: string; evidenceType: string; description: string | null }>;
+  evidence: Array<{ id: string; imagePath: string; evidenceType: string; description: string | null }>;
 }
 
 export interface ClaimVerification {
@@ -347,7 +350,6 @@ export interface PostClaimSummary {
   claimant: { id: string; fullName: string };
   status: "PENDING" | "NEED_MORE_INFO" | "ACCEPTED" | "REJECTED" | "CANCELLED";
   description: string | null;
-  secretAnswer: string | null;
   approximateLostAt: string | null;
   approximateLocation: string | null;
   rejectionReason: string | null;
@@ -387,6 +389,7 @@ export interface ListPostsParams {
   type?: PostType | "";
   status?: PostStatus | "";
   categoryId?: string;
+  categoryIds?: string[];
   areaId?: string;
   buildingId?: string;
   from?: string;
@@ -395,7 +398,7 @@ export interface ListPostsParams {
 }
 
 function getToken() {
-  return localStorage.getItem(TOKEN_KEY);
+  return accessToken;
 }
 
 export function getStoredAccessToken() {
@@ -411,23 +414,31 @@ export function hasAccessToken() {
 }
 
 export function getStoredRefreshToken() {
-  return localStorage.getItem(REFRESH_TOKEN_KEY);
+  return null;
 }
 
 export function saveTokens(tokens: Tokens) {
-  localStorage.setItem(TOKEN_KEY, tokens.accessToken);
-  localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refreshToken);
+  accessToken = tokens.accessToken;
+  localStorage.setItem(SESSION_HINT_KEY, "1");
+  localStorage.removeItem(LEGACY_TOKEN_KEY);
+  localStorage.removeItem(LEGACY_REFRESH_TOKEN_KEY);
 }
 
 export function clearTokens() {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
+  accessToken = null;
+  localStorage.removeItem(SESSION_HINT_KEY);
+  localStorage.removeItem(LEGACY_TOKEN_KEY);
+  localStorage.removeItem(LEGACY_REFRESH_TOKEN_KEY);
 }
 
 function buildQuery(params: ListPostsParams) {
   const searchParams = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== "") {
+    if (Array.isArray(value)) {
+      if (value.length > 0) {
+        searchParams.set(key, value.join(","));
+      }
+    } else if (value !== undefined && value !== "") {
       searchParams.set(key, String(value));
     }
   }
@@ -435,8 +446,39 @@ function buildQuery(params: ListPostsParams) {
   return query ? `?${query}` : "";
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function refreshWebSession() {
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", "X-Client-Platform": "web" },
+        body: "{}"
+      });
+      const payload = (await response.json().catch(() => ({}))) as ApiEnvelope<{ user: PublicUser; tokens: Tokens }>;
+      if (!response.ok || !payload.success || !payload.data) {
+        clearTokens();
+        return false;
+      }
+      saveTokens(payload.data.tokens);
+      return true;
+    })().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+}
+
+export function restoreWebSession() {
+  if (localStorage.getItem(SESSION_HINT_KEY) !== "1") {
+    return Promise.resolve(false);
+  }
+  return refreshWebSession();
+}
+
+async function request<T>(path: string, init: RequestInit = {}, allowRefresh = true): Promise<T> {
   const headers = new Headers(init.headers);
+  headers.set("X-Client-Platform", "web");
   const token = getToken();
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
@@ -447,8 +489,14 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
-    headers
+    headers,
+    credentials: "include"
   });
+  if (response.status === 401 && allowRefresh && !path.startsWith("/auth/")) {
+    if (await refreshWebSession()) {
+      return request<T>(path, init, false);
+    }
+  }
   const payload = (await response.json().catch(() => ({}))) as ApiEnvelope<T>;
 
   if (!response.ok || !payload.success) {
@@ -461,13 +509,19 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return payload.data;
 }
 
+export interface AiMediaAnalysis {
+  mediaId: string;
+  suggestedCategories: Array<{ id: string; name: string; score: number }>;
+}
+
 async function downloadFile(path: string) {
   const headers = new Headers();
+  headers.set("X-Client-Platform", "web");
   const token = getToken();
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
-  const response = await fetch(`${API_BASE_URL}${path}`, { headers });
+  const response = await fetch(`${API_BASE_URL}${path}`, { headers, credentials: "include" });
   if (!response.ok) {
     throw new Error(`Download failed with HTTP ${response.status}`);
   }
@@ -540,7 +594,7 @@ export const api = {
     const data = new FormData();
     Array.from(files).forEach((file) => data.append("images", file));
     Array.from(evidenceFiles).forEach((file) => data.append("evidenceImages", file));
-    return request<{ media: unknown[]; ai: unknown[]; matchSuggestions: PostMatchSuggestion[] }>(`/posts/${id}/media`, {
+    return request<{ media: unknown[]; ai: AiMediaAnalysis[]; matchSuggestions: PostMatchSuggestion[] }>(`/posts/${id}/media`, {
       method: "POST",
       body: data
     });
@@ -569,7 +623,7 @@ export const api = {
   uploadClaimChatImage(id: string, file: File) {
     const data = new FormData();
     data.append("image", file);
-    return request<{ image: { secureUrl: string; publicId: string; bytes?: number } }>(`/claims/${id}/chat-image`, {
+    return request<{ image: { publicId: string; bytes?: number | null } }>(`/claims/${id}/chat-image`, {
       method: "POST",
       body: data
     });
@@ -689,10 +743,10 @@ export const api = {
       body: JSON.stringify(input)
     });
   },
-  logout(refreshToken: string) {
+  logout(refreshToken?: string) {
     return request<{ revoked: boolean }>("/auth/logout", {
       method: "POST",
-      body: JSON.stringify({ refreshToken })
+      body: JSON.stringify(refreshToken ? { refreshToken } : {})
     });
   },
   me() {
@@ -917,6 +971,12 @@ export const api = {
     return request<{ updated: boolean }>(`/admin/warehouse-items/${id}/status`, {
       method: "PATCH",
       body: JSON.stringify({ status })
+    });
+  },
+  adminProcessWarehouseItem(id: string, input: { status: "DISPOSED" | "DONATED" | "TRANSFERRED"; note: string }) {
+    return request<{ updated: boolean }>(`/admin/warehouse-items/${id}/process`, {
+      method: "POST",
+      body: JSON.stringify(input)
     });
   },
   adminDeleteWarehouseItem(id: string) {

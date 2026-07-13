@@ -72,10 +72,7 @@ async function main() {
     })
   }, token, 201);
 
-  const lostPost = await request<{
-    post: { id: string };
-    matchSuggestions: Array<{ match: { totalScore: number; scoreTier?: string }; post: { id: string } }>;
-  }>("/posts", {
+  const lostPost = await request<{ post: { id: string } }>("/posts", {
     method: "POST",
     body: JSON.stringify({
       type: "LOST",
@@ -88,7 +85,7 @@ async function main() {
       lostFoundAt: new Date(Date.now() - 60 * 60 * 1000).toISOString()
     })
   }, token, 201);
-  const bestSuggestion = lostPost.matchSuggestions[0];
+  const bestSuggestion = await waitForMatchSuggestion(token, lostPost.post.id, foundPost.post.id);
   if (!bestSuggestion || bestSuggestion.match.totalScore < 0.45 || !bestSuggestion.match.scoreTier) {
     throw new Error("Expected at least one tiered match suggestion for the E2E LOST/FOUND pair.");
   }
@@ -153,6 +150,27 @@ async function main() {
   });
 
   console.log(`Core smoke passed. LOST=${lostPost.post.id} FOUND=${foundPost.post.id} CLAIM=${claim.claim.id}`);
+}
+
+async function waitForMatchSuggestion(token: string, lostPostId: string, foundPostId: string) {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    const result = await request<{
+      suggestions: Array<{
+        sourcePostId?: string;
+        match: { totalScore: number; scoreTier?: string };
+        post: { id: string };
+      }>;
+    }>("/posts/my/match-suggestions", {}, token);
+    const suggestion = result.suggestions.find(
+      (item) => item.sourcePostId === lostPostId && item.post.id === foundPostId
+    );
+    if (suggestion) {
+      return suggestion;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+  }
+  throw new Error("Timed out waiting for background matching result.");
 }
 
 main().catch((error: unknown) => {

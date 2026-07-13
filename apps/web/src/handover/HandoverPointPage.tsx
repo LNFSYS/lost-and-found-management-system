@@ -53,7 +53,7 @@ export function HandoverPointPage(props: {
     <div className="handover-page">
       <section className="handover-hero">
         <div>
-          <span className="eyebrow">Campus operations</span>
+          <span className="eyebrow">Điều phối trong campus</span>
           <h2>Điểm bàn giao</h2>
           <p>
             Xem nhanh các quầy tiếp nhận và lưu giữ đồ thất lạc trong FPT University Đà Nẵng.

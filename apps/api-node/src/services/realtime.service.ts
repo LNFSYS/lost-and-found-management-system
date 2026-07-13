@@ -5,6 +5,7 @@ import { env } from "../config/env.js";
 import type { AccessTokenPayload } from "../middlewares/auth.middleware.js";
 import { chatRepository } from "../repositories/chat.repository.js";
 import { isConfigured } from "../utils/configured.js";
+import { cloudinaryService } from "./cloudinary.service.js";
 
 let realtimeIo: Server | null = null;
 
@@ -17,9 +18,11 @@ function authFromSocket(handshakeAuth: unknown): string | null {
 }
 
 export function setupRealtimeServer(server: HttpServer) {
+  const socketOrigins = env.socketCorsOrigin.split(",").map((origin) => origin.trim()).filter(Boolean);
   const io = new Server(server, {
     cors: {
-      origin: env.socketCorsOrigin
+      origin: socketOrigins,
+      credentials: true
     }
   });
   realtimeIo = io;
@@ -45,7 +48,7 @@ export function setupRealtimeServer(server: HttpServer) {
     socket.on("claim:join", async (input: { claimId?: string }, ack?: (payload: unknown) => void) => {
       try {
         const claimId = input.claimId;
-        if (!claimId || !(await chatRepository.canAccessClaim(claimId, auth.sub, auth.roles))) {
+        if (!claimId || !(await chatRepository.canUseClaimChat(claimId, auth.sub, auth.roles))) {
           ack?.({ ok: false, error: "Forbidden" });
           return;
         }
@@ -67,7 +70,7 @@ export function setupRealtimeServer(server: HttpServer) {
       try {
         const claimId = input.claimId;
         const content = input.content?.trim();
-        if (!claimId || !content || !(await chatRepository.canAccessClaim(claimId, auth.sub, auth.roles))) {
+        if (!claimId || !content || !(await chatRepository.canUseClaimChat(claimId, auth.sub, auth.roles))) {
           ack?.({ ok: false, error: "Invalid chat message" });
           return;
         }
@@ -89,14 +92,15 @@ export function setupRealtimeServer(server: HttpServer) {
       }
     });
 
-    socket.on("chat:image", async (input: { claimId?: string; mediaUrl?: string; mediaPublicId?: string }, ack?: (payload: unknown) => void) => {
+    socket.on("chat:image", async (input: { claimId?: string; mediaPublicId?: string }, ack?: (payload: unknown) => void) => {
       try {
         const claimId = input.claimId;
-        const mediaUrl = input.mediaUrl?.trim();
-        if (!claimId || !mediaUrl || !(await chatRepository.canAccessClaim(claimId, auth.sub, auth.roles))) {
+        const mediaPublicId = input.mediaPublicId?.trim();
+        if (!claimId || !mediaPublicId || !(await chatRepository.canUseClaimChat(claimId, auth.sub, auth.roles))) {
           ack?.({ ok: false, error: "Invalid chat image" });
           return;
         }
+        const media = await cloudinaryService.resolveUploadedImage(mediaPublicId, `lnfs/private/claim-chat/${claimId}`);
         const room = await chatRepository.getOrCreateRoom(claimId);
         if (!room) {
           ack?.({ ok: false, error: "Room not found" });
@@ -105,8 +109,8 @@ export function setupRealtimeServer(server: HttpServer) {
         const message = await chatRepository.createMessage({
           roomId: room.id,
           senderId: auth.sub,
-          mediaUrl,
-          mediaPublicId: input.mediaPublicId ?? null,
+          mediaUrl: media.secureUrl,
+          mediaPublicId: media.publicId,
           messageType: "IMAGE"
         });
         io.to(`claim:${room.id}`).emit("chat:message", message);
@@ -119,7 +123,7 @@ export function setupRealtimeServer(server: HttpServer) {
     socket.on("chat:seen", async (input: { claimId?: string }, ack?: (payload: unknown) => void) => {
       try {
         const claimId = input.claimId;
-        if (!claimId || !(await chatRepository.canAccessClaim(claimId, auth.sub, auth.roles))) {
+        if (!claimId || !(await chatRepository.canUseClaimChat(claimId, auth.sub, auth.roles))) {
           ack?.({ ok: false, error: "Forbidden" });
           return;
         }

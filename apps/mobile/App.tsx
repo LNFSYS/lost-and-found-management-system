@@ -603,7 +603,7 @@ function CreatePostScreen({ onCreated }: { onCreated: (postId: string) => void }
 
       <View style={styles.actionRow}>
         <Button label="Chup anh" variant="blue" onPress={takePhoto} />
-        <Button label={`Ch?n ?nh (${images.length})`} variant="ghost" onPress={chooseImages} />
+        <Button label={`Chọn ảnh (${images.length})`} variant="ghost" onPress={chooseImages} />
       </View>
       <View style={styles.previewRow}>
         {images.map((image) => (
@@ -692,7 +692,7 @@ function HandoverScreen() {
           <View style={styles.panel}>
             <View style={styles.rowBetween}>
               <Text style={styles.cardTitle}>{item.name}</Text>
-              <Badge label={`${item.storedItems ?? 0} m?n`} tone="OPEN" />
+              <Badge label={`${item.storedItems ?? 0} món`} tone="OPEN" />
             </View>
             <Text style={styles.cardText}>{item.address}</Text>
           <Text style={styles.metaText}>Giờ: {item.openingHours ?? "Chưa cập nhật"}</Text>
@@ -901,7 +901,7 @@ function StaffScreen({ enabled }: { enabled: boolean }) {
             <Badge label={item.status} tone={item.isNegative ? "REJECTED" : "RESOLVED"} />
           </View>
           <Text style={styles.cardText}>{item.comment ?? "Không có ghi chú"}</Text>
-          <Text style={styles.metaText}>{item.postTitle ?? item.postId} ? {formatDate(item.createdAt)}</Text>
+          <Text style={styles.metaText}>{item.postTitle ?? item.postId} · {formatDate(item.createdAt)}</Text>
         </View>
       ))}
     </ScrollView>
@@ -1099,6 +1099,7 @@ function PostDetailModal(props: {
 
 function ClaimModal(props: { claimId: string | null; onClose: () => void; onMessage: (message: string) => void }) {
   const [detail, setDetail] = useState<ClaimDetail | null>(null);
+  const [imageAuthToken, setImageAuthToken] = useState<string | null>(null);
   const [appointments, setAppointments] = useState<ReturnAppointment[]>([]);
   const [confidence, setConfidence] = useState<{ ownershipConfidence: number; level: string; note: string } | null>(null);
   const [handoverPoints, setHandoverPoints] = useState<HandoverPoint[]>([]);
@@ -1107,12 +1108,14 @@ function ClaimModal(props: { claimId: string | null; onClose: () => void; onMess
 
   const load = useCallback(async () => {
     if (!props.claimId) return;
-    const [claimResult, appointmentResult, hpResult] = await Promise.all([
+    const [claimResult, appointmentResult, hpResult, accessToken] = await Promise.all([
       api.getClaim(props.claimId),
       api.claimAppointments(props.claimId).catch(() => ({ appointments: [] })),
-      api.handoverPoints().catch(() => ({ handoverPoints: [] }))
+      api.handoverPoints().catch(() => ({ handoverPoints: [] })),
+      getAccessToken()
     ]);
     setDetail(claimResult);
+    setImageAuthToken(accessToken);
     setAppointments(appointmentResult.appointments);
     setHandoverPoints(hpResult.handoverPoints);
     setHandoverPointId(hpResult.handoverPoints[0]?.id ?? "");
@@ -1232,7 +1235,16 @@ function ClaimModal(props: { claimId: string | null; onClose: () => void; onMess
             </View>
             <Text style={styles.sectionTitle}>Bằng chứng</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {detail.evidence.map((item) => <Image key={item.id} source={{ uri: item.secureUrl }} style={styles.detailImage} />)}
+              {detail.evidence.map((item) => (
+                <Image
+                  key={item.id}
+                  source={{
+                    uri: `${API_ORIGIN}${item.imagePath}`,
+                    headers: imageAuthToken ? { Authorization: `Bearer ${imageAuthToken}` } : undefined
+                  }}
+                  style={styles.detailImage}
+                />
+              ))}
             </ScrollView>
             <Text style={styles.sectionTitle}>Lịch bàn giao</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalPicker}>

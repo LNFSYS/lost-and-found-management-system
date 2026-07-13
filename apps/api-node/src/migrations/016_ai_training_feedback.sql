@@ -1,11 +1,84 @@
-ALTER TABLE match_results
-  ADD COLUMN image_score FLOAT NOT NULL DEFAULT 0 AFTER time_score,
-  ADD COLUMN ocr_score FLOAT NOT NULL DEFAULT 0 AFTER image_score,
-  ADD COLUMN score_tier ENUM('WEAK', 'SUGGESTION', 'NOTIFY', 'HIGH_CONFIDENCE') NOT NULL DEFAULT 'WEAK' AFTER ocr_score,
-  ADD COLUMN matcher_version VARCHAR(40) NOT NULL DEFAULT 'rule-v1' AFTER score_tier,
-  ADD COLUMN explanation_json JSON NULL AFTER matcher_version;
+SET @match_image_score_exists = (
+  SELECT COUNT(*)
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE()
+    AND table_name = 'match_results'
+    AND column_name = 'image_score'
+);
+SET @match_image_score_sql = IF(
+  @match_image_score_exists = 0,
+  'ALTER TABLE match_results ADD COLUMN image_score FLOAT NOT NULL DEFAULT 0 AFTER time_score',
+  'SELECT 1'
+);
+PREPARE match_image_score_stmt FROM @match_image_score_sql;
+EXECUTE match_image_score_stmt;
+DEALLOCATE PREPARE match_image_score_stmt;
 
-CREATE TABLE match_feedback (
+SET @match_ocr_score_exists = (
+  SELECT COUNT(*)
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE()
+    AND table_name = 'match_results'
+    AND column_name = 'ocr_score'
+);
+SET @match_ocr_score_sql = IF(
+  @match_ocr_score_exists = 0,
+  'ALTER TABLE match_results ADD COLUMN ocr_score FLOAT NOT NULL DEFAULT 0 AFTER image_score',
+  'SELECT 1'
+);
+PREPARE match_ocr_score_stmt FROM @match_ocr_score_sql;
+EXECUTE match_ocr_score_stmt;
+DEALLOCATE PREPARE match_ocr_score_stmt;
+
+SET @match_score_tier_exists = (
+  SELECT COUNT(*)
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE()
+    AND table_name = 'match_results'
+    AND column_name = 'score_tier'
+);
+SET @match_score_tier_sql = IF(
+  @match_score_tier_exists = 0,
+  'ALTER TABLE match_results ADD COLUMN score_tier ENUM(''WEAK'', ''SUGGESTION'', ''NOTIFY'', ''HIGH_CONFIDENCE'') NOT NULL DEFAULT ''WEAK'' AFTER ocr_score',
+  'SELECT 1'
+);
+PREPARE match_score_tier_stmt FROM @match_score_tier_sql;
+EXECUTE match_score_tier_stmt;
+DEALLOCATE PREPARE match_score_tier_stmt;
+
+SET @match_version_exists = (
+  SELECT COUNT(*)
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE()
+    AND table_name = 'match_results'
+    AND column_name = 'matcher_version'
+);
+SET @match_version_sql = IF(
+  @match_version_exists = 0,
+  'ALTER TABLE match_results ADD COLUMN matcher_version VARCHAR(40) NOT NULL DEFAULT ''rule-v1'' AFTER score_tier',
+  'SELECT 1'
+);
+PREPARE match_version_stmt FROM @match_version_sql;
+EXECUTE match_version_stmt;
+DEALLOCATE PREPARE match_version_stmt;
+
+SET @match_explanation_exists = (
+  SELECT COUNT(*)
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE()
+    AND table_name = 'match_results'
+    AND column_name = 'explanation_json'
+);
+SET @match_explanation_sql = IF(
+  @match_explanation_exists = 0,
+  'ALTER TABLE match_results ADD COLUMN explanation_json JSON NULL AFTER matcher_version',
+  'SELECT 1'
+);
+PREPARE match_explanation_stmt FROM @match_explanation_sql;
+EXECUTE match_explanation_stmt;
+DEALLOCATE PREPARE match_explanation_stmt;
+
+CREATE TABLE IF NOT EXISTS match_feedback (
   id CHAR(36) PRIMARY KEY,
   match_id CHAR(36) NOT NULL,
   user_id CHAR(36) NOT NULL,
@@ -21,7 +94,7 @@ CREATE TABLE match_feedback (
   KEY idx_match_feedback_user_created (user_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE match_suggestion_impressions (
+CREATE TABLE IF NOT EXISTS match_suggestion_impressions (
   id CHAR(36) PRIMARY KEY,
   match_id CHAR(36) NOT NULL,
   user_id CHAR(36) NOT NULL,

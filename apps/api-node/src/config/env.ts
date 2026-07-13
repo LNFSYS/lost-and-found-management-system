@@ -61,7 +61,5 @@ export const env = {
     visionApiKey: process.env.GOOGLE_VISION_API_KEY,
     applicationCredentials: process.env.GOOGLE_APPLICATION_CREDENTIALS
   },
-  redisUrl: process.env.REDIS_URL,
-  socketPort: numberFromEnv("SOCKET_PORT", 3002),
   socketCorsOrigin: process.env.SOCKET_CORS_ORIGIN ?? process.env.FRONTEND_URL ?? "http://localhost:5173"
 };

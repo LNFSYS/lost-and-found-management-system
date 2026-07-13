@@ -1,4 +1,5 @@
 import * as SecureStore from "expo-secure-store";
+import { SingleFlight } from "./single-flight";
 
 declare const process: { env: Record<string, string | undefined> };
 
@@ -8,6 +9,7 @@ export const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, "");
 
 const ACCESS_TOKEN_KEY = "lnfs.mobile.accessToken";
 const REFRESH_TOKEN_KEY = "lnfs.mobile.refreshToken";
+const refreshGate = new SingleFlight<boolean>();
 
 export type PostType = "LOST" | "FOUND";
 export type PostStatus = "OPEN" | "MATCHED" | "RESOLVED" | "CLOSED" | "EXPIRED" | "HIDDEN";
@@ -134,7 +136,6 @@ export interface ClaimSummary {
   claimant: { id: string; fullName: string };
   status: "PENDING" | "NEED_MORE_INFO" | "ACCEPTED" | "REJECTED" | "CANCELLED";
   description: string | null;
-  secretAnswer?: string | null;
   approximateLostAt: string | null;
   approximateLocation: string | null;
   rejectionReason: string | null;
@@ -158,7 +159,7 @@ export interface ClaimDetail {
     approximateLocation: string | null;
     createdAt: string;
   };
-  evidence: Array<{ id: string; secureUrl: string; evidenceType: string; description: string | null }>;
+  evidence: Array<{ id: string; imagePath: string; evidenceType: string; description: string | null }>;
 }
 
 export interface ReturnAppointment {
@@ -314,8 +315,14 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   throw lastError instanceof Error ? lastError : new Error("Network request failed");
 }
 
-async function requestOnce<T>(path: string, init: RequestInit = {}, allowServerRetry = false): Promise<T> {
+async function requestOnce<T>(
+  path: string,
+  init: RequestInit = {},
+  allowServerRetry = false,
+  allowRefresh = true
+): Promise<T> {
   const headers = new Headers(init.headers);
+  headers.set("X-Client-Platform", "mobile");
   const token = await getAccessToken();
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
@@ -325,6 +332,12 @@ async function requestOnce<T>(path: string, init: RequestInit = {}, allowServerR
   }
 
   const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+  if (response.status === 401 && allowRefresh && !path.startsWith("/auth/")) {
+    const refreshed = await refreshMobileSession();
+    if (refreshed) {
+      return requestOnce<T>(path, init, allowServerRetry, false);
+    }
+  }
   const payload = (await response.json().catch(() => ({}))) as ApiEnvelope<T>;
   if (allowServerRetry && response.status >= 500) {
     throw new Error(`Retryable HTTP ${response.status}`);
@@ -336,6 +349,40 @@ async function requestOnce<T>(path: string, init: RequestInit = {}, allowServerR
     throw new Error("API returned no data");
   }
   return payload.data;
+}
+
+async function refreshMobileSession() {
+  return refreshGate.run(async () => {
+    const refreshToken = await getRefreshToken();
+    if (!refreshToken) {
+      await clearTokens();
+      return false;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Client-Platform": "mobile"
+        },
+        body: JSON.stringify({ refreshToken })
+      });
+      const payload = (await response.json().catch(() => ({}))) as ApiEnvelope<{
+        user: PublicUser;
+        tokens: Tokens;
+      }>;
+      if (!response.ok || !payload.success || !payload.data?.tokens.refreshToken) {
+        await clearTokens();
+        return false;
+      }
+      await saveTokens(payload.data.tokens);
+      return true;
+    } catch {
+      await clearTokens();
+      return false;
+    }
+  });
 }
 
 function isRetryableError(error: unknown) {

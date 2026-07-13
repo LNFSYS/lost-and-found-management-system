@@ -29,13 +29,13 @@ export const postController = {
 
   async list(request: Request, response: Response) {
     const query = listPostsQuerySchema.parse(request.query);
-    const result = await postService.listPublicPosts(query);
+    const result = await postService.listPublicPosts(query, request.auth);
     response.json(ok(result));
   },
 
   async search(request: Request, response: Response) {
     const query = listPostsQuerySchema.parse(request.query);
-    const result = await postService.listPublicPosts(query);
+    const result = await postService.listPublicPosts(query, request.auth);
     response.json(ok(result));
   },
 
@@ -57,13 +57,13 @@ export const postController = {
 
   async matches(request: Request, response: Response) {
     const postId = requireStringParam(request.params.id, "id");
-    const matches = await matchingService.listMatches(postId);
+    const matches = await postService.listPostMatches(request.auth!, postId);
     response.json(ok({ matches }));
   },
 
   async matchExplanations(request: Request, response: Response) {
     const postId = requireStringParam(request.params.id, "id");
-    const explanations = await matchingService.explainMatches(postId);
+    const explanations = await postService.explainPostMatches(request.auth!, postId);
     response.json(ok({ explanations }));
   },
 

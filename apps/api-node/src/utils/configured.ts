@@ -1,3 +1,4 @@
 export function isConfigured(value: string | undefined): value is string {
-  return Boolean(value && value.trim() !== "" && value !== "YOUR_VALUE_HERE");
+  const trimmed = value?.trim();
+  return Boolean(trimmed && trimmed !== "YOUR_VALUE_HERE");
 }

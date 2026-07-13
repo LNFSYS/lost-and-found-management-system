@@ -1,0 +1,210 @@
+.auth-card {
+  width: min(460px, 100%);
+  max-width: none;
+  margin: 24px auto 0;
+  gap: 18px;
+  padding: 26px;
+  border: 0;
+  box-shadow: 0 18px 44px rgba(22, 32, 51, 0.1);
+}
+
+.auth-card.register-mode {
+  width: min(620px, 100%);
+}
+
+.auth-card-heading {
+  display: grid;
+  gap: 6px;
+  text-align: center;
+}
+
+.auth-card-heading h2,
+.auth-card-heading p {
+  margin: 0;
+}
+
+.auth-card-heading h2 {
+  color: var(--ink);
+  font-size: 1.65rem;
+  line-height: 1.15;
+}
+
+.auth-card-heading p {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.auth-back-link {
+  justify-self: start;
+}
+
+.auth-forgot-link {
+  justify-self: end;
+  margin-top: -4px;
+}
+
+.google-login-button {
+  justify-content: center;
+  width: 100%;
+}
+
+.auth-submit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 2px;
+}
+
+.auth-submit-row .primary-button {
+  min-width: 170px;
+}
+
+.auth-submit-row span {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 800;
+  text-align: right;
+}
+
+.profile-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.profile-card img {
+  width: 58px;
+  height: 58px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.profile-card h2,
+.profile-card p {
+  margin: 0;
+}
+
+.profile-card p {
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.inline-profile-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: 10px;
+  align-items: end;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+}
+
+.inline-profile-form input {
+  min-height: 42px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.account-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mini-panel {
+  display: grid;
+  gap: 7px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.mini-panel svg {
+  color: var(--fpt-blue);
+}
+
+.mini-panel strong {
+  font-size: 1.35rem;
+}
+
+.mini-panel span,
+.activity-list span {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 750;
+}
+
+.activity-list {
+  display: grid;
+  gap: 8px;
+}
+
+.activity-list span {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+}
+
+.avatar-upload-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.avatar-upload-panel > img {
+  width: 96px;
+  height: 96px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.reputation-history {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.reputation-history-row {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 10px;
+  border: 1px solid #eef2f7;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.reputation-history-row strong {
+  font-size: 0.9rem;
+}
+
+.reputation-history-row strong.positive {
+  color: #008a3d;
+}
+
+.reputation-history-row strong.negative {
+  color: #b42318;
+}
+
+.reputation-history-row span {
+  color: #334155;
+  font-weight: 700;
+}
+
+.reputation-history-row small {
+  color: #64748b;
+  font-weight: 700;
+}

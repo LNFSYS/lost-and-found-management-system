@@ -15,7 +15,7 @@ postRoutes.post("/", requireAuth, postWriteLimit, (request, response, next) => {
   postController.create(request, response).catch(next);
 });
 
-postRoutes.get("/", (request, response, next) => {
+postRoutes.get("/", optionalAuth, (request, response, next) => {
   postController.list(request, response).catch(next);
 });
 
@@ -84,6 +84,6 @@ postRoutes.delete("/:id", requireAuth, (request, response, next) => {
   postController.remove(request, response).catch(next);
 });
 
-searchRoutes.get("/", (request, response, next) => {
+searchRoutes.get("/", optionalAuth, (request, response, next) => {
   postController.search(request, response).catch(next);
 });

@@ -241,11 +241,11 @@ function basePostSelect() {
   `;
 }
 
-function buildListWhere(query: ListPostsQuery, userId?: string) {
+function buildListWhere(query: ListPostsQuery, userId?: string, options: { includeHidden?: boolean } = {}) {
   const where = ["p.deleted_at IS NULL"];
   const values: unknown[] = [];
 
-  if (!query.status) {
+  if (!options.includeHidden) {
     where.push("p.status <> 'HIDDEN'");
   }
   if (userId) {
@@ -253,8 +253,18 @@ function buildListWhere(query: ListPostsQuery, userId?: string) {
     values.push(userId);
   }
   if (query.q) {
-    where.push("(p.title_normalized LIKE ? OR p.description_normalized LIKE ?)");
-    values.push(`%${query.q}%`, `%${query.q}%`);
+    const fullTextTerms = query.q
+      .split(/\s+/)
+      .map((term) => term.replace(/[^a-z0-9_]/gi, ""))
+      .filter((term) => term.length >= 2)
+      .map((term) => `${term}*`);
+    if (fullTextTerms.length > 0) {
+      where.push("MATCH(p.title_normalized, p.description_normalized) AGAINST (? IN BOOLEAN MODE)");
+      values.push(fullTextTerms.join(" "));
+    } else {
+      where.push("(p.title_normalized LIKE ? OR p.description_normalized LIKE ?)");
+      values.push(`${query.q}%`, `${query.q}%`);
+    }
   }
   if (query.type) {
     where.push("p.type = ?");
@@ -264,9 +274,13 @@ function buildListWhere(query: ListPostsQuery, userId?: string) {
     where.push("p.status = ?");
     values.push(query.status);
   }
-  if (query.categoryId) {
-    where.push("(p.category_id = ? OR p.category_id IN (SELECT id FROM item_categories WHERE parent_id = ?))");
-    values.push(query.categoryId, query.categoryId);
+  const categoryIds = query.categoryIds?.length ? query.categoryIds : query.categoryId ? [query.categoryId] : [];
+  if (categoryIds.length > 0) {
+    const placeholders = categoryIds.map(() => "?").join(", ");
+    where.push(
+      `(p.category_id IN (${placeholders}) OR p.category_id IN (SELECT id FROM item_categories WHERE parent_id IN (${placeholders})))`
+    );
+    values.push(...categoryIds, ...categoryIds);
   }
   if (query.areaId) {
     where.push("p.area_id = ?");
@@ -305,6 +319,24 @@ function mapMatchPost(row: MatchPostRow): MatchCandidatePost {
     roomText: row.room_text,
     lostFoundAt: row.lost_found_at
   };
+}
+
+interface EditablePostRow extends RowDataPacket {
+  id: string;
+  user_id: string;
+  type: PostType;
+  status: PostStatus;
+  title: string;
+  description: string;
+  category_id: string;
+  area_id: string | null;
+  building_id: string | null;
+  room_text: string | null;
+  custom_location: string | null;
+  contact_info: string | null;
+  lost_found_at: string | null;
+  handover_point_id: string | null;
+  has_secret_verification: number;
 }
 
 function parseJson(value: unknown) {
@@ -653,6 +685,40 @@ export const postRepository = {
     return row ? mapMatchPost(row) : null;
   },
 
+  async findMatchPostsByIds(postIds: string[]) {
+    const uniqueIds = Array.from(new Set(postIds)).filter(Boolean);
+    if (uniqueIds.length === 0) {
+      return [];
+    }
+    const placeholders = uniqueIds.map(() => "?").join(", ");
+    const [rows] = await dbPool.query<MatchPostRow[]>(
+      `
+        SELECT
+          p.id, p.user_id, p.type, p.status, p.title, p.title_normalized, p.description_normalized,
+          tags.ai_tag_text, tags.image_tag_text, tags.ocr_tag_text,
+          p.category_id, c.parent_id AS parent_category_id,
+          p.area_id, p.building_id, p.room_text, p.lost_found_at
+        FROM posts p
+        LEFT JOIN item_categories c ON c.id = p.category_id
+        LEFT JOIN (
+          SELECT
+            post_id,
+            GROUP_CONCAT(tag SEPARATOR ' ') AS ai_tag_text,
+            GROUP_CONCAT(CASE WHEN source IN ('VISION_LABEL', 'VISION_OBJECT', 'MANUAL') THEN tag END SEPARATOR ' ') AS image_tag_text,
+            GROUP_CONCAT(CASE WHEN source = 'OCR' THEN tag END SEPARATOR ' ') AS ocr_tag_text
+          FROM ai_tags
+          GROUP BY post_id
+        ) tags ON tags.post_id = p.id
+        WHERE p.id IN (${placeholders})
+          AND p.deleted_at IS NULL
+          AND p.status IN ('OPEN', 'MATCHED')
+      `,
+      uniqueIds
+    );
+    const order = new Map(uniqueIds.map((id, index) => [id, index]));
+    return rows.map(mapMatchPost).sort((left, right) => (order.get(left.id) ?? 0) - (order.get(right.id) ?? 0));
+  },
+
   async listOppositeOpenPosts(type: PostType, excludePostId: string) {
     const oppositeType: PostType = type === "LOST" ? "FOUND" : "LOST";
     const [rows] = await dbPool.query<MatchPostRow[]>(
@@ -844,6 +910,22 @@ export const postRepository = {
     return rows[0] ?? null;
   },
 
+  async findEditableState(id: string) {
+    const [rows] = await dbPool.query<EditablePostRow[]>(
+      `
+        SELECT id, user_id, type, status, title, description, category_id,
+               area_id, building_id, room_text, custom_location, contact_info,
+               lost_found_at, handover_point_id,
+               (secret_verification_hash IS NOT NULL) AS has_secret_verification
+        FROM posts
+        WHERE id = ? AND deleted_at IS NULL
+        LIMIT 1
+      `,
+      [id]
+    );
+    return rows[0] ?? null;
+  },
+
   async upsertMatchFeedback(input: {
     matchId: string;
     userId: string;
@@ -923,8 +1005,8 @@ export const postRepository = {
     return rows.map((row) => row.id);
   },
 
-  async list(query: ListPostsQuery, userId?: string) {
-    const { clause, values } = buildListWhere(query, userId);
+  async list(query: ListPostsQuery, userId?: string, options: { includeHidden?: boolean } = {}) {
+    const { clause, values } = buildListWhere(query, userId, options);
     const offset = (query.page - 1) * query.pageSize;
     const matchScoreJoin =
       query.sort === "highest_match"

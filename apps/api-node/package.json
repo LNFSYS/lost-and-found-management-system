@@ -11,10 +11,15 @@
     "e2e:warehouse": "tsx src/scripts/e2e-warehouse-lifecycle.ts",
     "e2e:claim-race": "tsx src/scripts/e2e-claim-race.ts",
     "e2e:media-privacy": "tsx src/scripts/e2e-media-privacy.ts",
+    "e2e:chat-gating": "tsx src/scripts/e2e-chat-gating.ts",
+    "e2e:claim-evidence-policy": "tsx src/scripts/e2e-claim-evidence-policy.ts",
+    "e2e:admin-crud": "tsx src/scripts/e2e-admin-crud.ts",
     "seed:demo": "tsx src/scripts/seed-demo.ts",
+    "repair:encoding": "tsx src/scripts/repair-mojibake.ts",
     "export:training-data": "tsx src/scripts/export-training-data.ts",
     "train:match-model": "tsx src/scripts/train-match-model.ts",
     "smoke:migration": "tsx src/scripts/smoke-migration.ts",
+    "test": "tsx --test src/policies/*.test.ts",
     "migrate": "tsx src/migrations/run-migrations.ts",
     "build": "node ../../node_modules/typescript/bin/tsc -p tsconfig.json",
     "start": "node dist/server.js"
@@ -30,7 +35,7 @@
     "morgan": "^1.10.0",
     "multer": "^2.0.2",
     "mysql2": "^3.11.5",
-    "nodemailer": "^8.0.10",
+    "nodemailer": "^9.0.3",
     "socket.io": "^4.8.3",
     "zod": "^3.24.1"
   },
@@ -43,6 +48,7 @@
     "@types/multer": "^1.4.12",
     "@types/node": "^22.10.2",
     "@types/nodemailer": "^6.4.17",
+    "socket.io-client": "^4.8.3",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3"
   }

@@ -1,8 +1,10 @@
 const API_BASE_URL = process.env.E2E_API_URL ?? "http://localhost:3001/api";
 const ownerEmail = process.env.E2E_EMAIL ?? "adminlnf@gmail.com";
 const ownerPassword = process.env.E2E_PASSWORD ?? "12345678";
-const claimantEmail = process.env.E2E_CLAIMANT_EMAIL ?? "stafflnf@gmail.com";
-const claimantPassword = process.env.E2E_CLAIMANT_PASSWORD ?? "12345678";
+const firstClaimantEmail = process.env.E2E_FIRST_CLAIMANT_EMAIL ?? "stafflnf@gmail.com";
+const firstClaimantPassword = process.env.E2E_FIRST_CLAIMANT_PASSWORD ?? "12345678";
+const secondClaimantEmail = process.env.E2E_SECOND_CLAIMANT_EMAIL ?? "studentlnf@gmail.com";
+const secondClaimantPassword = process.env.E2E_SECOND_CLAIMANT_PASSWORD ?? "12345678";
 
 interface Envelope<T> {
   success: boolean;
@@ -52,7 +54,8 @@ async function login(email: string, password: string) {
 
 async function main() {
   const ownerToken = await login(ownerEmail, ownerPassword);
-  const claimantToken = await login(claimantEmail, claimantPassword);
+  const firstClaimantToken = await login(firstClaimantEmail, firstClaimantPassword);
+  const secondClaimantToken = await login(secondClaimantEmail, secondClaimantPassword);
   const categories = await request<{ categories: Array<{ id: string; name: string }> }>("/categories", {}, ownerToken);
   const categoryId = categories.categories[0]?.id;
   if (!categoryId) {
@@ -73,22 +76,29 @@ async function main() {
     })
   }, ownerToken, 201);
 
-  const claim = await request<{ claim: { id: string } }>("/claims", {
+  const firstClaim = await request<{ claim: { id: string } }>("/claims", {
     method: "POST",
     body: JSON.stringify({
       postId: foundPost.post.id,
-      secretAnswer: "E2E race private proof",
-      description: "E2E race claim proof",
+      secretAnswer: "E2E first claimant private proof",
+      description: "E2E first claimant race proof",
       approximateLocation: "E2E race campus"
     })
-  }, claimantToken, 201);
+  }, firstClaimantToken, 201);
+
+  const secondClaim = await request<{ claim: { id: string } }>("/claims", {
+    method: "POST",
+    body: JSON.stringify({
+      postId: foundPost.post.id,
+      secretAnswer: "E2E second claimant private proof",
+      description: "E2E second claimant race proof",
+      approximateLocation: "E2E race campus"
+    })
+  }, secondClaimantToken, 201);
 
   const results = await Promise.allSettled([
-    rawRequest(`/claims/${claim.claim.id}/accept`, { method: "PATCH" }, ownerToken),
-    rawRequest(`/claims/${claim.claim.id}/reject`, {
-      method: "PATCH",
-      body: JSON.stringify({ reason: "E2E concurrent reject should not win if accept wins" })
-    }, ownerToken)
+    rawRequest(`/claims/${firstClaim.claim.id}/accept`, { method: "PATCH" }, ownerToken),
+    rawRequest(`/claims/${secondClaim.claim.id}/accept`, { method: "PATCH" }, ownerToken)
   ]);
 
   const statuses = results.map((result) => {
@@ -100,14 +110,24 @@ async function main() {
   const successCount = statuses.filter((status) => status === 200).length;
   const conflictCount = statuses.filter((status) => status === 409).length;
   if (successCount !== 1 || conflictCount !== 1) {
-    throw new Error(`Expected exactly one claim transition to win with one 409 loser, got statuses: ${statuses.join(", ")}`);
+    throw new Error(`Expected exactly one accepted claim and one 409 loser, got statuses: ${statuses.join(", ")}`);
+  }
+
+  const claimList = await request<{ claims: Array<{ id: string; status: string }> }>(
+    `/posts/${foundPost.post.id}/claims`,
+    {},
+    ownerToken
+  );
+  const acceptedClaims = claimList.claims.filter((item) => item.status === "ACCEPTED");
+  if (acceptedClaims.length !== 1) {
+    throw new Error(`Database invariant failed: expected one accepted claim, got ${acceptedClaims.length}`);
   }
 
   await request(`/posts/${foundPost.post.id}`, { method: "DELETE" }, ownerToken).catch((error: unknown) => {
     console.warn(`Claim race e2e cleanup skipped: ${error instanceof Error ? error.message : "unknown error"}`);
   });
 
-  console.log(`Claim race smoke passed. CLAIM=${claim.claim.id}`);
+  console.log(`Two-claim race smoke passed. ACCEPTED_CLAIM=${acceptedClaims[0]?.id}`);
 }
 
 main().catch((error: unknown) => {

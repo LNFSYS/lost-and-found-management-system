@@ -1290,6 +1290,9 @@ export const adminRepository = {
   },
 
   async updateWarehouseItemStatus(id: string, status: WarehouseStatus, actorId: string) {
+    if (["DISPOSED", "DONATED", "TRANSFERRED"].includes(status)) {
+      throw new HttpError(409, "Use the overdue processing endpoint for disposal, donation, or transfer");
+    }
     const previousStatus = await currentWarehouseStatus(id);
     if (!previousStatus) {
       throw new HttpError(404, "Warehouse item not found");

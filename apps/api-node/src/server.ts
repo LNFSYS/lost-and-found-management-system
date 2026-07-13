@@ -3,6 +3,7 @@ import { checkDatabaseConnection } from "./config/db.js";
 import { env } from "./config/env.js";
 import { setupRealtimeServer } from "./services/realtime.service.js";
 import { startScheduledJobs } from "./services/scheduled-jobs.service.js";
+import { startMatchingWorker } from "./services/matching-worker.service.js";
 import { createServer } from "node:http";
 
 async function startServer() {
@@ -12,6 +13,7 @@ async function startServer() {
   const server = createServer(app);
   setupRealtimeServer(server);
   startScheduledJobs();
+  startMatchingWorker();
 
   server.listen(env.port, () => {
     console.log(`LNFS Node API listening on http://localhost:${env.port}`);

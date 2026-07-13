@@ -1,6 +1,8 @@
 # Node.js And Java Service Boundary
 
-Last updated: 2026-07-08
+Last updated: 2026-07-10
+
+The binding decision record is [adr-001-node-java-write-ownership.md](adr-001-node-java-write-ownership.md). This document explains the broader rationale and future integration path.
 
 ## Decision
 
@@ -62,6 +64,7 @@ The boundary below keeps the project honest and defensible.
 5. If Java updates the same tables as Node, add integration tests before claiming production readiness.
 6. Do not start two scheduled jobs that update the same status field without a lock/ownership decision.
 7. Demo scripts should state whether a step is using Node-only flow or Java extension flow.
+8. Java write endpoints default to disabled. Set `JAVA_WRITES_ENABLED=true` only after the selected flow is routed away from Node.
 
 ## Recommended Thesis Explanation
 

@@ -58,7 +58,7 @@ export function optionalAuth(request: Request, _response: Response, next: NextFu
     request.auth = jwt.verify(token, accessSecret) as AccessTokenPayload;
     next();
   } catch {
-    next(new HttpError(401, "Invalid or expired token"));
+    next();
   }
 }
 

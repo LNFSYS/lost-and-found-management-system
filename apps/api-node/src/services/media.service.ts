@@ -8,7 +8,7 @@ import { userRepository } from "../repositories/user.repository.js";
 import { HttpError } from "../utils/http-error.js";
 import type { ClaimEvidenceBody } from "../validators/media.validator.js";
 import { cloudinaryService } from "./cloudinary.service.js";
-import { matchingService } from "./matching.service.js";
+import { matchingWorkerService } from "./matching-worker.service.js";
 import { visionService } from "./vision.service.js";
 
 const mimeToFormat = new Map([
@@ -192,14 +192,8 @@ export const mediaService = {
       }
     });
 
-    try {
-      const matches = await matchingService.runForPost(postId);
-      const matchSuggestions = post.type === "LOST" ? await matchingService.buildSuggestions(postId, matches) : [];
-      return { media: uploadedMedia, ai, matchSuggestions };
-    } catch (error: unknown) {
-      console.warn(`Post matching failed after media upload: ${error instanceof Error ? error.message : "unknown error"}`);
-      return { media: uploadedMedia, ai, matchSuggestions: [] };
-    }
+    await matchingWorkerService.enqueue(postId);
+    return { media: uploadedMedia, ai, matchSuggestions: [] };
   },
 
   async deletePostMedia(auth: AccessTokenPayload, postId: string, mediaId: string) {
@@ -235,8 +229,11 @@ export const mediaService = {
     if (!currentClaim) {
       throw new HttpError(404, "Claim not found");
     }
-    if (!canViewClaim(auth, currentClaim.claim)) {
+    if (auth.sub !== currentClaim.claim.claimant.id) {
       throw new HttpError(403, "You do not have permission to upload evidence for this claim");
+    }
+    if (currentClaim.claim.status !== "PENDING" && currentClaim.claim.status !== "NEED_MORE_INFO") {
+      throw new HttpError(409, "Evidence can only be uploaded while the claim is pending review");
     }
 
     const uploaded = await cloudinaryService.uploadImage(image.buffer, `lnfs/private/claims/${claimId}`);
@@ -273,19 +270,19 @@ export const mediaService = {
       throw new HttpError(403, "You do not have permission to view evidence for this claim");
     }
 
-    const evidence = currentClaim.evidence.find((item) => item.id === evidenceId);
+    const evidence = await claimRepository.findEvidenceStorage(claimId, evidenceId);
     if (!evidence) {
       throw new HttpError(404, "Claim evidence not found");
     }
 
-    return { imageUrl: evidence.secureUrl };
+    return { imageUrl: evidence.secure_url };
   },
 
   async uploadClaimChatImage(auth: AccessTokenPayload, claimId: string, file: Express.Multer.File | undefined) {
     const image = requireFile(file, "image");
     await assertImageFile(image);
 
-    if (!(await chatRepository.canAccessClaim(claimId, auth.sub, auth.roles))) {
+    if (!(await chatRepository.canUseClaimChat(claimId, auth.sub, auth.roles))) {
       throw new HttpError(403, "You do not have permission to upload chat images for this claim");
     }
 
@@ -301,11 +298,16 @@ export const mediaService = {
       }
     });
 
-    return { image: uploaded };
+    return {
+      image: {
+        publicId: uploaded.publicId,
+        bytes: uploaded.bytes ?? null
+      }
+    };
   },
 
   async getClaimChatImageUrl(auth: AccessTokenPayload, claimId: string, mediaPublicId: string) {
-    if (!(await chatRepository.canAccessClaim(claimId, auth.sub, auth.roles))) {
+    if (!(await chatRepository.canUseClaimChat(claimId, auth.sub, auth.roles))) {
       throw new HttpError(403, "You do not have permission to view chat images for this claim");
     }
 

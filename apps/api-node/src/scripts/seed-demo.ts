@@ -9,7 +9,7 @@ interface IdRow extends RowDataPacket {
   id: string;
 }
 
-type DemoRole = "ADMIN" | "STAFF" | "STUDENT";
+type DemoRole = "ADMIN" | "STAFF" | "STUDENT" | "LECTURER";
 
 const demoPassword = process.env.DEMO_PASSWORD ?? "12345678";
 
@@ -127,12 +127,14 @@ async function ensureWarehouseItem(input: {
 async function main() {
   await ensureRole("USER", "User");
   await ensureRole("STUDENT", "Student");
+  await ensureRole("LECTURER", "Lecturer");
   await ensureRole("STAFF", "Staff");
   await ensureRole("ADMIN", "Admin");
 
   const adminId = await upsertUser({ email: "adminlnf@gmail.com", fullName: "LNF Demo Admin", role: "ADMIN" });
   const staffId = await upsertUser({ email: "stafflnf@gmail.com", fullName: "LNF Demo Staff", role: "STAFF" });
   await upsertUser({ email: "studentlnf@gmail.com", fullName: "LNF Demo Student", role: "STUDENT" });
+  await upsertUser({ email: "lecturerlnf@gmail.com", fullName: "LNF Demo Lecturer", role: "LECTURER" });
 
   await ensureHandoverPoint({
     name: "Alpha Lobby Handover Desk",
@@ -153,7 +155,7 @@ async function main() {
     createdBy: adminId
   });
   await ensureHandoverPoint({
-    name: "Canteen Found Item Counter",
+    name: "Quầy đồ nhặt được tại căng tin",
     address: "Main canteen counter",
     openingHours: "07:30 - 21:00",
     contactInfo: "Canteen team",
@@ -181,6 +183,7 @@ async function main() {
   console.log(`Admin: adminlnf@gmail.com / ${demoPassword}`);
   console.log(`Staff: stafflnf@gmail.com / ${demoPassword}`);
   console.log(`Student: studentlnf@gmail.com / ${demoPassword}`);
+  console.log(`Lecturer: lecturerlnf@gmail.com / ${demoPassword}`);
 }
 
 main()

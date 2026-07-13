@@ -18,6 +18,7 @@ spring:
           time_zone: UTC
 
 lnfs:
+  write-enabled: ${JAVA_WRITES_ENABLED:false}
   jwt:
     access-secret: ${JWT_ACCESS_SECRET:${JAVA_JWT_SECRET:}}
 

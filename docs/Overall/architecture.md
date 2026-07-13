@@ -68,13 +68,13 @@ Current Node API endpoints:
 | `GET` | `/api/auth/notifications` | Return current user's notifications |
 | `PATCH` | `/api/auth/notifications/:id/read` | Mark one notification as read |
 | `PATCH` | `/api/auth/notifications/read-all` | Mark all current user's notifications as read |
-| `POST` | `/api/posts` | Create LOST/FOUND post and return match suggestions when available |
+| `POST` | `/api/posts` | Create LOST/FOUND post and enqueue background matching |
 | `GET` | `/api/posts` | Public board with pagination, search, filters, latest sort and first-media `coverImageUrl` for feed cards |
 | `GET` | `/api/posts/my` | Current user's posts with filters |
 | `GET` | `/api/posts/:id` | Post detail with media, AI tags and matches |
 | `PUT` | `/api/posts/:id` | Update owned/admin post |
 | `PATCH` | `/api/posts/:id/status` | Update post status |
-| `POST` | `/api/posts/:id/media` | Upload item images/evidence images to Cloudinary, save `media_kind`, run AI for item images and return match suggestions |
+| `POST` | `/api/posts/:id/media` | Upload item/evidence images, run assisted OCR/tags and enqueue matching after metadata changes |
 | `DELETE` | `/api/posts/:id/media/:mediaId` | Delete post media asset and metadata |
 | `GET` | `/api/posts/:id/matches` | Return saved matching results for a post |
 | `GET` | `/api/posts/:id/matches/explanations` | Return score summary and match reasons |
@@ -150,6 +150,8 @@ All Node API responses use `{ success, data?, error?, message? }`.
 | `017_media_derivatives.sql` | Add thumbnail and optimized media URLs for faster web/mobile image rendering |
 | `018_return_feedback.sql` | Add return feedback after completed appointments and Admin/Staff review queue |
 | `019_appointment_return_proof.sql` | Add proof image, uploader, timestamp and note metadata to return appointments |
+| `020_matching_jobs.sql` | Add retryable MySQL-backed background matching queue |
+| `021_matching_jobs_utc.sql` | Normalize pending matching-job availability to UTC for cloud MySQL timezones |
 
 Run migrations with:
 
@@ -167,6 +169,9 @@ The migration runner creates the configured database if needed and records appli
 
 Security and integrity notes:
 
+- The Node API uses Helmet and route-level rate limiting for sensitive auth/write/upload flows.
+- API CORS is restricted to `FRONTEND_URL` and comma-separated `SOCKET_CORS_ORIGIN`, with localhost-style origins allowed only outside production.
+- Web refresh tokens use an `httpOnly`, `SameSite=Lax` cookie; the short-lived access token is kept in web memory and restored through token rotation after reload. Mobile/API clients may continue sending refresh tokens in the request body.
 - Password and LOST-post secret verification values are stored with bcrypt; default salt rounds are 12.
 - Password reset revokes all active refresh tokens for that user.
 - A user can submit only one claim per post, enforced by both service validation and a database unique key.
@@ -175,11 +180,23 @@ Security and integrity notes:
 - Category administration is limited to two levels: main groups and concrete categories. The API rejects nested child categories and rejects moving a group that already has children under another group.
 - The Node API verifies the configured MySQL connection before listening so DB configuration failures fail fast.
 
+## Known Architecture Debt
+
+These issues are not blockers for the current MVP demo, but they should be acknowledged honestly if a judge asks about maintainability:
+
+| Area | Current state | Recommended next step |
+| --- | --- | --- |
+| Web frontend | `apps/web/src/App.tsx` and `styles.css` remain large, although shared app modules, post cards, board feed/filter view, the complete account feature and account CSS have been extracted | Continue with Create/Admin/Claim feature modules in small verified steps |
+| Web navigation | Public board, my posts, create, handover, account and post detail use `react-router-dom` URLs with browser back/forward and deep-link smoke coverage | Add route-level lazy loading only when bundle/performance measurement justifies it |
+| Mobile frontend | `apps/mobile/App.tsx` still contains many screens and modal flows | Deferred by the current product decision; do not include it in the active Web/backend hardening phase |
+| Node post domain | Post controller/service/repository remain large because posts connect matching, media, claims, reports, and admin moderation | Split by subdomain once demo flow is stable: post CRUD, media, matching, moderation, and search |
+| Testing depth | API policy unit tests, smoke/e2e scripts, isolated MySQL CI and Java build CI exist; browser-level full-flow coverage remains thin | Expand Playwright coverage and load/concurrency tests before a campus pilot |
+
 ## AI And Matching
 
 Post item image upload sends each Cloudinary `secure_url` through Google Vision when Vision is configured. Claim/post evidence images also run OCR where supported so evidence verification can use extracted text, but evidence remains private and AI remains advisory. The Node API stores label/object/OCR tags in `ai_tags`, returns suggested categories in the upload response, and falls back to empty tags/OCR text if Vision is not configured or fails.
 
-The matching engine runs after post create/update and after post image tags are saved. It builds TF-IDF vectors from normalized title, description, Vision/image tags and OCR text, then combines text, category, location, time, image-tag and OCR/serial-like scores. Config keys define score tiers: weak candidate, user suggestion, notification, and high-confidence advisory. The system saves match results and returns explanation details such as matched tokens, matched image/OCR terms, location reason, time difference and score caps/penalties. High scores notify users, but they do not automatically approve ownership or return an item. Automatic `MATCHED` status changes are disabled by default and require `matching.auto_mark_matched_enabled=1`.
+Post create/update/media changes enqueue a MySQL-backed matching job. A Node worker claims jobs in batches, retries failures with backoff, and writes materialized match results; suggestion polling only reads saved results. The engine builds TF-IDF vectors from normalized title, description, Vision/image tags and OCR text, then combines text, category, location, time, image-tag and OCR/serial-like scores. Config keys define score tiers: weak candidate, user suggestion, notification, and high-confidence advisory. Explanation details include matched tokens, image/OCR terms, location reason, time difference and score caps/penalties. High scores notify users, but never approve ownership or return an item automatically. Automatic `MATCHED` status changes are disabled by default.
 
 Warehouse retention now uses policy defaults from config: general items 60 days, electronics/high-value items 90 days, documents/cards 120 days, and perishable/hygiene/unsafe items 1-7 days depending on configuration. Disposal/donation/transfer is blocked while related claims or return appointments are pending/accepted, and document/card items must be transferred rather than donated or disposed.
 
@@ -217,14 +234,14 @@ Because Node currently also implements several demo-critical APIs, including adm
 ## Integration Flow
 
 1. User creates LOST or FOUND post from web/mobile.
-2. Node API validates input, stores post/media, then runs matching for the affected post.
-3. AI/matching service analyzes item images/text and saves match results.
+2. Node API validates input, stores post/media and enqueues matching for the affected post.
+3. The matching worker analyzes saved text/OCR/tag metadata and materializes match results.
 4. In-app notifications are persisted for likely owners/finders when score passes the notification threshold.
 5. Claimant submits evidence; finder/staff/admin reviews it.
-6. Accepted claim creates chat room and return appointment.
+6. Only an accepted claim can join/send/read claim chat; chat images are resolved from a server-validated Cloudinary public ID. The accepted flow can then create a return appointment.
 7. Appointment completion updates return state, post/warehouse status, notifications and reputation where applicable.
 8. Users can submit feedback after completed handovers; Staff/Admin can monitor it and Admin can mark items reviewed, flagged or dismissed.
-9. Scheduled Node jobs handle overdue posts, overdue warehouse items, near-expiry alerts, capacity alerts and appointment reminders.
+9. Scheduled Node jobs use a MySQL named lock before handling overdue posts/items, near-expiry alerts, capacity alerts and appointment reminders.
 
 ## Frontend Foundation
 
@@ -232,7 +249,7 @@ Because Node currently also implements several demo-critical APIs, including adm
 
 | Route | Purpose |
 | --- | --- |
-| In-app board view | Public LOST/FOUND board with keyword, type, category, area, status, date and match-score filters |
+| In-app board view | Public LOST/FOUND board with keyword, type, one-or-more category, area, status, date and match-score filters |
 | In-app create view | Create LOST/FOUND post and upload images |
 | In-app account view | Register, OTP verification, login/logout, profile edit, avatar upload, activity and reputation |
 | Modal/drawer flows | Post detail, AI tags, matches and FOUND-post claim submission |

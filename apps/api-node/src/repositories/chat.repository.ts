@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { RowDataPacket } from "mysql2/promise";
 import { dbPool } from "../config/db.js";
+import { canAccessClaimRecord, canUseClaimChatRecord } from "../policies/claim-chat.policy.js";
 
 interface ChatRoomRow extends RowDataPacket {
   id: string;
@@ -26,6 +27,12 @@ interface ChatImageRow extends RowDataPacket {
   media_public_id: string;
 }
 
+interface ChatClaimAccessRow extends RowDataPacket {
+  claimant_id: string;
+  post_owner_id: string;
+  status: "PENDING" | "NEED_MORE_INFO" | "ACCEPTED" | "REJECTED" | "CANCELLED";
+}
+
 function mapMessage(row: ChatMessageRow) {
   return {
     id: row.id,
@@ -46,20 +53,47 @@ function mapMessage(row: ChatMessageRow) {
 
 export const chatRepository = {
   async canAccessClaim(claimId: string, userId: string, roles: string[]) {
-    if (roles.includes("ADMIN") || roles.includes("STAFF")) {
-      return true;
-    }
-    const [rows] = await dbPool.query<Array<RowDataPacket & { total: number }>>(
+    const [rows] = await dbPool.query<ChatClaimAccessRow[]>(
       `
-        SELECT COUNT(*) AS total
+        SELECT c.claimant_id, p.user_id AS post_owner_id, c.status
         FROM claims c
         INNER JOIN posts p ON p.id = c.post_id
         WHERE c.id = ?
-          AND (c.claimant_id = ? OR p.user_id = ?)
+        LIMIT 1
       `,
-      [claimId, userId, userId]
+      [claimId]
     );
-    return Number(rows[0]?.total ?? 0) > 0;
+    const claim = rows[0];
+    if (!claim) {
+      return false;
+    }
+    return canAccessClaimRecord(
+      { claimantId: claim.claimant_id, postOwnerId: claim.post_owner_id, status: claim.status },
+      userId,
+      roles
+    );
+  },
+
+  async canUseClaimChat(claimId: string, userId: string, roles: string[]) {
+    const [rows] = await dbPool.query<ChatClaimAccessRow[]>(
+      `
+        SELECT c.claimant_id, p.user_id AS post_owner_id, c.status
+        FROM claims c
+        INNER JOIN posts p ON p.id = c.post_id
+        WHERE c.id = ?
+        LIMIT 1
+      `,
+      [claimId]
+    );
+    const claim = rows[0];
+    if (!claim) {
+      return false;
+    }
+    return canUseClaimChatRecord(
+      { claimantId: claim.claimant_id, postOwnerId: claim.post_owner_id, status: claim.status },
+      userId,
+      roles
+    );
   },
 
   async getOrCreateRoom(claimId: string) {

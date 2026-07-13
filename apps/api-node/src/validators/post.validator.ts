@@ -20,40 +20,63 @@ const postBaseSchema = z.object({
   secretVerification: z.string().trim().min(3).max(2000).nullable().optional()
 });
 
+type BusinessRuleInput = {
+  type: z.infer<typeof postTypeSchema>;
+  areaId?: string | null;
+  buildingId?: string | null;
+  roomText?: string | null;
+  customLocation?: string | null;
+  contactInfo?: string | null;
+  handoverPointId?: string | null;
+  hasSecretVerification: boolean;
+};
+
+function applyPostBusinessRules(input: BusinessRuleInput, context: z.RefinementCtx) {
+  const hasHoldingLocation = Boolean(
+    input.handoverPointId ||
+      input.roomText?.trim() ||
+      input.buildingId ||
+      input.areaId ||
+      input.customLocation?.trim()
+  );
+
+  if (input.type === "FOUND" && !hasHoldingLocation) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["handoverPointId"],
+      message: "FOUND posts require a handover point or current holding location"
+    });
+  }
+
+  if (!input.contactInfo?.trim()) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["contactInfo"],
+      message: "Posts require contact information"
+    });
+  }
+
+  if (input.type === "LOST" && !input.hasSecretVerification) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["secretVerification"],
+      message: "LOST posts require secret verification information"
+    });
+  }
+}
+
 export const createPostSchema = postBaseSchema
   .superRefine((input, context) => {
-    const hasHoldingLocation = Boolean(
-      input.handoverPointId ||
-        input.roomText?.trim() ||
-        input.buildingId ||
-        input.areaId ||
-        input.customLocation?.trim()
+    applyPostBusinessRules(
+      { ...input, hasSecretVerification: Boolean(input.secretVerification?.trim()) },
+      context
     );
-
-    if (input.type === "FOUND" && !hasHoldingLocation) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["handoverPointId"],
-        message: "FOUND posts require a handover point or current holding location"
-      });
-    }
-
-    if (!input.contactInfo?.trim()) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["contactInfo"],
-        message: "Posts require contact information"
-      });
-    }
-
-    if (input.type === "LOST" && !input.secretVerification) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["secretVerification"],
-        message: "LOST posts require secret verification information"
-      });
-    }
   });
+
+export const finalPostStateSchema = postBaseSchema
+  .omit({ secretVerification: true })
+  .extend({ hasSecretVerification: z.boolean() })
+  .superRefine(applyPostBusinessRules);
 
 export const updatePostSchema = postBaseSchema.partial();
 
@@ -78,6 +101,10 @@ export const listPostsQuerySchema = z.object({
   type: postTypeSchema.optional(),
   status: z.enum(["OPEN", "MATCHED", "RESOLVED", "CLOSED", "EXPIRED", "HIDDEN"]).optional(),
   categoryId: z.string().uuid().optional(),
+  categoryIds: z.preprocess(
+    (value) => (typeof value === "string" ? value.split(",").map((item) => item.trim()).filter(Boolean) : value),
+    z.array(z.string().uuid()).min(1).max(10).optional()
+  ),
   areaId: z.string().uuid().optional(),
   buildingId: z.string().uuid().optional(),
   from: z.string().datetime().optional(),
@@ -86,6 +113,7 @@ export const listPostsQuerySchema = z.object({
 });
 
 export type CreatePostInput = z.infer<typeof createPostSchema>;
+export type FinalPostState = z.infer<typeof finalPostStateSchema>;
 export type UpdatePostInput = z.infer<typeof updatePostSchema>;
 export type UpdatePostStatusInput = z.infer<typeof updatePostStatusSchema>;
 export type ReportPostInput = z.infer<typeof reportPostSchema>;

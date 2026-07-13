@@ -174,34 +174,34 @@ function cosineSimilarity(left: Map<string, number>, right: Map<string, number>)
 
 function categoryScore(left: MatchCandidatePost, right: MatchCandidatePost) {
   if (!left.categoryId || !right.categoryId) {
-    return { score: 0, reason: "Chua du thong tin danh muc" };
+    return { score: 0, reason: "Chưa đủ thông tin danh mục" };
   }
   if (left.categoryId === right.categoryId) {
-    return { score: 1, reason: "Trung danh muc" };
+    return { score: 1, reason: "Trùng danh mục" };
   }
   if (
     (left.parentCategoryId && left.parentCategoryId === right.parentCategoryId) ||
     left.parentCategoryId === right.categoryId ||
     right.parentCategoryId === left.categoryId
   ) {
-    return { score: 0.5, reason: "Gan danh muc cha/con" };
+    return { score: 0.5, reason: "Gần danh mục cha/con" };
   }
 
-  return { score: 0, reason: "Khac danh muc" };
+  return { score: 0, reason: "Khác danh mục" };
 }
 
 function locationScore(left: MatchCandidatePost, right: MatchCandidatePost) {
   if (left.roomText && right.roomText && normalizeText(left.roomText) === normalizeText(right.roomText)) {
-    return { score: 1, reason: `Trung phong/khu vuc: ${left.roomText}` };
+    return { score: 1, reason: `Trùng phòng/khu vực: ${left.roomText}` };
   }
   if (left.buildingId && left.buildingId === right.buildingId) {
-    return { score: 0.7, reason: "Cung toa nha" };
+    return { score: 0.7, reason: "Cùng tòa nhà" };
   }
   if (left.areaId && left.areaId === right.areaId) {
-    return { score: 0.4, reason: "Cung khu vuc campus" };
+    return { score: 0.4, reason: "Cùng khu vực campus" };
   }
 
-  return { score: 0, reason: "Khac vi tri" };
+  return { score: 0, reason: "Khác vị trí" };
 }
 
 function timeScore(left: MatchCandidatePost, right: MatchCandidatePost) {
@@ -322,20 +322,20 @@ function applyCaps(input: {
 
   if (input.categoryScore === 0 && !strongPrivateSignal && totalScore > 0.55) {
     totalScore = 0.55;
-    penalties.push("Khac danh muc va khong co tin hieu rieng manh, gioi han diem toi da 55%.");
+    penalties.push("Khác danh mục và không có tín hiệu riêng mạnh, giới hạn điểm tối đa 55%.");
   } else if (input.categoryScore === 0 && totalScore > 0.69) {
     totalScore = 0.69;
-    penalties.push("Khac danh muc, gioi han diem toi da 69%.");
+    penalties.push("Khác danh mục, giới hạn điểm tối đa 69%.");
   }
 
   if (input.daysDiff !== null && input.daysDiff > 30 && input.ocrScore < 0.5 && totalScore > 0.59) {
     totalScore = 0.59;
-    penalties.push("Lech thoi gian hon 30 ngay va OCR/serial khong manh, gioi han diem toi da 59%.");
+    penalties.push("Lệch thời gian hơn 30 ngày và OCR/serial không mạnh, giới hạn điểm tối đa 59%.");
   }
 
   if (input.locationScore === 0 && input.textScore < 0.35 && input.imageScore < 0.35 && input.ocrScore < 0.35 && totalScore > 0.6) {
     totalScore = 0.6;
-    penalties.push("Khac vi tri va noi dung/anh/OCR yeu, gioi han diem toi da 60%.");
+    penalties.push("Khác vị trí và nội dung/ảnh/OCR yếu, giới hạn điểm tối đa 60%.");
   }
 
   return { totalScore, penalties };
@@ -391,13 +391,13 @@ function buildScoreDetail(
     totalScore,
     explanation: {
       tier,
-      summary: `Hai bai co do tuong dong ${percent(totalScore)} (${tier}).`,
+      summary: `Hai bài có độ tương đồng ${percent(totalScore)} (${tier}).`,
       reasons: [
-        `noi dung ${percent(textScore)}`,
-        `danh muc ${percent(catScore)}`,
-        `vi tri ${percent(locScore)}`,
-        `thoi gian ${percent(temporalScore)}`,
-        `anh/tag ${percent(imageScore)}`,
+        `nội dung ${percent(textScore)}`,
+        `danh mục ${percent(catScore)}`,
+        `vị trí ${percent(locScore)}`,
+        `thời gian ${percent(temporalScore)}`,
+        `ảnh/tag ${percent(imageScore)}`,
         `OCR/serial ${percent(ocrScore)}`
       ],
       matchedTokens: matchedText.tokens.slice(0, 12),
@@ -439,16 +439,16 @@ async function notifyHighConfidenceMatch(
     {
       userId: lostPost.userId,
       type: "MATCH_FOUND",
-      title: "Co vat nhat duoc giong bai mat do cua ban",
-      body: `"${foundPost.title}" giong ${scoreText} voi bai "${lostPost.title}". Hay kiem tra thong tin truoc khi gui claim.`,
+      title: "Có vật nhặt được giống bài mất đồ của bạn",
+      body: `"${foundPost.title}" giống ${scoreText} với bài "${lostPost.title}". Hãy kiểm tra thông tin trước khi gửi yêu cầu nhận đồ.`,
       entityType: "POST",
       entityId: foundPost.id
     },
     {
       userId: foundPost.userId,
       type: "MATCH_FOUND",
-      title: "Co bai mat do moi giong vat ban da dang",
-      body: `"${lostPost.title}" giong ${scoreText} voi bai "${foundPost.title}". Ket qua chi la goi y de doi chieu.`,
+      title: "Có bài mất đồ mới giống vật bạn đã đăng",
+      body: `"${lostPost.title}" giống ${scoreText} với bài "${foundPost.title}". Kết quả chỉ là gợi ý để đối chiếu.`,
       entityType: "POST",
       entityId: lostPost.id
     }
@@ -555,25 +555,27 @@ export const matchingService = {
 
   async explainMatches(postId: string) {
     const [matches, weights] = await Promise.all([postRepository.listMatchesForPost(postId), loadWeights()]);
-    return Promise.all(
-      matches.map(async (match) => {
-        const sourcePost = await postRepository.findMatchPostById(postId);
+    const counterpartIds = matches.map((match) => (match.lostPostId === postId ? match.foundPostId : match.lostPostId));
+    const matchPosts = await postRepository.findMatchPostsByIds([postId, ...counterpartIds]);
+    const postById = new Map(matchPosts.map((post) => [post.id, post]));
+    const sourcePost = postById.get(postId);
+    return matches.map((match) => {
         const counterpartId = match.lostPostId === postId ? match.foundPostId : match.lostPostId;
-        const counterpart = await postRepository.findMatchPostById(counterpartId);
+        const counterpart = postById.get(counterpartId);
         let explanation: ScoreExplanation = {
           tier: tierForScore(match.totalScore, weights),
-          summary: `Hai bai co do tuong dong ${percent(match.totalScore)}.`,
+          summary: `Hai bài có độ tương đồng ${percent(match.totalScore)}.`,
           reasons: [
-            `noi dung ${percent(match.textScore)}`,
-            `danh muc ${percent(match.categoryScore)}`,
-            `vi tri ${percent(match.locationScore)}`,
-            `thoi gian ${percent(match.timeScore)}`
+            `nội dung ${percent(match.textScore)}`,
+            `danh mục ${percent(match.categoryScore)}`,
+            `vị trí ${percent(match.locationScore)}`,
+            `thời gian ${percent(match.timeScore)}`
           ],
           matchedTokens: [],
           matchedImageTags: [],
           matchedOcrTokens: [],
-          locationReason: "Can doi chieu vi tri trong chi tiet bai dang",
-          categoryReason: "Can doi chieu danh muc trong chi tiet bai dang",
+          locationReason: "Cần đối chiếu vị trí trong chi tiết bài đăng",
+          categoryReason: "Cần đối chiếu danh mục trong chi tiết bài đăng",
           daysDiff: null,
           penalties: []
         };
@@ -604,7 +606,6 @@ export const matchingService = {
           ocrScore,
           ...explanation
         };
-      })
-    );
+      });
   }
 };

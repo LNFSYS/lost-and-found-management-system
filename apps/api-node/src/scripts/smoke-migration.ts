@@ -39,6 +39,34 @@ async function assertColumn(tableName: string, columnName: string) {
   }
 }
 
+async function assertMissingColumn(tableName: string, columnName: string) {
+  const total = await count(
+    `
+      SELECT COUNT(*) AS total
+      FROM information_schema.columns
+      WHERE table_schema = ? AND table_name = ? AND column_name = ?
+    `,
+    [env.db.name, tableName, columnName]
+  );
+  if (total !== 0) {
+    throw new Error(`Sensitive legacy column must be removed: ${tableName}.${columnName}`);
+  }
+}
+
+async function assertUniqueIndex(tableName: string, indexName: string) {
+  const total = await count(
+    `
+      SELECT COUNT(*) AS total
+      FROM information_schema.statistics
+      WHERE table_schema = ? AND table_name = ? AND index_name = ? AND non_unique = 0
+    `,
+    [env.db.name, tableName, indexName]
+  );
+  if (total === 0) {
+    throw new Error(`Missing unique index: ${tableName}.${indexName}`);
+  }
+}
+
 async function main() {
   for (const table of [
     "users",
@@ -55,6 +83,7 @@ async function main() {
     "chat_messages",
     "match_feedback",
     "match_suggestion_impressions",
+    "matching_jobs",
     "return_feedback",
     "config_entries",
     "config_history"
@@ -80,14 +109,20 @@ async function main() {
     ["return_appointments", "proof_image_url"],
     ["return_appointments", "proof_uploaded_by"],
     ["return_appointments", "proof_uploaded_at"],
-    ["return_appointments", "proof_note"]
+    ["return_appointments", "proof_note"],
+    ["claims", "secret_answer_hash"],
+    ["claims", "has_private_signal"],
+    ["claims", "accepted_post_id"]
   ] as const) {
     await assertColumn(tableName, columnName);
   }
 
+  await assertMissingColumn("claims", "secret_answer");
+  await assertUniqueIndex("claims", "uq_claims_one_accepted_per_post");
+
   const migrationCount = await count("SELECT COUNT(*) AS total FROM schema_migrations", []);
-  if (migrationCount < 19) {
-    throw new Error(`Expected at least 19 applied migrations, got ${migrationCount}`);
+  if (migrationCount < 23) {
+    throw new Error(`Expected at least 23 applied migrations, got ${migrationCount}`);
   }
 
   console.log(`Migration smoke passed on database ${env.db.name}. Applied migrations: ${migrationCount}.`);

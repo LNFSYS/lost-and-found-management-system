@@ -1,6 +1,6 @@
 # Master Dev Checklist - FPTU Lost & Found System
 
-Last audit: 2026-07-08
+Last audit: 2026-07-11
 
 This file is the canonical UC checklist for the project. The old list of nearly 200 UCs has been consolidated to exactly 100 UCs. Each UC starts with a verb, has one primary owner, and is organized by current team member assignment.
 
@@ -104,20 +104,20 @@ This file is the canonical UC checklist for the project. The old list of nearly 
 | [x] | UC-065 | Manage campus areas and buildings via Admin API | `/admin/locations/...` |
 | [x] | UC-066 | Moderate posts and handle reports via Admin API | moderation/report APIs |
 | [x] | UC-067 | Provide admin dashboard overview data | `/admin/dashboard/overview` |
-| [x] | UC-068 | Run matching after post create or update | post create/update/media upload |
+| [x] | UC-068 | Run matching after post create or update | MySQL-backed matching queue after create/update/media upload |
 | [x] | UC-069 | Normalize Vietnamese text for matching algorithm | `normalize-text.ts` |
 | [x] | UC-070 | Calculate tiered match score by text, category, location, time, image tags, and OCR | `matchingService.runForPost`, image/OCR score support |
 | [x] | UC-071 | Save matching results | `upsertMatchResult` |
 | [x] | UC-072 | Return similar item suggestions | `buildSuggestions`, match suggestion API |
 | [x] | UC-073 | Send notification when new match found | `MATCH_FOUND` notifications |
-| [x] | UC-074 | Check match suggestions on 10-minute cycle | `my-match-suggestions` polling plus realtime notification invalidation |
+| [x] | UC-074 | Check match suggestions on 10-minute cycle | Polling reads materialized results; realtime notification invalidates query |
 | [x] | UC-075 | Re-run matching manually for admin | `POST /posts/:id/matches/re-run`, `matchingService.runForPost` |
 | [x] | UC-076 | Explain why two posts match | `GET /posts/:id/matches/explanations` returns score tier, matched tokens, image/OCR terms, location/time reasons, and penalties |
 | [x] | UC-077 | Set up Socket.IO server | `setupRealtimeServer(server)` attached to Node HTTP server |
 | [x] | UC-078 | Authenticate socket via JWT | Socket middleware verifies access token and joins `user:{id}` room |
-| [x] | UC-079 | Create and join chat room by claim | `claim:join` guards claim access and joins `claim:{roomId}` |
+| [x] | UC-079 | Create and join chat room by claim | `claim:join` requires an `ACCEPTED` claim and an authorized participant/reviewer |
 | [x] | UC-080 | Send and receive realtime messages | `chat:message` persists and broadcasts text messages |
-| [x] | UC-081 | Send images in realtime chat | `chat:image` persists image message metadata and broadcasts it |
+| [x] | UC-081 | Send images in realtime chat | Socket accepts only a server-validated Cloudinary public ID; arbitrary client URLs are rejected |
 | [x] | UC-082 | Display seen status and unread count in realtime | Web chat UI receives messages, `chat:seen` persists read time, and unread badge is displayed in claim chat |
 | [x] | UC-083 | Send realtime notifications for chat, claim, and appointment | Notification repository emits `notification:new` to user room for matching, claim, appointment, and warehouse alerts |
 | [x] | UC-084 | Export statistics report via API | `GET /admin/dashboard/export.csv` |

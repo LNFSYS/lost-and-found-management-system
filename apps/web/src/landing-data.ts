@@ -79,7 +79,7 @@ export const boardItems = [
     location: "Sân bóng rổ",
     time: "12:15",
     score: "Xác minh",
-    status: "Chờ chủ sở hữu claim"
+    status: "Chờ chủ sở hữu gửi yêu cầu"
   }
 ];
 
@@ -113,7 +113,7 @@ export const roleCards = [
   {
     icon: UserCheck,
     title: "Sinh viên",
-    text: "Đăng tin, tìm kiếm, claim, chat và nhận lại đồ với quy trình rõ ràng."
+    text: "Đăng tin, tìm kiếm, gửi yêu cầu, trao đổi và nhận lại đồ với quy trình rõ ràng."
   },
   {
     icon: CalendarCheck,

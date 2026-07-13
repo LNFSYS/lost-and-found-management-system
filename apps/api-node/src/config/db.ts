@@ -17,11 +17,11 @@ export const dbPool = mysql.createPool({
 });
 
 export async function checkDatabaseConnection() {
-  if (!env.db.user || env.db.user === "YOUR_VALUE_HERE") {
+  if (!env.db.user?.trim() || env.db.user.trim() === "YOUR_VALUE_HERE") {
     throw new Error("Missing DB_USER. Set DB_USER in .env.");
   }
 
-  if (env.db.password === "YOUR_VALUE_HERE") {
+  if (env.db.password?.trim() === "YOUR_VALUE_HERE") {
     throw new Error("Missing DB_PASSWORD. Set DB_PASSWORD in .env.");
   }
 

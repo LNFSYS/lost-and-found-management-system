@@ -25,7 +25,7 @@ This document links Business Rules, Requirements, and the canonical 100-UC set i
 | BR-17 | FR-HANDOVER-01 | UC-008, UC-009, UC-010, UC-055, UC-056, UC-057, UC-058 | Implemented |
 | BR-18 | FR-WAREHOUSE-01, NFR-DATA-01, NFR-AUDIT-01 | UC-011, UC-012, UC-013, UC-014, UC-015, UC-059, UC-060 | Implemented |
 | BR-19 | FR-WAREHOUSE-01, FR-WAREHOUSE-02 | UC-016, UC-017, UC-061 | Implemented |
-| BR-20 | FR-WAREHOUSE-02, FR-NOTI-01 | UC-018, UC-019, UC-020 | Partial |
+| BR-20 | FR-WAREHOUSE-02, FR-NOTI-01 | UC-018, UC-019, UC-020 | Implemented for MVP |
 | BR-21 | FR-APPT-01 | UC-021, UC-022, UC-023, UC-024 | Implemented |
 | BR-22 | FR-RT-01, NFR-RT-01, NFR-SEC-02 | UC-077, UC-078, UC-079 | Implemented |
 | BR-23 | FR-RT-01, NFR-RT-01 | UC-079, UC-080, UC-081, UC-082 | Implemented |
@@ -35,7 +35,7 @@ This document links Business Rules, Requirements, and the canonical 100-UC set i
 | BR-27 | FR-AI-02, NFR-AI-01 | UC-026, UC-027, UC-028, UC-029, UC-030 | Partial foundation |
 | BR-28 | FR-MOBILE-01, NFR-SEC-02, NFR-RT-01 | UC-093, UC-094, UC-095, UC-096, UC-097, UC-098, UC-099, UC-100 | Partial |
 | BR-29 | FR-DEMO-01 | UC-031, UC-032, UC-040, UC-041, UC-059 | Implemented |
-| BR-30 | NFR-AUDIT-01, NFR-DATA-01, NFR-PERF-01, NFR-RT-01, NFR-PRIV-01 | UC-007, UC-015, UC-054, UC-071, UC-078, UC-089 | Partial hardening |
+| BR-30 | NFR-AUDIT-01, NFR-DATA-01, NFR-PERF-01, NFR-RT-01, NFR-PRIV-01 | UC-007, UC-015, UC-054, UC-071, UC-078, UC-089 | Core smoke implemented; browser/load hardening pending |
 
 ## UC Count
 

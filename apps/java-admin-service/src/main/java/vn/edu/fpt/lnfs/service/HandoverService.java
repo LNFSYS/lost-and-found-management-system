@@ -49,7 +49,6 @@ public class HandoverService {
         request.mapPositionY(),
         request.areaId(),
         request.buildingId(),
-        request.roomId(),
         authContext.currentUserId()));
   }
 
@@ -65,7 +64,6 @@ public class HandoverService {
     point.setMapPositionY(request.mapPositionY());
     point.setAreaId(request.areaId());
     point.setBuildingId(request.buildingId());
-    point.setRoomId(request.roomId());
     point.touch();
     return handoverPointRepository.save(point);
   }

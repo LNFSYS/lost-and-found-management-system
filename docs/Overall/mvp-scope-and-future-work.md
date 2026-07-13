@@ -1,5 +1,7 @@
 # MVP Scope And Future Work
 
+> Delivery note (2026-07-10): the team is prioritizing Web + Node/Java backend completion. Mobile remains a prototype/extension and is intentionally not part of the current implementation sprint.
+
 Last updated: 2026-07-08
 
 ## Current MVP Positioning

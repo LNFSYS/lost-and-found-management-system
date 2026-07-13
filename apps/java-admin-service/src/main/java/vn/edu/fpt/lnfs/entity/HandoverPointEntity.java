@@ -21,9 +21,6 @@ public class HandoverPointEntity {
   @Column(name = "building_id")
   private String buildingId;
 
-  @Column(name = "room_id")
-  private String roomId;
-
   @Column(name = "opening_hours")
   private String openingHours;
 
@@ -55,8 +52,7 @@ public class HandoverPointEntity {
   }
 
   public HandoverPointEntity(String id, String name, String address, String openingHours, String contactInfo,
-      String mapImageUrl, Double mapPositionX, Double mapPositionY, String areaId, String buildingId, String roomId,
-      String createdBy) {
+      String mapImageUrl, Double mapPositionX, Double mapPositionY, String areaId, String buildingId, String createdBy) {
     this.id = id;
     this.name = name;
     this.address = address;
@@ -67,7 +63,6 @@ public class HandoverPointEntity {
     this.mapPositionY = mapPositionY;
     this.areaId = areaId;
     this.buildingId = buildingId;
-    this.roomId = roomId;
     this.createdBy = createdBy;
     this.active = true;
     this.createdAt = LocalDateTime.now();
@@ -108,14 +103,6 @@ public class HandoverPointEntity {
 
   public void setBuildingId(String buildingId) {
     this.buildingId = buildingId;
-  }
-
-  public String getRoomId() {
-    return roomId;
-  }
-
-  public void setRoomId(String roomId) {
-    this.roomId = roomId;
   }
 
   public String getOpeningHours() {

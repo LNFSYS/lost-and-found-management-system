@@ -8,6 +8,7 @@ import { userRepository } from "../repositories/user.repository.js";
 import { HttpError } from "../utils/http-error.js";
 import { normalizeText } from "../utils/normalize-text.js";
 import type { CreateClaimInput } from "../validators/claim.validator.js";
+import { containsPrivateOwnershipSignal, protectClaimSecret } from "./claim-secret.service.js";
 import { matchingService } from "./matching.service.js";
 
 function canReviewClaims(auth: AccessTokenPayload, ownerId: string) {
@@ -63,16 +64,6 @@ function overlapScore(left: string | null | undefined, right: string | null | un
     }
   }
   return Math.min(1, overlap / Math.min(leftTokens.size, rightTokens.size));
-}
-
-function privateSignalScore(value: string) {
-  const normalized = normalizeText(value);
-  const patterns = [
-    /\b(serial|imei|ma so|ma may|so seri|hoa don|receipt|bill|scratch|vet xuoc|phu kien|op lung|sticker)\b/,
-    /\b[a-z]{2,}\d{3,}\b/,
-    /\b\d{6,}\b/
-  ];
-  return patterns.some((pattern) => pattern.test(normalized)) ? 1 : 0;
 }
 
 function timeConfidence(claimTime: string | null | undefined, postTime: string | null | undefined) {
@@ -137,6 +128,7 @@ export const claimService = {
       throw new HttpError(409, "You already submitted a claim for this post");
     }
 
+    const protectedSecret = await protectClaimSecret(input.secretAnswer);
     let result;
     try {
       result = await claimRepository.create({
@@ -144,7 +136,8 @@ export const claimService = {
         postId: input.postId,
         claimantId: auth.sub,
         description: input.description?.trim() ?? null,
-        secretAnswer: input.secretAnswer.trim(),
+        secretAnswerHash: protectedSecret.secretAnswerHash,
+        hasPrivateSignal: protectedSecret.hasPrivateSignal,
         approximateLostAt: parseOptionalDate(input.approximateLostAt),
         approximateLocation: input.approximateLocation.trim()
       });
@@ -163,7 +156,7 @@ export const claimService = {
       userId: post.user_id,
       type: "CLAIM_SUBMITTED",
       title: "Có yêu cầu nhận đồ mới",
-      body: "Một người dùng vừa gửi claim cho bài FOUND của bạn. Hãy kiểm tra bằng chứng trước khi xử lý.",
+      body: "Một người dùng vừa gửi yêu cầu nhận đồ cho bài nhặt được của bạn. Hãy kiểm tra bằng chứng trước khi xử lý.",
       entityType: "CLAIM",
       entityId: result.claim.id
     });
@@ -246,14 +239,17 @@ export const claimService = {
     if (detail.claim.status !== "PENDING" && detail.claim.status !== "NEED_MORE_INFO") {
       throw new HttpError(409, "Only pending claims can be accepted");
     }
-    const result = await claimRepository.updateStatus({
-      id: claimId,
-      actorId: auth.sub,
-      status: "ACCEPTED",
-      allowedStatuses: ["PENDING", "NEED_MORE_INFO"],
-      note: "Claim accepted"
-    });
-    if (!result) {
+    const acceptance = await claimRepository.acceptClaim({ id: claimId, actorId: auth.sub });
+    if (acceptance.outcome !== "ACCEPTED") {
+      if (acceptance.outcome === "NOT_FOUND") {
+        throw new HttpError(404, "Claim not found");
+      }
+      if (acceptance.outcome === "POST_ALREADY_ACCEPTED") {
+        throw new HttpError(409, "Another claim has already been accepted for this found item");
+      }
+      if (acceptance.outcome === "POST_NOT_OPEN") {
+        throw new HttpError(409, "The found post is no longer open for claim acceptance");
+      }
       throw new HttpError(409, "Claim status changed; refresh before continuing");
     }
     await notifyClaimUsers(
@@ -263,7 +259,7 @@ export const claimService = {
       "Claim đã được chấp nhận. Hai bên có thể tạo lịch hẹn bàn giao."
     );
     await chatRepository.getOrCreateRoom(claimId);
-    return result;
+    return acceptance.detail;
   },
 
   async reject(auth: AccessTokenPayload, claimId: string, reason: string) {
@@ -285,7 +281,7 @@ export const claimService = {
     if (!result) {
       throw new HttpError(409, "Claim status changed; refresh before continuing");
     }
-    await notifyClaimUsers(detail.claim, "CLAIM_REJECTED", "Claim bị từ chối", reason.trim());
+    await notifyClaimUsers(detail.claim, "CLAIM_REJECTED", "Yêu cầu nhận đồ bị từ chối", reason.trim());
     const rejectedCount = await claimRepository.countRejectedClaimsForUser(detail.claim.claimant.id);
     if (rejectedCount >= 3) {
       await userRepository.addReputation({
@@ -317,7 +313,7 @@ export const claimService = {
     if (!result) {
       throw new HttpError(409, "Claim status changed; refresh before continuing");
     }
-    await notifyClaimUsers(detail.claim, "CLAIM_CANCELLED", "Claim đã bị hủy", reason.trim());
+    await notifyClaimUsers(detail.claim, "CLAIM_CANCELLED", "Yêu cầu nhận đồ đã bị hủy", reason.trim());
     return result;
   },
 
@@ -339,7 +335,7 @@ export const claimService = {
       .sort((left, right) => right.totalScore - left.totalScore)[0];
 
     const evidenceText = detail.evidence.map((item) => item.description ?? "").join(" ");
-    const claimText = [detail.claim.description, detail.claim.secretAnswer, evidenceText].filter(Boolean).join(" ");
+    const claimText = [detail.claim.description, evidenceText].filter(Boolean).join(" ");
     const postText = [post.title, post.description, post.category?.name].filter(Boolean).join(" ");
     const postLocation = [
       post.location.roomText,
@@ -349,7 +345,8 @@ export const claimService = {
     ].filter(Boolean).join(" ");
 
     const textScore = overlapScore(claimText, postText);
-    const privateSignal = privateSignalScore(claimText);
+    const storedPrivateSignal = await claimRepository.hasPrivateSignal(claimId);
+    const privateSignal = storedPrivateSignal || containsPrivateOwnershipSignal(claimText) ? 1 : 0;
     const evidenceScore = evidenceText.trim()
       ? Math.max(privateSignal > 0 ? 0.35 : 0, overlapScore(evidenceText, postText), privateSignal)
       : 0;

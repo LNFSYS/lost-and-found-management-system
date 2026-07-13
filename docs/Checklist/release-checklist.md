@@ -1,28 +1,37 @@
 # Release Checklist
 
-Last audit: 2026-07-08
+Last audit: 2026-07-11
 
 Use this checklist before demo, merge, or submission. Keep evidence screenshots/logs when a step is important for grading.
 
 ## 1. Environment
 
-- [ ] Confirm `.env` files exist locally and no real secrets are committed.
-- [ ] Confirm `FRONTEND_URL`, `API_PORT`, `SOCKET_PORT`, and `SOCKET_CORS_ORIGIN` match the demo environment.
+- [x] Confirm only `.env.example` files are tracked; real `.env` files are ignored.
+- [ ] Rotate any Aiven/JWT/SMTP/Cloudinary/Google secret that appeared in screenshots, files, or shared artifacts.
+- [ ] Confirm `FRONTEND_URL`, `API_PORT`, and `SOCKET_CORS_ORIGIN` match the demo environment. Socket.IO shares `API_PORT`; Redis is not required by the current MVP.
+- [ ] Confirm API CORS allowlist covers the deployed web origin; local development origins are allowed only outside production.
 - [ ] Confirm `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` are configured.
-- [ ] Confirm Cloudinary and Google Vision credentials are either configured or the fallback behavior is acceptable for demo.
+- [ ] Confirm Cloudinary and Google Vision credentials are either configured or the fallback behavior is acceptable for demo; if Cloudinary is missing, live upload will show a friendly 503 and the demo should use seeded images.
 - [ ] If `npm run quality:release` prints a Google Vision warning, present OCR/tagging as configured/fallback-dependent and do not rely on live OCR in the demo.
 - [ ] Confirm registration uses OTP with any valid email; do not require FPT/edu email for students.
+- [x] Confirm web refresh tokens use an `httpOnly` cookie and legacy localStorage token keys are removed on auth/session restore.
 
 ## 2. Database
 
 - [x] Run `npm run migrate:api`.
 - [x] Run `npm run smoke:migration`.
-- [ ] Run `npm run seed:demo` when preparing a fresh demo database.
+- [ ] Run `npm run seed:demo` only on a fresh demo/test database, never on the shared primary demo data by accident.
 - [ ] Verify demo accounts for Student/Lecturer/Staff/Admin can log in.
+- [ ] Run `npm run repair:encoding` against a copy of the demo database if old records display mojibake; review output before using `npm run repair:encoding -- --apply`.
+- [x] GitHub Actions migrates/seeds isolated MySQL 8 and runs core/role/warehouse/claim-race/chat-gating E2E.
 
 ## 3. Build and Smoke
 
 - [x] Run `npm run quality:release` before demo/merge to scan text, verify media/OCR env presence, build API/web/mobile, and run migration smoke.
+- [x] GitHub Actions CI runs release text/config scan, API build, web build, and mobile typecheck on pushes/PRs to `main`.
+- [x] GitHub Actions also runs isolated MySQL migration smoke, Java 21/Maven build, and advisory dependency audit.
+- [x] Run `npm run test:api` for claim-chat policy unit tests.
+- [x] Run public Playwright routing/back-forward smoke; authenticated session smoke is configured for isolated CI.
 - [x] Run `npm run build:api`.
 - [x] Run `npm run build:web`.
 - [x] Run `npm run typecheck:mobile`.
@@ -31,6 +40,9 @@ Use this checklist before demo, merge, or submission. Keep evidence screenshots/
 - [x] Run `npm run e2e:warehouse` to verify warehouse lifecycle and terminal-state guards.
 - [x] Run `npm run e2e:claim-race` to verify concurrent claim decisions cannot both win.
 - [x] Run `npm run e2e:media-privacy` when API + Cloudinary are ready to verify public post detail does not expose evidence media.
+- [x] Run `npm run e2e:chat-gating` to verify PENDING/REJECTED/CANCELLED claims cannot chat, ACCEPTED can chat, and client image URLs are rejected.
+- [x] Run `npm run e2e:claim-evidence-policy` to verify reviewer upload denial and accepted-claim evidence lock.
+- [ ] Run `npm run e2e:admin-crud` on an isolated test database; do not run it on shared demo data because it intentionally creates admin resources.
 - [ ] Run `npm run build:java` on a machine with Maven installed; current Windows shell does not have `mvn` in PATH.
 - [ ] Open the web app and check the browser console for repeated 4xx/5xx errors.
 
@@ -51,16 +63,19 @@ Use this checklist before demo, merge, or submission. Keep evidence screenshots/
 
 - [ ] Public post list/detail does not show private contact info to unauthenticated users.
 - [ ] Claim evidence is visible only to claimant, owner, Staff, or Admin.
+- [x] Claim evidence upload is allowed only for the claimant while status is `PENDING` or `NEED_MORE_INFO` (`e2e:claim-evidence-policy` passed).
 - [ ] Post evidence images are hidden from public post detail and only visible to owner, Staff, or Admin.
 - [ ] Appointment proof, claim evidence, and chat images load through authenticated media endpoints.
+- [ ] Protected media proxying rejects non-Cloudinary/private-network URLs; chat socket payload sends only `mediaPublicId`.
 - [ ] Claim evidence view writes an activity audit event.
 - [ ] Admin role/status changes write activity audit metadata.
 - [ ] Warehouse create/update/status/process/delete operations are logged.
 - [ ] Invalid warehouse status transitions return 409.
+- [ ] Terminal overdue actions use the dedicated disposition form/API and cannot bypass active claim/appointment guards through the generic status endpoint.
 
 ## 6. Presentation Safety
 
 - [ ] Describe the system as an MVP/campus pilot-ready web/backend, not a full production platform.
 - [ ] Describe matching as hybrid/rule-based with Google Vision assisted OCR, not a custom trained AI model.
 - [ ] Describe native mobile and custom AI training as future work unless the code is complete.
-- [ ] Prepare a fallback demo path if Google Vision, Cloudinary, or email delivery is unavailable.
+- [ ] Prepare a fallback demo path if Google Vision, Cloudinary, or email delivery is unavailable: seeded posts/images, pre-created claims, and a script-free walkthrough of OCR/matching fallback behavior.

@@ -7,6 +7,7 @@ build/
 *.pem
 .DS_Store
 coverage/
+apps/web/playwright-results/
 target/
 training-exports/
 model-artifacts/

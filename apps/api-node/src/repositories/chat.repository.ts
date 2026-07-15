@@ -42,7 +42,6 @@ function mapMessage(row: ChatMessageRow) {
       fullName: row.sender_name
     },
     content: row.content,
-    mediaUrl: row.media_url,
     mediaPublicId: row.media_public_id,
     messageType: row.message_type,
     isRead: row.is_read === 1,

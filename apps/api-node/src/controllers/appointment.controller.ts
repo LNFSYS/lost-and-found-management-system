@@ -101,13 +101,7 @@ export const appointmentController = {
   },
 
   async proofImage(request: Request, response: Response) {
-    const { imageUrl } = await appointmentService.getProofImageUrl(request.auth!, appointmentIdParam(request));
-    const upstream = await fetch(imageUrl);
-    if (!upstream.ok) {
-      throw new HttpError(502, "Unable to load appointment proof image");
-    }
-    const contentType = upstream.headers.get("content-type") ?? "image/jpeg";
-    const bytes = Buffer.from(await upstream.arrayBuffer());
+    const { bytes, contentType } = await appointmentService.downloadProofImage(request.auth!, appointmentIdParam(request));
     response.setHeader("Content-Type", contentType);
     response.setHeader("Cache-Control", "private, no-store");
     response.send(bytes);

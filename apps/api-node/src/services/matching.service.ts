@@ -490,12 +490,23 @@ export const matchingService = {
       return [];
     }
 
-    const candidates = await postRepository.listOppositeOpenPosts(post.type, post.id);
+    const [weights, candidateLimit, candidateWindowDays] = await Promise.all([
+      loadWeights(),
+      postRepository.getConfigNumber("matching.candidate_limit", 500),
+      postRepository.getConfigNumber("matching.candidate_window_days", 120)
+    ]);
+    const candidates = await postRepository.listOppositeOpenPosts(post, {
+      candidateLimit,
+      candidateWindowDays
+    });
+    await postRepository.deleteMatchesOutsideCandidates(
+      post.id,
+      candidates.map((candidate) => candidate.id)
+    );
     if (candidates.length === 0) {
       return [];
     }
 
-    const weights = await loadWeights();
     const documents = [post, ...candidates].map((candidate) =>
       `${candidate.text} ${candidate.imageText} ${candidate.ocrText}`.trim()
     );
@@ -547,6 +558,44 @@ export const matchingService = {
   async buildSuggestions(postId: string, matches: MatchRunResult[], minimumScore?: number) {
     const score = minimumScore ?? (await postRepository.getConfigNumber("matching.suggestion_threshold", 0.6));
     return buildMatchSuggestions(postId, matches, score);
+  },
+
+  async buildSuggestionGroups(postIds: string[]) {
+    const uniqueIds = Array.from(new Set(postIds)).filter(Boolean);
+    if (uniqueIds.length === 0) {
+      return new Map<string, Awaited<ReturnType<typeof buildMatchSuggestions>>>();
+    }
+
+    const [matchesByPost, minimumScore] = await Promise.all([
+      postRepository.listMatchesForPosts(uniqueIds),
+      postRepository.getConfigNumber("matching.suggestion_threshold", 0.6)
+    ]);
+    const counterpartIds = uniqueIds.flatMap((postId) =>
+      (matchesByPost.get(postId) ?? []).map((match) =>
+        match.lostPostId === postId ? match.foundPostId : match.lostPostId
+      )
+    );
+    const posts = await postRepository.findByIds([...uniqueIds, ...counterpartIds]);
+    const postById = new Map(posts.map((post) => [post.id, post]));
+    const groups = new Map<string, Array<{ match: MatchRunResult; post: (typeof posts)[number] }>>();
+
+    for (const postId of uniqueIds) {
+      const sourcePost = postById.get(postId);
+      if (!sourcePost) {
+        groups.set(postId, []);
+        continue;
+      }
+      const suggestions = (matchesByPost.get(postId) ?? [])
+        .filter((match) => match.totalScore >= minimumScore)
+        .sort((left, right) => right.totalScore - left.totalScore)
+        .flatMap((match) => {
+          const counterpartId = sourcePost.type === "LOST" ? match.foundPostId : match.lostPostId;
+          const counterpart = postById.get(counterpartId);
+          return counterpart ? [{ match, post: counterpart }] : [];
+        });
+      groups.set(postId, suggestions);
+    }
+    return groups;
   },
 
   async listMatches(postId: string) {

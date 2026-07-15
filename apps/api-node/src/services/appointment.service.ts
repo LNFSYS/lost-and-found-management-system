@@ -5,13 +5,8 @@ import { notificationRepository } from "../repositories/notification.repository.
 import { postRepository } from "../repositories/post.repository.js";
 import { userRepository } from "../repositories/user.repository.js";
 import { HttpError } from "../utils/http-error.js";
+import { hasMatchingImageSignature, imageFormatForMime } from "../utils/image-signature.js";
 import { cloudinaryService } from "./cloudinary.service.js";
-
-const proofMimeToFormat = new Map([
-  ["image/jpeg", "jpg"],
-  ["image/png", "png"],
-  ["image/webp", "webp"]
-]);
 
 function canUseClaim(auth: AccessTokenPayload, claim: { claimant_id: string; post_owner_id: string }) {
   return (
@@ -44,9 +39,12 @@ function requireProofFile(file: Express.Multer.File | undefined) {
 }
 
 async function assertProofImageFile(file: Express.Multer.File) {
-  const format = proofMimeToFormat.get(file.mimetype);
+  const format = imageFormatForMime(file.mimetype);
   if (!format) {
     throw new HttpError(422, "Only JPG, PNG and WEBP proof images are allowed");
+  }
+  if (!hasMatchingImageSignature(file.buffer, file.mimetype)) {
+    throw new HttpError(422, "Proof image content does not match its declared format");
   }
 
   const allowedFormats = (await postRepository.getConfigString("post.allowed_image_formats", "jpg,png,webp"))
@@ -155,9 +153,19 @@ export const appointmentService = {
     if (await appointmentRepository.hasScheduleConflict(input)) {
       throw new HttpError(409, "This handover point already has another appointment near that time");
     }
-    const appointment = await appointmentRepository.create(input, auth.sub);
-    if (!appointment) {
+    const creation = await appointmentRepository.create(input, auth.sub);
+    if (creation.status === "CLAIM_NOT_FOUND") {
       throw new HttpError(404, "Claim not found");
+    }
+    if (creation.status === "CLAIM_NOT_ACCEPTED") {
+      throw new HttpError(409, "Appointments can only be created after a claim is accepted");
+    }
+    if (creation.status === "ACTIVE_APPOINTMENT_EXISTS") {
+      throw new HttpError(409, "This claim already has an active appointment");
+    }
+    const appointment = creation.appointment;
+    if (!appointment) {
+      throw new HttpError(500, "Unable to load the created appointment");
     }
     await notifyAppointmentUsers(
       {
@@ -265,7 +273,14 @@ export const appointmentService = {
     if (appointment.status !== "ACCEPTED") {
       throw new HttpError(409, "Only accepted appointments can be completed");
     }
-    const completed = await appointmentRepository.complete(appointmentId);
+    const completion = await appointmentRepository.complete(appointmentId, auth.sub);
+    if (completion.status !== "COMPLETED") {
+      throw new HttpError(409, "Only accepted appointments can be completed");
+    }
+    const completed = completion.appointment;
+    if (!completed) {
+      throw new HttpError(500, "Unable to load the completed appointment");
+    }
     await userRepository.addReputation({
       userId: appointment.claimant_id,
       delta: 10,
@@ -343,13 +358,13 @@ export const appointmentService = {
     return { appointment: updated };
   },
 
-  async getProofImageUrl(auth: AccessTokenPayload, appointmentId: string) {
+  async downloadProofImage(auth: AccessTokenPayload, appointmentId: string) {
     const appointment = await requireAppointmentForAction(appointmentId);
     assertCanUseAppointment(auth, appointment);
     if (!appointment.proof_image_url) {
       throw new HttpError(404, "Appointment proof image not found");
     }
-    return { imageUrl: appointment.proof_image_url };
+    return cloudinaryService.downloadTrustedImage(appointment.proof_image_url);
   },
 
   async submitFeedback(

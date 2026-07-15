@@ -52,10 +52,10 @@ This file is the canonical UC checklist for the project. The old list of nearly 
 | [x] | UC-013 | Record item condition notes upon receipt | `StorageActionRequest.conditionNotes` |
 | [x] | UC-014 | Confirm item returned to recipient | `HandoverService.returnItem` |
 | [x] | UC-015 | Write storage log for warehouse operations | `StorageLogEntity`, `StorageLogRepository` |
-| [x] | UC-021 | Create return appointment after accepted claim | `appointmentService.create`, `/appointments`, accepted-claim guard |
+| [x] | UC-021 | Create return appointment after accepted claim | `appointmentService.create`, accepted-claim transaction guard, migration 024 one-active-appointment invariant |
 | [x] | UC-022 | Reject appointment with reason | `PATCH /appointments/:id/reject` |
 | [x] | UC-023 | Reschedule or cancel return appointment | `PATCH /appointments/:id/reschedule` and `PATCH /appointments/:id/cancel` |
-| [x] | UC-024 | Complete appointment and update to resolved | Complete API updates appointment, post resolved, warehouse returned; accepted/completed appointment can store handover proof image |
+| [x] | UC-024 | Complete appointment and update to resolved | Transaction-safe completion updates appointment/post/warehouse once, records the actual actor, and serves proof through the authenticated media proxy |
 | [x] | UC-025 | Calculate reputation score after business event | Appointment completion adds reputation logs and score updates |
 | [x] | UC-026 | Collect AI training data | Match feedback, suggestion impressions, persisted explanations, and export fields |
 | [x] | UC-027 | Label match correct/incorrect data | `match_feedback` supports true/false/uncertain/duplicate/insufficient evidence labels |
@@ -84,7 +84,7 @@ This file is the canonical UC checklist for the project. The old list of nearly 
 | [x] | UC-045 | Return current user's posts | `GET /posts/my` |
 | [x] | UC-046 | Return public Lost & Found board | `GET /posts` |
 | [x] | UC-047 | Search, filter, and sort posts | query filters/sort |
-| [x] | UC-048 | Upload post images | `/posts/:id/media` |
+| [x] | UC-048 | Upload post images | `/posts/:id/media` with MIME, size, count and JPEG/PNG/WEBP signature validation |
 | [x] | UC-049 | Upload claim evidence images | `/claims/:id/evidence` |
 | [x] | UC-050 | Delete post images from Cloudinary | `deletePostMedia` |
 | [x] | UC-051 | Provide public config for client validation | `/config/public` |
@@ -104,7 +104,7 @@ This file is the canonical UC checklist for the project. The old list of nearly 
 | [x] | UC-065 | Manage campus areas and buildings via Admin API | `/admin/locations/...` |
 | [x] | UC-066 | Moderate posts and handle reports via Admin API | moderation/report APIs |
 | [x] | UC-067 | Provide admin dashboard overview data | `/admin/dashboard/overview` |
-| [x] | UC-068 | Run matching after post create or update | MySQL-backed matching queue after create/update/media upload |
+| [x] | UC-068 | Run matching after post create or update | MySQL-backed queue plus bounded SQL candidate prefilter after create/update/media upload |
 | [x] | UC-069 | Normalize Vietnamese text for matching algorithm | `normalize-text.ts` |
 | [x] | UC-070 | Calculate tiered match score by text, category, location, time, image tags, and OCR | `matchingService.runForPost`, image/OCR score support |
 | [x] | UC-071 | Save matching results | `upsertMatchResult` |
@@ -115,7 +115,7 @@ This file is the canonical UC checklist for the project. The old list of nearly 
 | [x] | UC-076 | Explain why two posts match | `GET /posts/:id/matches/explanations` returns score tier, matched tokens, image/OCR terms, location/time reasons, and penalties |
 | [x] | UC-077 | Set up Socket.IO server | `setupRealtimeServer(server)` attached to Node HTTP server |
 | [x] | UC-078 | Authenticate socket via JWT | Socket middleware verifies access token and joins `user:{id}` room |
-| [x] | UC-079 | Create and join chat room by claim | `claim:join` requires an `ACCEPTED` claim and an authorized participant/reviewer |
+| [x] | UC-079 | Create and join chat room by claim | `claim:join` requires an `ACCEPTED` claim and authorized participant/reviewer; history/socket payloads do not expose raw private media URLs |
 | [x] | UC-080 | Send and receive realtime messages | `chat:message` persists and broadcasts text messages |
 | [x] | UC-081 | Send images in realtime chat | Socket accepts only a server-validated Cloudinary public ID; arbitrary client URLs are rejected |
 | [x] | UC-082 | Display seen status and unread count in realtime | Web chat UI receives messages, `chat:seen` persists read time, and unread badge is displayed in claim chat |

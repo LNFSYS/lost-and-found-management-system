@@ -118,6 +118,14 @@ async function main() {
       customLocation: "E2E completed appointment"
     })
   }, token, 201);
+  await request("/appointments", {
+    method: "POST",
+    body: JSON.stringify({
+      claimId: claim.claim.id,
+      proposedAt: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
+      customLocation: "E2E duplicate active appointment must be rejected"
+    })
+  }, token2, 409);
   await request(`/appointments/${appointment.appointment.id}/accept`, { method: "PATCH" }, token2);
   await request(`/appointments/${appointment.appointment.id}/complete`, { method: "PATCH" }, token);
   await request(`/appointments/${appointment.appointment.id}/feedback`, {

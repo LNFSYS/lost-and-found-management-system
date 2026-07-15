@@ -1,6 +1,6 @@
 # Pending Task Checklist
 
-Last audit: 2026-07-11
+Last audit: 2026-07-15
 
 > Current delivery priority (2026-07-11): finish and harden Web + Node/Java backend first. Mobile implementation/refactor remains deferred by product decision and is not part of this work phase.
 
@@ -15,6 +15,21 @@ Last audit: 2026-07-11
 Open work is now concentrated in hardening/future work: advanced AI category selection, optional Java auth extension, background matching queue, notification digest/anti-noise tuning, overdue disposition paperwork, mobile hardening, custom AI inference/MLOps, and deeper automated tests.
 
 Scope note: the current MVP should be demoed as web + Node backend with Google Vision assisted OCR/tags and rule-based/hybrid matching. Expo mobile MVP and training-data baseline scripts are present, while native mobile hardening and production custom AI inference remain future work.
+
+## Deep Review Follow-up - 2026-07-15
+
+- [x] Add release-safe packaging command based on clean `git archive`; add optional ignored-workspace secret scan.
+- [x] Use normal workspace `tsc` resolution for reproducible API builds.
+- [x] Enforce one active appointment per claim with transaction locking and a database unique generated key.
+- [x] Record the real completion actor in warehouse storage logs and make concurrent completion transition-safe.
+- [x] Proxy appointment proof through the trusted Cloudinary download guard.
+- [x] Remove raw private storage URLs from chat history and Socket.IO payloads.
+- [x] Validate JPEG/PNG/WEBP magic bytes in post, claim, chat, avatar, and appointment-proof uploads.
+- [x] Preserve Lecturer selection in the legacy OTP verification endpoint.
+- [x] Avoid incrementing view count for missing or unauthorized hidden posts.
+- [x] Batch-load match suggestions and prefilter a bounded candidate set using category/location/time signals.
+- [ ] Run migrations 024-025 and database-backed E2E only on isolated MySQL/CI before applying them to the shared demo database.
+- [ ] Keep Redis/distributed rate limits, multi-node Socket.IO, observability, and 10k+ load tests as production hardening rather than MVP claims.
 
 
 ## Auth / Account

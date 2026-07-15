@@ -719,8 +719,13 @@ export const postRepository = {
     return rows.map(mapMatchPost).sort((left, right) => (order.get(left.id) ?? 0) - (order.get(right.id) ?? 0));
   },
 
-  async listOppositeOpenPosts(type: PostType, excludePostId: string) {
-    const oppositeType: PostType = type === "LOST" ? "FOUND" : "LOST";
+  async listOppositeOpenPosts(
+    source: MatchCandidatePost,
+    options: { candidateLimit: number; candidateWindowDays: number }
+  ) {
+    const oppositeType: PostType = source.type === "LOST" ? "FOUND" : "LOST";
+    const candidateLimit = Math.max(50, Math.min(2_000, Math.trunc(options.candidateLimit)));
+    const candidateWindowDays = Math.max(1, Math.min(365, Math.trunc(options.candidateWindowDays)));
     const [rows] = await dbPool.query<MatchPostRow[]>(
       `
         SELECT
@@ -743,8 +748,39 @@ export const postRepository = {
           AND p.id <> ?
           AND p.status IN ('OPEN', 'MATCHED')
           AND p.deleted_at IS NULL
+          AND (
+            p.category_id = ?
+            OR c.parent_id = ?
+            OR p.area_id = ?
+            OR p.building_id = ?
+            OR (
+              p.lost_found_at IS NOT NULL
+              AND ? IS NOT NULL
+              AND ABS(DATEDIFF(p.lost_found_at, ?)) <= ?
+            )
+          )
+        ORDER BY
+          (p.category_id = ?) DESC,
+          (p.building_id = ?) DESC,
+          COALESCE(ABS(TIMESTAMPDIFF(HOUR, p.lost_found_at, ?)), 999999999) ASC,
+          p.created_at DESC
+        LIMIT ?
       `,
-      [oppositeType, excludePostId]
+      [
+        oppositeType,
+        source.id,
+        source.categoryId,
+        source.parentCategoryId,
+        source.areaId,
+        source.buildingId,
+        source.lostFoundAt,
+        source.lostFoundAt,
+        candidateWindowDays,
+        source.categoryId,
+        source.buildingId,
+        source.lostFoundAt,
+        candidateLimit
+      ]
     );
 
     return rows.map(mapMatchPost);
@@ -836,6 +872,24 @@ export const postRepository = {
     ]);
   },
 
+  async deleteMatchesOutsideCandidates(postId: string, candidateIds: string[]) {
+    const uniqueCandidateIds = Array.from(new Set(candidateIds)).filter(Boolean);
+    if (uniqueCandidateIds.length === 0) {
+      await dbPool.execute("DELETE FROM match_results WHERE lost_post_id = ? OR found_post_id = ?", [postId, postId]);
+      return;
+    }
+
+    const placeholders = uniqueCandidateIds.map(() => "?").join(", ");
+    await dbPool.execute(
+      `
+        DELETE FROM match_results
+        WHERE (lost_post_id = ? OR found_post_id = ?)
+          AND (CASE WHEN lost_post_id = ? THEN found_post_id ELSE lost_post_id END) NOT IN (${placeholders})
+      `,
+      [postId, postId, postId, ...uniqueCandidateIds]
+    );
+  },
+
   async markPairMatched(lostPostId: string, foundPostId: string) {
     await dbPool.execute(
       `
@@ -880,6 +934,36 @@ export const postRepository = {
     );
 
     return rows.map(mapMatch);
+  },
+
+  async listMatchesForPosts(postIds: string[]) {
+    const uniqueIds = Array.from(new Set(postIds)).filter(Boolean);
+    const grouped = new Map(uniqueIds.map((postId) => [postId, [] as ReturnType<typeof mapMatch>[]]));
+    if (uniqueIds.length === 0) {
+      return grouped;
+    }
+
+    const placeholders = uniqueIds.map(() => "?").join(", ");
+    const [rows] = await dbPool.query<MatchRow[]>(
+      `
+        SELECT id, lost_post_id, found_post_id, total_score, text_score, category_score,
+               location_score, time_score, image_score, ocr_score, score_tier,
+               matcher_version, explanation_json, is_notified, created_at
+        FROM match_results
+        WHERE lost_post_id IN (${placeholders}) OR found_post_id IN (${placeholders})
+        ORDER BY total_score DESC, created_at DESC
+      `,
+      [...uniqueIds, ...uniqueIds]
+    );
+
+    for (const row of rows) {
+      const match = mapMatch(row);
+      grouped.get(match.lostPostId)?.push(match);
+      if (match.foundPostId !== match.lostPostId) {
+        grouped.get(match.foundPostId)?.push(match);
+      }
+    }
+    return grouped;
   },
 
   async findMatchAccess(matchId: string, postId?: string) {

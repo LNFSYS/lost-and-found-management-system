@@ -8,3 +8,6 @@
 *.sql text eol=lf
 *.css text eol=lf
 *.html text eol=lf
+
+# Keep generated browser-test evidence in Git history but out of release source archives.
+/apps/web/test-results export-ignore

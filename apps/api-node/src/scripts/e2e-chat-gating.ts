@@ -17,6 +17,15 @@ interface Envelope<T> {
 interface AckPayload {
   ok: boolean;
   error?: string;
+  message?: unknown;
+  messages?: unknown[];
+}
+
+function assertNoRawMediaUrl(payload: unknown, context: string) {
+  const serialized = JSON.stringify(payload);
+  if (/"mediaUrl"|res\.cloudinary\.com|https?:\/\//i.test(serialized)) {
+    throw new Error(`${context} exposed a raw media URL.`);
+  }
 }
 
 async function request<T>(path: string, init: RequestInit = {}, token?: string, expectedStatus = 200) {
@@ -139,6 +148,7 @@ async function main() {
     if (!acceptedJoin.ok) {
       throw new Error(`ACCEPTED claim could not join chat: ${acceptedJoin.error ?? "unknown"}`);
     }
+    assertNoRawMediaUrl(acceptedJoin.messages, "claim:join history");
     const acceptedMessage = await emitAck(socket, "chat:message", {
       claimId: acceptedClaim.claim.id,
       content: "E2E accepted chat message"
@@ -146,6 +156,7 @@ async function main() {
     if (!acceptedMessage.ok) {
       throw new Error(`ACCEPTED claim could not send chat: ${acceptedMessage.error ?? "unknown"}`);
     }
+    assertNoRawMediaUrl(acceptedMessage.message, "chat:message acknowledgement");
     const forgedImage = await emitAck(socket, "chat:image", {
       claimId: acceptedClaim.claim.id,
       mediaUrl: "http://127.0.0.1/internal-image"

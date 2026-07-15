@@ -404,7 +404,7 @@ export const authService = {
     await userRepository.markOtpStatus(otpRow.id, "VERIFIED");
     await userRepository.markEmailVerified(user.id);
     await userRepository.assignRole(user.id, "USER");
-    await userRepository.assignRole(user.id, "STUDENT");
+    await userRepository.assignRole(user.id, input.accountType);
     await userRepository.ensureReputationScore(user.id);
     await userRepository.createActivityLog({
       userId: user.id,

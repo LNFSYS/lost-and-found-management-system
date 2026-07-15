@@ -17,7 +17,8 @@ export const loginSchema = z.object({
 
 export const verifyOtpSchema = z.object({
   email: z.string().trim().email(),
-  otp: z.string().trim().regex(/^\d{6}$/)
+  otp: z.string().trim().regex(/^\d{6}$/),
+  accountType: z.enum(["STUDENT", "LECTURER"]).default("STUDENT")
 });
 
 export const requestRegistrationOtpSchema = z.object({

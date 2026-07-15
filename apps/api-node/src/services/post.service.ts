@@ -210,11 +210,11 @@ export const postService = {
 
   async listMyMatchSuggestions(auth: AccessTokenPayload) {
     const lostPostIds = await postRepository.listActiveLostPostIdsByUser(auth.sub);
+    const suggestionGroups = await matchingService.buildSuggestionGroups(lostPostIds);
     const suggestions = [];
 
     for (const postId of lostPostIds) {
-      const matches = await matchingService.listMatches(postId);
-      const postSuggestions = await matchingService.buildSuggestions(postId, matches);
+      const postSuggestions = suggestionGroups.get(postId) ?? [];
       const safePostSuggestions = redactMatchSuggestions(postSuggestions, auth);
       await recordSuggestionImpressions(auth, postId, postSuggestions, "SUGGESTION_LIST");
       suggestions.push(...safePostSuggestions.map((suggestion) => ({ ...suggestion, sourcePostId: postId })));
@@ -234,7 +234,6 @@ export const postService = {
   },
 
   async getPostDetail(postId: string, auth?: AccessTokenPayload) {
-    await postRepository.incrementViewCount(postId);
     const detail = await postRepository.getDetail(postId);
     if (!detail) {
       throw new HttpError(404, "Post not found");
@@ -243,6 +242,8 @@ export const postService = {
     if (detail.post.status === "HIDDEN" && !canViewContactInfo(auth, detail.post.userId)) {
       throw new HttpError(404, "Post not found");
     }
+
+    await postRepository.incrementViewCount(postId);
 
     const canViewPrivateMedia = canViewContactInfo(auth, detail.post.userId);
     return {

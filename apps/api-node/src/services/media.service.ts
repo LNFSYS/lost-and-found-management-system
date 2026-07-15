@@ -6,16 +6,11 @@ import { chatRepository } from "../repositories/chat.repository.js";
 import { postRepository } from "../repositories/post.repository.js";
 import { userRepository } from "../repositories/user.repository.js";
 import { HttpError } from "../utils/http-error.js";
+import { hasMatchingImageSignature, imageFormatForMime } from "../utils/image-signature.js";
 import type { ClaimEvidenceBody } from "../validators/media.validator.js";
 import { cloudinaryService } from "./cloudinary.service.js";
 import { matchingWorkerService } from "./matching-worker.service.js";
 import { visionService } from "./vision.service.js";
-
-const mimeToFormat = new Map([
-  ["image/jpeg", "jpg"],
-  ["image/png", "png"],
-  ["image/webp", "webp"]
-]);
 
 function assertPostOwnerOrAdmin(auth: AccessTokenPayload, ownerId: string) {
   if (auth.sub !== ownerId && !auth.roles.includes("ADMIN")) {
@@ -33,9 +28,12 @@ function canViewClaim(auth: AccessTokenPayload, claim: { claimant: { id: string 
 }
 
 async function assertImageFile(file: Express.Multer.File) {
-  const format = mimeToFormat.get(file.mimetype);
+  const format = imageFormatForMime(file.mimetype);
   if (!format) {
     throw new HttpError(422, "Only JPG, PNG and WEBP images are allowed");
+  }
+  if (!hasMatchingImageSignature(file.buffer, file.mimetype)) {
+    throw new HttpError(422, "Image content does not match its declared format");
   }
 
   const allowedFormats = (await postRepository.getConfigString("post.allowed_image_formats", "jpg,png,webp"))

@@ -25,6 +25,9 @@ jobs:
       - name: Scan tracked files for secrets
         run: npm run scan:secrets
 
+      - name: Verify release packaging from tracked commit
+        run: npm run package:release -- /tmp/fptu-lost-found-system-release.zip
+
       - name: Audit runtime dependencies (advisory until Vite/Expo major upgrade)
         run: npm audit --omit=dev --audit-level=high
         continue-on-error: true

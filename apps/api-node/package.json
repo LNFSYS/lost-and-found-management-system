@@ -19,9 +19,9 @@
     "export:training-data": "tsx src/scripts/export-training-data.ts",
     "train:match-model": "tsx src/scripts/train-match-model.ts",
     "smoke:migration": "tsx src/scripts/smoke-migration.ts",
-    "test": "tsx --test src/policies/*.test.ts",
+    "test": "tsx --test src/policies/*.test.ts src/utils/*.test.ts",
     "migrate": "tsx src/migrations/run-migrations.ts",
-    "build": "node ../../node_modules/typescript/bin/tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js"
   },
   "dependencies": {

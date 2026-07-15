@@ -38,7 +38,9 @@
     "typecheck:mobile": "npm --workspace apps/mobile run typecheck",
     "lint:web": "npm --workspace apps/web run lint",
     "scan:secrets": "node scripts/secret-scan.mjs",
+    "scan:secrets:workspace": "node scripts/secret-scan.mjs --workspace",
     "scan:text": "node scripts/release-quality-check.mjs",
+    "package:release": "node scripts/release-package.mjs",
     "quality:release": "npm run scan:secrets && node scripts/release-quality-check.mjs && npm run build:api && npm run build:web && npm run typecheck:mobile && npm run smoke:migration"
   },
   "workspaces": [

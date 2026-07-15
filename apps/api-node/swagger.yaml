@@ -26,6 +26,24 @@ paths:
   /auth/verify-otp:
     post:
       summary: Verify registration OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, otp]
+              properties:
+                email:
+                  type: string
+                  format: email
+                otp:
+                  type: string
+                  pattern: '^\d{6}$'
+                accountType:
+                  type: string
+                  enum: [STUDENT, LECTURER]
+                  default: STUDENT
       responses:
         "200":
           description: Email verified and token pair issued

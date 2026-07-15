@@ -88,6 +88,10 @@ function mapAppointment(row: AppointmentRow) {
   };
 }
 
+function isDuplicateEntry(error: unknown) {
+  return typeof error === "object" && error !== null && "errno" in error && error.errno === 1062;
+}
+
 const appointmentSelect = `
   SELECT
     ra.id, ra.claim_id, ra.post_id, ra.proposer_id, proposer.full_name AS proposer_name,
@@ -126,29 +130,75 @@ export const appointmentRepository = {
   },
 
   async create(input: AppointmentInput, proposerId: string) {
-    const claim = await this.findClaimForAppointment(input.claimId);
-    if (!claim) {
-      return null;
-    }
+    const connection = await dbPool.getConnection();
     const id = randomUUID();
-    await dbPool.execute(
-      `
-        INSERT INTO return_appointments (
-          id, claim_id, post_id, proposer_id, proposed_at, handover_point_id, custom_location
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        id,
-        input.claimId,
-        claim.post_id,
-        proposerId,
-        new Date(input.proposedAt),
-        input.handoverPointId ?? null,
-        input.customLocation?.trim() || null
-      ]
-    );
-    return this.findById(id);
+    try {
+      await connection.beginTransaction();
+      const [claimRows] = await connection.query<ClaimForAppointmentRow[]>(
+        `
+          SELECT c.id, c.post_id, p.user_id AS post_owner_id, c.claimant_id, c.status
+          FROM claims c
+          INNER JOIN posts p ON p.id = c.post_id
+          WHERE c.id = ?
+          LIMIT 1
+          FOR UPDATE
+        `,
+        [input.claimId]
+      );
+      const claim = claimRows[0];
+      if (!claim) {
+        await connection.rollback();
+        return { status: "CLAIM_NOT_FOUND" as const };
+      }
+      if (claim.status !== "ACCEPTED") {
+        await connection.rollback();
+        return { status: "CLAIM_NOT_ACCEPTED" as const };
+      }
+
+      const [activeRows] = await connection.query<Array<RowDataPacket & { id: string }>>(
+        `
+          SELECT id
+          FROM return_appointments
+          WHERE claim_id = ?
+            AND status IN ('PENDING', 'ACCEPTED', 'RESCHEDULED')
+          LIMIT 1
+          FOR UPDATE
+        `,
+        [input.claimId]
+      );
+      if (activeRows[0]) {
+        await connection.rollback();
+        return { status: "ACTIVE_APPOINTMENT_EXISTS" as const, appointmentId: activeRows[0].id };
+      }
+
+      await connection.execute(
+        `
+          INSERT INTO return_appointments (
+            id, claim_id, post_id, proposer_id, proposed_at, handover_point_id, custom_location
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          id,
+          input.claimId,
+          claim.post_id,
+          proposerId,
+          new Date(input.proposedAt),
+          input.handoverPointId ?? null,
+          input.customLocation?.trim() || null
+        ]
+      );
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      if (isDuplicateEntry(error)) {
+        return { status: "ACTIVE_APPOINTMENT_EXISTS" as const };
+      }
+      throw error;
+    } finally {
+      connection.release();
+    }
+    return { status: "CREATED" as const, appointment: await this.findById(id) };
   },
 
   async hasScheduleConflict(input: { appointmentId?: string; proposedAt: string; handoverPointId?: string | null }) {
@@ -274,10 +324,18 @@ export const appointmentRepository = {
     return this.findById(id);
   },
 
-  async complete(id: string) {
+  async complete(id: string, actorId: string) {
     const connection = await dbPool.getConnection();
     try {
       await connection.beginTransaction();
+      const [rows] = await connection.query<Array<RowDataPacket & { status: AppointmentForActionRow["status"] }>>(
+        "SELECT status FROM return_appointments WHERE id = ? LIMIT 1 FOR UPDATE",
+        [id]
+      );
+      if (rows[0]?.status !== "ACCEPTED") {
+        await connection.rollback();
+        return { status: "NOT_ACCEPTED" as const };
+      }
       await connection.execute(
         `
           UPDATE return_appointments
@@ -302,6 +360,19 @@ export const appointmentRepository = {
       );
       await connection.execute(
         `
+          INSERT INTO storage_logs (id, post_id, handover_point_id, actor_id, action, condition_notes)
+          SELECT UUID(), wi.post_id, wi.handover_point_id, ?, 'RETURNED', 'Returned through completed appointment'
+          FROM warehouse_items wi
+          INNER JOIN return_appointments ra ON ra.post_id = wi.post_id
+          WHERE ra.id = ?
+            AND wi.deleted_at IS NULL
+            AND wi.handover_point_id IS NOT NULL
+            AND wi.status NOT IN ('RETURNED', 'DISPOSED', 'DONATED', 'TRANSFERRED')
+        `,
+        [actorId, id]
+      );
+      await connection.execute(
+        `
           UPDATE warehouse_items wi
           INNER JOIN return_appointments ra ON ra.post_id = wi.post_id
           SET wi.status = 'RETURNED',
@@ -313,18 +384,6 @@ export const appointmentRepository = {
         `,
         [id]
       );
-      await connection.execute(
-        `
-          INSERT INTO storage_logs (id, post_id, handover_point_id, actor_id, action, condition_notes)
-          SELECT UUID(), wi.post_id, wi.handover_point_id, ra.proposer_id, 'RETURNED', 'Returned through completed appointment'
-          FROM warehouse_items wi
-          INNER JOIN return_appointments ra ON ra.post_id = wi.post_id
-          WHERE ra.id = ?
-            AND wi.deleted_at IS NULL
-            AND wi.handover_point_id IS NOT NULL
-        `,
-        [id]
-      );
       await connection.commit();
     } catch (error) {
       await connection.rollback();
@@ -332,7 +391,7 @@ export const appointmentRepository = {
     } finally {
       connection.release();
     }
-    return this.findById(id);
+    return { status: "COMPLETED" as const, appointment: await this.findById(id) };
   },
 
   async listByClaim(claimId: string) {

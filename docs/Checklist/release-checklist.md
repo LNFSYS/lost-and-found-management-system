@@ -1,12 +1,14 @@
 # Release Checklist
 
-Last audit: 2026-07-11
+Last audit: 2026-07-15
 
 Use this checklist before demo, merge, or submission. Keep evidence screenshots/logs when a step is important for grading.
 
 ## 1. Environment
 
 - [x] Confirm only `.env.example` files are tracked; real `.env` files are ignored.
+- [ ] Run `npm run package:release` from a clean committed tree and distribute that ZIP instead of compressing the working directory.
+- [ ] Run `npm run scan:secrets:workspace` before manually sharing a working-directory copy; a local `.env` finding is expected and means the raw copy must not be shared.
 - [ ] Rotate any Aiven/JWT/SMTP/Cloudinary/Google secret that appeared in screenshots, files, or shared artifacts.
 - [ ] Confirm `FRONTEND_URL`, `API_PORT`, and `SOCKET_CORS_ORIGIN` match the demo environment. Socket.IO shares `API_PORT`; Redis is not required by the current MVP.
 - [ ] Confirm API CORS allowlist covers the deployed web origin; local development origins are allowed only outside production.
@@ -18,8 +20,8 @@ Use this checklist before demo, merge, or submission. Keep evidence screenshots/
 
 ## 2. Database
 
-- [x] Run `npm run migrate:api`.
-- [x] Run `npm run smoke:migration`.
+- [ ] Run `npm run migrate:api` for migrations 024-025 on an isolated/test database first.
+- [ ] Run `npm run smoke:migration` and verify all 25 migrations plus the active-appointment unique key.
 - [ ] Run `npm run seed:demo` only on a fresh demo/test database, never on the shared primary demo data by accident.
 - [ ] Verify demo accounts for Student/Lecturer/Staff/Admin can log in.
 - [ ] Run `npm run repair:encoding` against a copy of the demo database if old records display mojibake; review output before using `npm run repair:encoding -- --apply`.
@@ -27,13 +29,13 @@ Use this checklist before demo, merge, or submission. Keep evidence screenshots/
 
 ## 3. Build and Smoke
 
-- [x] Run `npm run quality:release` before demo/merge to scan text, verify media/OCR env presence, build API/web/mobile, and run migration smoke.
+- [ ] Run `npm run quality:release` after migrations 024-025 are verified/applied on the intended database; the 2026-07-15 local run is intentionally pending because shared DB remains at migration 023.
 - [x] GitHub Actions CI runs release text/config scan, API build, web build, and mobile typecheck on pushes/PRs to `main`.
 - [x] GitHub Actions also runs isolated MySQL migration smoke, Java 21/Maven build, and advisory dependency audit.
-- [x] Run `npm run test:api` for claim-chat policy unit tests.
+- [x] Run `npm run test:api` for policy and image-signature tests (20 tests passed on 2026-07-15).
 - [x] Run public Playwright routing/back-forward smoke; authenticated session smoke is configured for isolated CI.
-- [x] Run `npm run build:api`.
-- [x] Run `npm run build:web`.
+- [x] Run `npm run build:api` (passed on 2026-07-15).
+- [x] Run `npm run build:web` (passed on 2026-07-15).
 - [x] Run `npm run typecheck:mobile`.
 - [x] Run `npm run e2e:core` when the local API/database are ready.
 - [x] Run `npm run e2e:roles` to verify Staff vs Admin permissions.
@@ -54,6 +56,7 @@ Use this checklist before demo, merge, or submission. Keep evidence screenshots/
 - [ ] Owner submits a claim with evidence.
 - [ ] Owner/Staff/Admin verifies evidence confidence and accepts/rejects/request-info.
 - [ ] Accepted claim creates an appointment and opens claim chat.
+- [ ] A second active appointment for the same claim returns `409`; verify through isolated `e2e:core` after migration 024.
 - [ ] Accepted or completed appointment can store a handover/return proof image.
 - [ ] Staff manages warehouse/handover point and status transitions.
 - [ ] Admin views dashboard, config, users, and reports with the correct permissions.

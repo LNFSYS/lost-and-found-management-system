@@ -8,7 +8,6 @@ export type ChatMessageView = {
   id: string;
   sender: { id: string; fullName: string | null };
   content: string | null;
-  mediaUrl: string | null;
   mediaPublicId: string | null;
   messageType: "TEXT" | "IMAGE" | "SYSTEM";
   isRead: boolean;

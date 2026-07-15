@@ -112,17 +112,19 @@ async function main() {
     ["return_appointments", "proof_note"],
     ["claims", "secret_answer_hash"],
     ["claims", "has_private_signal"],
-    ["claims", "accepted_post_id"]
+    ["claims", "accepted_post_id"],
+    ["return_appointments", "active_claim_id"]
   ] as const) {
     await assertColumn(tableName, columnName);
   }
 
   await assertMissingColumn("claims", "secret_answer");
   await assertUniqueIndex("claims", "uq_claims_one_accepted_per_post");
+  await assertUniqueIndex("return_appointments", "uq_return_appointments_one_active_claim");
 
   const migrationCount = await count("SELECT COUNT(*) AS total FROM schema_migrations", []);
-  if (migrationCount < 23) {
-    throw new Error(`Expected at least 23 applied migrations, got ${migrationCount}`);
+  if (migrationCount < 25) {
+    throw new Error(`Expected at least 25 applied migrations, got ${migrationCount}`);
   }
 
   console.log(`Migration smoke passed on database ${env.db.name}. Applied migrations: ${migrationCount}.`);

@@ -3,12 +3,35 @@ import fs from "node:fs";
 import path from "node:path";
 
 const repoRoot = process.cwd();
-const trackedFiles = execFileSync("git", ["ls-files", "-z"], {
-  cwd: repoRoot,
-  encoding: "utf8"
-})
-  .split("\0")
-  .filter(Boolean);
+const workspaceMode = process.argv.includes("--workspace");
+const ignoredDirectories = new Set([
+  ".git",
+  "node_modules",
+  "dist",
+  "target",
+  "coverage",
+  "playwright-results",
+  "test-results"
+]);
+
+function listWorkspaceFiles(directory, prefix = "") {
+  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      return ignoredDirectories.has(entry.name) ? [] : listWorkspaceFiles(path.join(directory, entry.name), relativePath);
+    }
+    return entry.isFile() ? [relativePath] : [];
+  });
+}
+
+const scannedFiles = workspaceMode
+  ? listWorkspaceFiles(repoRoot)
+  : execFileSync("git", ["ls-files", "-z"], {
+      cwd: repoRoot,
+      encoding: "utf8"
+    })
+      .split("\0")
+      .filter(Boolean);
 
 const forbiddenFilePatterns = [
   { name: "environment file", pattern: /(^|\/)\.env(?:\..+)?$/i, allow: /\.env\.example$/i },
@@ -29,7 +52,7 @@ const secretPatterns = [
 
 const findings = [];
 
-for (const relativePath of trackedFiles) {
+for (const relativePath of scannedFiles) {
   const normalizedPath = relativePath.replaceAll("\\", "/");
   for (const rule of forbiddenFilePatterns) {
     if (rule.pattern.test(normalizedPath) && !(rule.allow?.test(normalizedPath))) {
@@ -64,4 +87,4 @@ if (findings.length > 0) {
   process.exit(1);
 }
 
-console.log(`Secret scan passed for ${trackedFiles.length} tracked file(s).`);
+console.log(`Secret scan passed for ${scannedFiles.length} ${workspaceMode ? "workspace" : "tracked"} file(s).`);

@@ -152,6 +152,10 @@ All Node API responses use `{ success, data?, error?, message? }`.
 | `019_appointment_return_proof.sql` | Add proof image, uploader, timestamp and note metadata to return appointments |
 | `020_matching_jobs.sql` | Add retryable MySQL-backed background matching queue |
 | `021_matching_jobs_utc.sql` | Normalize pending matching-job availability to UTC for cloud MySQL timezones |
+| `022_claim_secret_privacy.sql` | Hash private claim answers and remove the legacy plaintext column |
+| `023_one_accepted_claim_per_post.sql` | Enforce one accepted claim for each FOUND post |
+| `024_one_active_appointment_per_claim.sql` | Enforce one active appointment for each accepted claim |
+| `025_matching_candidate_prefilter.sql` | Add bounded matching candidate settings and supporting index |
 
 Run migrations with:
 
@@ -235,11 +239,11 @@ Because Node currently also implements several demo-critical APIs, including adm
 
 1. User creates LOST or FOUND post from web/mobile.
 2. Node API validates input, stores post/media and enqueues matching for the affected post.
-3. The matching worker analyzes saved text/OCR/tag metadata and materializes match results.
+3. The matching worker prefilters a bounded opposite-post candidate set, analyzes saved text/OCR/tag metadata, and materializes match results; user suggestion reads are batch-loaded.
 4. In-app notifications are persisted for likely owners/finders when score passes the notification threshold.
 5. Claimant submits evidence; finder/staff/admin reviews it.
 6. Only an accepted claim can join/send/read claim chat; chat images are resolved from a server-validated Cloudinary public ID. The accepted flow can then create a return appointment.
-7. Appointment completion updates return state, post/warehouse status, notifications and reputation where applicable.
+7. Each claim has at most one active appointment. Completion records the acting user and updates return state, post/warehouse status, notifications and reputation where applicable.
 8. Users can submit feedback after completed handovers; Staff/Admin can monitor it and Admin can mark items reviewed, flagged or dismissed.
 9. Scheduled Node jobs use a MySQL named lock before handling overdue posts/items, near-expiry alerts, capacity alerts and appointment reminders.
 

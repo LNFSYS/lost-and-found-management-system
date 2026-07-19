@@ -14,14 +14,14 @@ function makeUser(role: "STUDENT" | "STAFF") {
   };
 }
 
-function makePost(id = "post-existing") {
+function makePost(id = "post-existing", type: "LOST" | "FOUND" = "LOST") {
   return {
     id,
-    userId: "user-student",
-    type: "LOST",
+    userId: type === "FOUND" ? "user-finder" : "user-student",
+    type,
     status: "OPEN",
-    title: "Ví màu nâu",
-    description: "Ví da màu nâu có ngăn kéo khóa.",
+    title: type === "FOUND" ? "Ví sinh viên nhặt được" : "Ví màu nâu",
+    description: type === "FOUND" ? "Nhặt được ví da tại sảnh Alpha." : "Ví da màu nâu có ngăn kéo khóa.",
     category: { id: "category-wallet", name: "Ví" },
     location: {
       areaId: "area-alpha",
@@ -37,7 +37,7 @@ function makePost(id = "post-existing") {
     handoverPoint: null,
     resolvedAt: null,
     viewCount: 0,
-    owner: { id: "user-student", fullName: "Demo Student" },
+    owner: { id: type === "FOUND" ? "user-finder" : "user-student", fullName: type === "FOUND" ? "Demo Finder" : "Demo Student" },
     coverImageUrl: null,
     createdAt: now,
     updatedAt: now
@@ -47,10 +47,11 @@ function makePost(id = "post-existing") {
 async function installMockApi(
   page: Page,
   role: "STUDENT" | "STAFF",
-  onCreatePost?: (payload: Record<string, unknown>) => void
+  onCreatePost?: (payload: Record<string, unknown>) => void,
+  onSubmitClaim?: (payload: Record<string, unknown>) => void
 ) {
   const user = makeUser(role);
-  const existingPost = makePost();
+  const existingPost = makePost("post-existing", "FOUND");
 
   await page.route("**/api/**", async (route) => {
     const request = route.request();
@@ -88,8 +89,29 @@ async function installMockApi(
       const payload = request.postDataJSON() as Record<string, unknown>;
       onCreatePost?.(payload);
       data = { post: { ...existingPost, id: "post-created", ...payload }, matchSuggestions: [] };
+    } else if (path === "/claims" && method === "POST") {
+      const payload = request.postDataJSON() as Record<string, unknown>;
+      onSubmitClaim?.(payload);
+      data = {
+        claim: {
+          id: "claim-created",
+          postId: "post-existing",
+          postOwnerId: "user-finder",
+          claimant: { id: user.id, fullName: user.fullName },
+          status: "PENDING",
+          description: payload.description ?? null,
+          approximateLostAt: payload.approximateLostAt ?? null,
+          approximateLocation: payload.approximateLocation ?? null,
+          createdAt: now
+        },
+        evidence: []
+      };
     } else if (path === "/posts/post-created") {
       data = { post: makePost("post-created"), media: [], tags: [], matches: [] };
+    } else if (path === "/posts/post-existing") {
+      data = { post: existingPost, media: [], tags: [], matches: [] };
+    } else if (path === "/posts/post-existing/claims") {
+      data = { claims: [] };
     } else if (path === "/posts/post-created/claims") {
       data = { claims: [] };
     } else if (path === "/posts/post-created/matches") {
@@ -183,4 +205,31 @@ test("staff sees warehouse operations without admin-only tabs", async ({ page })
   await expect(page.getByRole("button", { name: "Quản lý kho" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Người dùng" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Cấu hình" })).toHaveCount(0);
+});
+
+test("student opens a FOUND post route and submits an ownership claim", async ({ page }) => {
+  let submittedClaim: Record<string, unknown> | undefined;
+  await installMockApi(page, "STUDENT", undefined, (payload) => {
+    submittedClaim = payload;
+  });
+  await login(page, "STUDENT");
+
+  await page.getByRole("heading", { name: "Ví sinh viên nhặt được" }).click();
+  await expect(page).toHaveURL(/\/posts\/post-existing$/);
+  await expect(page.getByRole("heading", { name: "Ví sinh viên nhặt được" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Claim đồ này" }).click();
+  const claimForm = page.locator("form.dialog");
+  await claimForm.getByLabel("Mô tả bí mật").fill("Bên trong có thẻ thư viện mã DEMO001");
+  await claimForm.getByLabel("Mô tả thêm").fill("Ví có một vết xước nhỏ ở góc phải");
+  await claimForm.getByLabel("Vị trí mất ước lượng").fill("Sảnh Alpha gần quầy lễ tân");
+  await claimForm.getByRole("button", { name: "Gửi yêu cầu nhận đồ" }).click();
+
+  await expect(claimForm).toHaveCount(0);
+  expect(submittedClaim).toMatchObject({
+    postId: "post-existing",
+    secretAnswer: "Bên trong có thẻ thư viện mã DEMO001",
+    description: "Ví có một vết xước nhỏ ở góc phải",
+    approximateLocation: "Sảnh Alpha gần quầy lễ tân"
+  });
 });

@@ -8,9 +8,9 @@ Last audit: 2026-07-19
 
 | Metric | Count |
 | --- | ---: |
-| Completed checklist items | 144 |
+| Completed checklist items | 148 |
 | Open MVP-blocking items | 0 |
-| Open future/hardening items | 24 |
+| Open future/hardening items | 21 |
 
 Open work is now concentrated in hardening/future work: advanced AI category selection, optional Java auth extension, background matching queue, notification digest/anti-noise tuning, overdue disposition paperwork, mobile hardening, custom AI inference/MLOps, and deeper automated tests.
 
@@ -28,13 +28,13 @@ Scope note: the current MVP should be demoed as web + Node backend with Google V
 - [x] Preserve Lecturer selection in the legacy OTP verification endpoint.
 - [x] Avoid incrementing view count for missing or unauthorized hidden posts.
 - [x] Batch-load match suggestions and prefilter a bounded candidate set using category/location/time signals.
-- [ ] Run migrations 024-025 and database-backed E2E only on isolated MySQL/CI before applying them to the shared demo database.
+- [x] Run migrations 001-025 and database-backed E2E on isolated MySQL 8 in CI before applying new migrations to the shared demo database.
 - [x] Add optional Redis-backed distributed rate limits and Socket.IO adapter while retaining a local single-process fallback.
 - [x] Add structured request logs, request IDs, liveness/readiness, matching queue health and protected Prometheus-format metrics.
 - [x] Add CI performance smoke with P50/P95/P99/error-rate artifact and Redis-backed runtime hardening smoke.
 - [x] Add guarded 10k/50k/100k synthetic dataset benchmark workflow with `EXPLAIN ANALYZE` artifacts.
 - [x] Add API/web container builds, production-like Compose topology, migration gate and tagged release ZIP/checksum workflow.
-- [ ] Verify Redis runtime and both container builds in GitHub Actions after this change is pushed.
+- [x] Verify Redis runtime, two-instance Socket.IO room isolation, and both container builds in GitHub Actions (`29693045128`).
 - [ ] Execute and retain passing 10k/50k/100k benchmark artifacts, then run a provider-specific backup/restore drill before production claims.
 
 
@@ -62,7 +62,7 @@ Scope note: the current MVP should be demoed as web + Node backend with Google V
 The current web and mobile MVPs are demo-ready but still carry "God file" debt. Do not block the MVP on this refactor, but plan it before long-term maintenance or team scaling.
 
 - [x] Extract shared web app types/constants/helpers, shell widgets, admin widgets, and private media widgets out of `apps/web/src/App.tsx` as the first low-risk refactor phase.
-- [ ] Continue splitting `apps/web/src/App.tsx` into route-level pages and domain components. Shared app modules, board/post cards, Create Post, account, claim chat/verification, and the active Admin dashboard are extracted; `App.tsx` is now about 1.7k lines. The remaining work is primarily post detail/claim orchestration and smaller route-shell responsibilities.
+- [x] Split `apps/web/src/App.tsx` into route-level/domain components. Board/posts, Create Post, account, Post Detail, claim dialogs/workflows, claim chat/verification and Admin are extracted; `App.tsx` is now about 750 lines and retains application-shell orchestration.
 - [ ] Continue splitting `apps/web/src/styles.css` into feature CSS modules or a consistent utility/component styling strategy. Account/auth/profile, create-post, and claim-chat styles now live with their features; the remaining global file is still large.
 - [x] Replace manual web `view` state navigation with `react-router-dom`; board/create/account/handover/my-posts/detail now use real URLs and browser history.
 - [ ] Split `apps/mobile/App.tsx` into screens/components/hooks.
@@ -138,6 +138,7 @@ The current web and mobile MVPs are demo-ready but still carry "God file" debt. 
 - [x] Add realtime unread badge for messages.
 - [x] Gate claim chat to `ACCEPTED` status and reject client-supplied image URLs.
 - [x] Add unit and e2e regression coverage for claim chat status gating.
+- [x] Add two-instance Redis/Socket.IO E2E that verifies cross-instance notification delivery and unrelated user-room isolation.
 
 ## Admin Dashboard / Report / Config
 
@@ -227,7 +228,7 @@ Recommended order is documented in `docs/Overall/ai-training-roadmap.md`: collec
 - [x] Add Java 21/Maven build to CI quality gates.
 - [x] Add API policy unit tests with Node's built-in test runner.
 - [x] Add validation regression coverage for category multi-select query parsing and legacy compatibility.
-- [x] Add Playwright web routing/auth session smoke plus API-mocked Student create-LOST and Staff warehouse/permission flows; CI runs the suite and retains the optional database-backed login scenario.
+- [x] Add Playwright routing/auth smoke plus API-mocked Student create-LOST, Student FOUND-detail-to-claim, Staff review/accept/appointment, and Staff warehouse/permission flows; CI retains the optional database-backed login scenario.
 - [x] Add isolated-CI E2E for admin CRUD of categories/areas/buildings/handover/users and report handling.
 - [x] Add role/privacy smoke test for Admin vs Staff permissions.
 - [x] Add media privacy smoke test for public post evidence/contact filtering.

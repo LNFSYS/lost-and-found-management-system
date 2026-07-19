@@ -60,7 +60,8 @@ docs/                   Canonical thesis/project documentation
 | `npm run build:api` | Compile Node API |
 | `npm run build:web` | Build web app |
 | `npm run lint:web` | Type-check web app |
-| `npm run e2e:web` | Run Playwright routing, mocked Student post creation and Staff permission flows; optional seeded login uses E2E credentials |
+| `npm run e2e:web` | Run Playwright routing, mocked Student LOST creation, FOUND claim, Staff review/appointment and permission flows; optional seeded login uses E2E credentials |
+| `npm run e2e:socket-scaleout` | Verify Redis-backed notification delivery and user-room isolation across two API instances |
 | `npm run e2e:core` | Smoke-check LOST/FOUND, claim, appointment, completion, and feedback when API is running |
 | `npm run e2e:roles` | Smoke-check selected Admin vs Staff permission boundaries when API is running |
 | `npm run e2e:warehouse` | Smoke-check warehouse lifecycle and terminal-state guards when API is running |

@@ -7,7 +7,7 @@ Use this checklist before demo, merge, or submission. Keep evidence screenshots/
 ## 1. Environment
 
 - [x] Confirm only `.env.example` files are tracked; real `.env` files are ignored.
-- [ ] Run `npm run package:release` from a clean committed tree and distribute that ZIP instead of compressing the working directory.
+- [x] Verify `npm run package:release` from a clean committed checkout in CI; use that command when producing the submission ZIP.
 - [ ] Run `npm run scan:secrets:workspace` before manually sharing a working-directory copy; a local `.env` finding is expected and means the raw copy must not be shared.
 - [ ] Rotate any Aiven/JWT/SMTP/Cloudinary/Google secret that appeared in screenshots, files, or shared artifacts.
 - [ ] Confirm `FRONTEND_URL`, `API_PORT`, and `SOCKET_CORS_ORIGIN` match the demo environment. Socket.IO shares `API_PORT`; configure `REDIS_URL` for multi-instance deployment.
@@ -21,8 +21,8 @@ Use this checklist before demo, merge, or submission. Keep evidence screenshots/
 
 ## 2. Database
 
-- [ ] Run `npm run migrate:api` for migrations 024-025 on an isolated/test database first.
-- [ ] Run `npm run smoke:migration` and verify all 25 migrations plus the active-appointment unique key.
+- [x] Run migrations 001-025 from a blank isolated MySQL 8 database in CI.
+- [x] Run `npm run smoke:migration` and verify all 25 migrations plus the active-appointment unique key in CI.
 - [ ] Run `npm run seed:demo` only on a fresh demo/test database, never on the shared primary demo data by accident.
 - [ ] Verify demo accounts for Student/Lecturer/Staff/Admin can log in.
 - [ ] Run `npm run repair:encoding` against a copy of the demo database if old records display mojibake; review output before using `npm run repair:encoding -- --apply`.
@@ -33,10 +33,10 @@ Use this checklist before demo, merge, or submission. Keep evidence screenshots/
 - [ ] Run `npm run quality:release` after migrations 024-025 are verified/applied on the intended database; the 2026-07-15 local run is intentionally pending because shared DB remains at migration 023.
 - [x] GitHub Actions CI runs release text/config scan, API build, web build, and mobile typecheck on pushes/PRs to `main`.
 - [x] GitHub Actions also runs isolated MySQL migration smoke, Java 21/Maven build, and advisory dependency audit.
-- [x] API tests include policy, image-signature, rate-limit, request-ID and metrics coverage (25 tests passed locally on 2026-07-19).
+- [x] API tests include policy, migration schema, image-signature, rate-limit, request-ID and metrics coverage (26 tests passed locally on 2026-07-19).
 - [x] API + web runtime dependency audit reports 0 vulnerabilities after the Vite 6.4.3 update; Expo/mobile advisories remain deferred with the mobile workstream.
-- [ ] Confirm CI passes Redis-backed runtime hardening, performance artifact and API/web container builds.
-- [x] Run Playwright routing/back-forward smoke plus API-mocked Student create-LOST and Staff permission/warehouse flows; database-backed login remains conditional on demo credentials.
+- [x] Confirm CI passes Redis-backed runtime hardening, two-instance Socket.IO isolation, performance artifact and API/web container builds (`29693045128`).
+- [x] Run Playwright routing/back-forward smoke plus API-mocked Student create-LOST, Student FOUND-detail-to-claim, Staff claim review/appointment and Staff permission/warehouse flows; database-backed login remains conditional on demo credentials.
 - [x] Run `npm run build:api` (passed on 2026-07-19).
 - [x] Run `npm run build:web` (passed on 2026-07-19).
 - [x] Run `npm run typecheck:mobile`.
@@ -47,10 +47,11 @@ Use this checklist before demo, merge, or submission. Keep evidence screenshots/
 - [x] Run `npm run e2e:media-privacy` when API + Cloudinary are ready to verify public post detail does not expose evidence media.
 - [x] Run `npm run e2e:chat-gating` to verify PENDING/REJECTED/CANCELLED claims cannot chat, ACCEPTED can chat, and client image URLs are rejected.
 - [x] Run `npm run e2e:claim-evidence-policy` to verify reviewer upload denial and accepted-claim evidence lock.
-- [ ] Run `npm run e2e:admin-crud` on an isolated test database; do not run it on shared demo data because it intentionally creates admin resources.
-- [ ] Run `npm run build:java` on a machine with Maven installed; current Windows shell does not have `mvn` in PATH.
+- [x] Run `npm run e2e:admin-crud` on the isolated CI database; do not run it on shared demo data because it intentionally creates admin resources.
+- [x] Run `npm run build:java` in the Java 21/Maven CI job; Maven remains unavailable on the current Windows workstation.
 - [ ] Open the web app and check the browser console for repeated 4xx/5xx errors.
-- [ ] Review the CI performance artifact and confirm P95/error-rate thresholds pass.
+- [ ] Apply migrations 024-025 deliberately to the intended local/demo database after backup; the current workstation smoke correctly fails because `return_appointments.active_claim_id` is absent.
+- [x] Confirm the bounded CI performance smoke passes its P95/error-rate thresholds; retain large-dataset benchmark runs separately.
 - [ ] Run the backup/restore drill in [deployment-and-rollback.md](../Overall/deployment-and-rollback.md) for the chosen provider.
 
 ## 4. Core Demo Flow

@@ -194,11 +194,11 @@ These issues are not blockers for the current MVP demo, but they should be ackno
 
 | Area | Current state | Recommended next step |
 | --- | --- | --- |
-| Web frontend | `apps/web/src/App.tsx` is about 1.7k lines after shared shell, board/posts, Create Post, account, claim chat/verification and Admin were extracted. `styles.css` and the Admin feature module remain large. | Extract post-detail/claim orchestration next, then split Admin and CSS internally by domain in small verified steps |
+| Web frontend | `apps/web/src/App.tsx` is about 750 lines after board/posts, Create Post, account, Post Detail, claim dialogs/workflows, claim chat/verification and Admin were extracted. `styles.css` and the Admin feature module remain large. | Split Admin and CSS internally by domain in small verified steps |
 | Web navigation | Public board, my posts, create, handover, account and post detail use `react-router-dom` URLs with browser back/forward and deep-link smoke coverage | Add route-level lazy loading only when bundle/performance measurement justifies it |
 | Mobile frontend | `apps/mobile/App.tsx` still contains many screens and modal flows | Deferred by the current product decision; do not include it in the active Web/backend hardening phase |
 | Node post domain | Post controller/service/repository remain large because posts connect matching, media, claims, reports, and admin moderation | Split by subdomain once demo flow is stable: post CRUD, media, matching, moderation, and search |
-| Testing depth | API unit/integration tests, smoke/e2e scripts, isolated MySQL/Redis CI, performance smoke and Java/container build gates exist. Playwright covers routing, mocked Student post creation and Staff permission boundaries, but not the full claim-to-return journey. | Expand Playwright claim/review/appointment coverage and retain large-dataset load artifacts before a broad campus rollout |
+| Testing depth | API unit/policy tests, smoke/e2e scripts, isolated MySQL/Redis CI, performance smoke and Java/container build gates exist. Playwright covers routing, Student LOST creation, Student FOUND claim, Staff review/appointment and permission boundaries; Redis CI verifies two-instance notification isolation. | Expand Playwright proof/completed-return coverage and retain large-dataset load artifacts before a broad campus rollout |
 
 ## AI And Matching
 

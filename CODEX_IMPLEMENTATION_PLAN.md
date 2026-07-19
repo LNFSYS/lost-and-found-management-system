@@ -136,8 +136,9 @@ Evidence:
 
 ## Phase 2 - In progress
 
-- [~] Modular-monolith extraction by bounded context. Web shell, board/posts, Create Post, account, claim chat/verification and Admin are extracted; `App.tsx` is about 1.7k lines. Post-detail/claim orchestration, Admin internals and large global CSS remain.
+- [x] Modular-monolith extraction by bounded context for the Web application shell. Board/posts, Create Post, account, post detail, claim dialogs/workflows, claim chat/verification and Admin are feature modules; `App.tsx` is about 750 lines. Admin internals and the large global CSS remain incremental technical debt.
 - [x] Distributed rate limiting and Socket.IO Redis adapter with an explicit local single-process fallback. `REDIS_REQUIRED=true` enforces Redis for scaled deployments.
+- [x] Two-instance Socket.IO delivery and user-room isolation are verified in CI by creating a claim through API instance 1 and receiving only the intended notification through API instance 2.
 - [x] Structured logging, request IDs, liveness, DB/queue/Redis-aware readiness, protected metrics and graceful shutdown.
 - [x] Matching candidate prefilter, durable MySQL job queue, performance smoke/query-plan scripts and guarded benchmark workflow. Large-dataset artifacts are still release evidence, not an implementation blocker.
 
@@ -145,10 +146,11 @@ Phase 0/1 gates are complete. Phase 2 changes must continue in small, independen
 
 ## Phase 2 verification update - 2026-07-19
 
-- Passed locally: API build, 25/25 API tests, Web build/lint, strict unused-local TypeScript check, tracked-secret scan and text/config scan.
-- Passed browser checks: URL/back-forward routing, API-mocked Student create-LOST flow and Staff warehouse/permission boundary. Seeded login remains credential-dependent.
-- CI definitions now include Redis runtime smoke, performance artifact generation, container builds and tagged release packaging; the exact working-tree snapshot still needs a green remote CI run after commit/push.
-- Runtime evidence still pending: isolated migrations 024-025, full database E2E for this snapshot, container build, multi-instance Redis/Socket soak, 10k/50k/100k benchmark and provider backup/restore drill.
+- Passed locally: API build, 26/26 API tests, Web build/lint, tracked-secret scan, text/config scan and Web Playwright (6 pass, 1 credential-dependent skip).
+- GitHub Actions run `29693045128` passed for commit `b4b6458`: clean release package, API/Web build, isolated blank MySQL migrations 001-025, seed, all database E2E suites, performance smoke, Redis runtime checks, two-instance Socket.IO room isolation, Java 21/Maven build and API/Web container builds.
+- Browser contract coverage now includes URL/back-forward routing, Student create-LOST, Student open-FOUND-and-claim, Staff claim review/accept, appointment creation and Staff warehouse/Admin-permission boundaries. The seeded live-login check remains credential-dependent outside CI.
+- The current workstation migration smoke reports a schema still below migration 024. CI proves blank migrations 001-025; migrate the intended local/demo database deliberately after backup rather than mutating shared data during verification.
+- Runtime evidence still pending: retained 10k/50k/100k benchmark artifacts, hosted staging smoke, provider backup/restore drill and external-service E2E with dedicated Google/SMTP/OAuth/Cloudinary test credentials.
 
 ## Final Phase 0/1 verification - 2026-07-13
 

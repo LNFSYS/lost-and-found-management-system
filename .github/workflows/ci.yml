@@ -134,6 +134,8 @@ jobs:
           E2E_PASSWORD: "12345678"
           E2E_CLAIMANT_EMAIL: studentlnf@gmail.com
           E2E_CLAIMANT_PASSWORD: "12345678"
+          E2E_UNRELATED_EMAIL: lecturerlnf@gmail.com
+          E2E_UNRELATED_PASSWORD: "12345678"
         run: |
           run_ci_check() {
             local check_name="$1"
@@ -153,17 +155,21 @@ jobs:
 
           npm run build:api
           npm --workspace apps/api-node run start > /tmp/lnfs-api.log 2>&1 &
-          API_PID=$!
-          trap 'kill $API_PID 2>/dev/null || true' EXIT
+          API_PID_1=$!
+          API_PORT=3002 npm --workspace apps/api-node run start > /tmp/lnfs-api-2.log 2>&1 &
+          API_PID_2=$!
+          trap 'kill $API_PID_1 $API_PID_2 2>/dev/null || true' EXIT
           for attempt in {1..30}; do
-            if curl --fail --silent http://localhost:3001/api/health > /dev/null; then
+            if curl --fail --silent http://localhost:3001/api/health > /dev/null && curl --fail --silent http://localhost:3002/api/health > /dev/null; then
               break
             fi
             sleep 1
           done
           curl --fail http://localhost:3001/api/health
           curl --fail http://localhost:3001/api/health/ready
+          curl --fail http://localhost:3002/api/health/ready
           run_ci_check e2e-runtime-hardening npm run e2e:runtime-hardening
+          E2E_SOCKET_URL=http://localhost:3002 run_ci_check e2e-socket-scaleout npm run e2e:socket-scaleout
           run_ci_check e2e-core npm run e2e:core
           run_ci_check e2e-roles npm run e2e:roles
           run_ci_check e2e-warehouse npm run e2e:warehouse

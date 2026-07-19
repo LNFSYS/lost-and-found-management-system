@@ -15,6 +15,7 @@
     "e2e:claim-evidence-policy": "tsx src/scripts/e2e-claim-evidence-policy.ts",
     "e2e:admin-crud": "tsx src/scripts/e2e-admin-crud.ts",
     "e2e:runtime-hardening": "tsx src/scripts/e2e-runtime-hardening.ts",
+    "e2e:socket-scaleout": "tsx src/scripts/e2e-socket-scaleout.ts",
     "seed:demo": "tsx src/scripts/seed-demo.ts",
     "repair:encoding": "tsx src/scripts/repair-mojibake.ts",
     "export:training-data": "tsx src/scripts/export-training-data.ts",

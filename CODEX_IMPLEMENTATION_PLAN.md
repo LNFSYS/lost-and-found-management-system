@@ -1,6 +1,6 @@
 # CODEX Implementation Plan
 
-Last updated: 2026-07-13
+Last updated: 2026-07-19
 
 ## Scope and gates
 
@@ -134,14 +134,21 @@ Evidence:
 - Commands: `npm run e2e:claim-race`, `npm run test:api`, `npm run test:mobile`.
 - Result: live two-claim race passes; 18/18 API tests and 2/2 mobile concurrency tests pass; CI runs the race without `|| true` or an always-success stub.
 
-## Phase 2 - Not started
+## Phase 2 - In progress
 
-- Modular-monolith extraction by bounded context.
-- Distributed rate limiting and Socket.IO adapter.
-- Observability and DB-aware health checks.
-- Matching candidate prefilter and benchmark work.
+- [~] Modular-monolith extraction by bounded context. Web shell, board/posts, Create Post, account, claim chat/verification and Admin are extracted; `App.tsx` is about 1.7k lines. Post-detail/claim orchestration, Admin internals and large global CSS remain.
+- [x] Distributed rate limiting and Socket.IO Redis adapter with an explicit local single-process fallback. `REDIS_REQUIRED=true` enforces Redis for scaled deployments.
+- [x] Structured logging, request IDs, liveness, DB/queue/Redis-aware readiness, protected metrics and graceful shutdown.
+- [x] Matching candidate prefilter, durable MySQL job queue, performance smoke/query-plan scripts and guarded benchmark workflow. Large-dataset artifacts are still release evidence, not an implementation blocker.
 
-Phase 2 remains blocked until every Phase 0/1 checkbox has implementation and passing evidence.
+Phase 0/1 gates are complete. Phase 2 changes must continue in small, independently verified slices; do not reopen mobile work in the current Web/backend phase.
+
+## Phase 2 verification update - 2026-07-19
+
+- Passed locally: API build, 25/25 API tests, Web build/lint, strict unused-local TypeScript check, tracked-secret scan and text/config scan.
+- Passed browser checks: URL/back-forward routing, API-mocked Student create-LOST flow and Staff warehouse/permission boundary. Seeded login remains credential-dependent.
+- CI definitions now include Redis runtime smoke, performance artifact generation, container builds and tagged release packaging; the exact working-tree snapshot still needs a green remote CI run after commit/push.
+- Runtime evidence still pending: isolated migrations 024-025, full database E2E for this snapshot, container build, multi-instance Redis/Socket soak, 10k/50k/100k benchmark and provider backup/restore drill.
 
 ## Final Phase 0/1 verification - 2026-07-13
 

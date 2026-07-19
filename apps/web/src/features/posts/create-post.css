@@ -1,0 +1,148 @@
+.create-page {
+  display: grid;
+  gap: 18px;
+  width: min(780px, 100%);
+  margin: 0 auto;
+}
+
+.create-intro {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.create-intro h2,
+.create-intro p {
+  margin: 0;
+}
+
+.create-intro h2 {
+  color: var(--ink);
+  font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 1.05;
+}
+
+.create-intro p {
+  max-width: 620px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.create-report-form {
+  max-width: none;
+  padding: clamp(18px, 3vw, 28px);
+  border: 0;
+  box-shadow: 0 18px 44px rgba(22, 32, 51, 0.08);
+}
+
+.create-report-form .segmented {
+  width: 100%;
+}
+
+.create-report-form .segmented button {
+  width: 100%;
+  min-height: 46px;
+}
+
+.form-section-heading {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px;
+  border-left: 4px solid var(--fpt-blue);
+  border-radius: 8px;
+  background: #f7fbff;
+}
+
+.form-section-heading span {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: var(--fpt-blue);
+  color: white;
+  font-size: 0.82rem;
+  font-weight: 950;
+}
+
+.form-section-heading strong,
+.form-section-heading small {
+  display: block;
+}
+
+.form-section-heading small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-weight: 750;
+}
+
+.upload-guide-panel {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(6, 81, 160, 0.14);
+  border-radius: 8px;
+  background: #f3f9ff;
+}
+
+.upload-guide-panel > strong {
+  color: var(--fpt-blue);
+}
+
+.upload-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.upload-guide-grid span {
+  min-width: 0;
+  color: #52647d;
+  font-size: 0.88rem;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.upload-split-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.upload-dropzone {
+  position: relative;
+  place-items: center;
+  min-height: 150px;
+  padding: 20px;
+  border: 2px dashed #b9c9d8;
+  border-radius: 8px;
+  background: #f7fbff;
+  color: var(--fpt-blue);
+  text-align: center;
+}
+
+.evidence-dropzone {
+  border-color: rgba(243, 113, 36, 0.38);
+  background: #fff7f1;
+  color: #9b4012;
+}
+
+.upload-dropzone span {
+  max-width: 440px;
+  color: var(--muted);
+  font-weight: 750;
+}
+
+.upload-dropzone input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.preview-section-title {
+  color: var(--ink);
+}

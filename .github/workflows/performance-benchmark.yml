@@ -1,0 +1,101 @@
+name: Performance Benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      dataset_size:
+        description: Synthetic post count
+        required: true
+        default: "10000"
+        type: choice
+        options:
+          - "10000"
+          - "50000"
+          - "100000"
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: perf-root-password
+          MYSQL_DATABASE: fptu_lost_found_perf
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pperf-root-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      NODE_ENV: test
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_NAME: fptu_lost_found_perf
+      DB_USER: root
+      DB_PASSWORD: perf-root-password
+      DB_SSL: "false"
+      JWT_ACCESS_SECRET: perf-access-secret-at-least-32-characters
+      JWT_REFRESH_SECRET: perf-refresh-secret-at-least-32-characters
+      REDIS_URL: redis://127.0.0.1:6379
+      API_PORT: 3001
+      FRONTEND_URL: http://localhost:5173
+      SOCKET_CORS_ORIGIN: http://localhost:5173
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare isolated benchmark database
+        run: |
+          npm run migrate:api
+          npm run seed:demo
+          ALLOW_PERF_SEED=true PERF_DATASET_SIZE=${{ inputs.dataset_size }} npm run perf:seed
+          PERF_QUERY_PLAN_OUTPUT=/tmp/lnfs-query-plan.json npm run perf:query-plan
+
+      - name: Run API benchmark
+        run: |
+          npm run build:api
+          npm --workspace apps/api-node run start > /tmp/lnfs-perf-api.log 2>&1 &
+          API_PID=$!
+          trap 'kill $API_PID 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://localhost:3001/api/health/ready > /dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl --fail http://localhost:3001/api/health/ready
+          sleep 5
+          PERF_OUTPUT_PATH=/tmp/lnfs-performance.json PERF_REQUESTS=500 PERF_CONCURRENCY=25 PERF_P95_LIMIT_MS=1000 npm run perf:smoke
+
+      - name: Upload benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-${{ inputs.dataset_size }}
+          path: |
+            /tmp/lnfs-performance.json
+            /tmp/lnfs-query-plan.json
+            /tmp/lnfs-perf-api.log
+          if-no-files-found: warn

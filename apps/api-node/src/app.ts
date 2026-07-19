@@ -1,9 +1,9 @@
 import cors from "cors";
 import express from "express";
 import helmet from "helmet";
-import morgan from "morgan";
 import { env } from "./config/env.js";
 import { errorHandler, notFoundHandler } from "./middlewares/error.middleware.js";
+import { requestContext } from "./middlewares/request-context.middleware.js";
 import { apiRoutes } from "./routes/index.js";
 
 function splitOrigins(...values: Array<string | undefined>) {
@@ -32,10 +32,13 @@ function corsOrigin(origin: string | undefined, callback: (error: Error | null, 
 export function createApp() {
   const app = express();
 
+  if (env.trustProxy !== false) {
+    app.set("trust proxy", env.trustProxy);
+  }
+  app.use(requestContext);
   app.use(helmet());
   app.use(cors({ origin: corsOrigin, credentials: true }));
   app.use(express.json({ limit: "1mb" }));
-  app.use(morgan("dev"));
 
   app.use("/api", apiRoutes);
   app.use(notFoundHandler);

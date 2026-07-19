@@ -1,8 +1,8 @@
 # MVP Scope And Future Work
 
-> Delivery note (2026-07-10): the team is prioritizing Web + Node/Java backend completion. Mobile remains a prototype/extension and is intentionally not part of the current implementation sprint.
+> Delivery note (2026-07-19): the team is prioritizing Web + Node/Java backend completion. Mobile remains a prototype/extension and is intentionally not part of the current implementation sprint.
 
-Last updated: 2026-07-08
+Last updated: 2026-07-19
 
 ## Current MVP Positioning
 
@@ -15,7 +15,7 @@ The core demo deliverable is the React web app plus the Node.js backend and MySQ
 3. Run rule-based/hybrid matching using title, description, category, location, time, image tags, and OCR/serial-like metadata.
 4. Notify users about likely matches.
 5. Submit claim with ownership evidence.
-6. Review evidence and show ownership confidence as decision support.
+6. Review evidence and show review confidence as decision support; this is not automatic ownership verification.
 7. Create return appointment after an accepted claim.
 8. Track handover points, warehouse items, retention deadlines, and stored-item counts.
 9. Use realtime chat/notifications for claim and return coordination.
@@ -110,10 +110,10 @@ See [node-java-service-boundary.md](node-java-service-boundary.md) for the owner
 ## Known Future Work
 
 - Stronger enrollment verification can be added later through student-code/admin approval, but FPT/edu email must not be mandatory for current students.
-- Realtime chat reconnect/offline/socket-room isolation hardening.
+- Realtime reconnect/offline hardening and multi-node soak testing; Redis adapter support and room-isolation smoke coverage are implemented.
 - Notification digest and anti-noise tuning beyond current score tiers.
 - Overdue disposition paperwork/report forms for real campus approval workflows.
-- Background matching queue for large data.
-- More automated coverage for OTP registration, admin CRUD, blank-DB migration rehearsal, realtime room isolation, reconnect and offline behavior.
+- Large-dataset matching benchmark and query-plan evidence beyond the current durable queue, bounded candidate prefilter and CI performance smoke.
+- More automated coverage for OTP provider delivery, reconnect/offline behavior and full browser workflows.
 - Native mobile hardening: push notifications, offline retry, device testing, app store packaging, and optional separate Flutter app.
 - Production custom AI training/MLOps pipeline.

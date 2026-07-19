@@ -1,0 +1,15 @@
+.git
+.github
+.env
+.env.*
+!.env.example
+**/node_modules
+**/dist
+**/target
+**/coverage
+**/test-results
+**/playwright-results
+training-exports
+model-artifacts
+docs
+*.log

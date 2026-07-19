@@ -4,12 +4,14 @@ import { ZodError } from "zod";
 import { env } from "../config/env.js";
 import { fail } from "../utils/api-response.js";
 import { HttpError } from "../utils/http-error.js";
+import { logger } from "../utils/logger.js";
 
 export function notFoundHandler(request: Request, _response: Response, next: NextFunction) {
   next(new HttpError(404, `Route not found: ${request.method} ${request.originalUrl}`));
 }
 
-export function errorHandler(error: unknown, _request: Request, response: Response, _next: NextFunction) {
+export function errorHandler(error: unknown, request: Request, response: Response, _next: NextFunction) {
+  const requestId = response.locals.requestId as string | undefined;
   if (error instanceof ZodError) {
     response.status(400).json(fail("VALIDATION_FAILED", "Validation failed", error.issues));
     return;
@@ -21,10 +23,19 @@ export function errorHandler(error: unknown, _request: Request, response: Respon
   }
 
   if (error instanceof HttpError) {
+    if (error.statusCode >= 500) {
+      logger.error("http_error", { requestId, method: request.method, path: request.originalUrl, error });
+    }
     response.status(error.statusCode).json(fail("HTTP_ERROR", error.message));
     return;
   }
 
+  logger.error("unhandled_request_error", {
+    requestId,
+    method: request.method,
+    path: request.originalUrl,
+    error
+  });
   response
     .status(500)
     .json(

@@ -28,8 +28,11 @@ jobs:
       - name: Verify release packaging from tracked commit
         run: npm run package:release -- /tmp/fptu-lost-found-system-release.zip
 
-      - name: Audit runtime dependencies (advisory until Vite/Expo major upgrade)
-        run: npm audit --omit=dev --audit-level=high
+      - name: Audit core API and web runtime dependencies
+        run: npm audit --workspace apps/api-node --workspace apps/web --omit=dev --audit-level=high
+
+      - name: Audit deferred mobile runtime dependencies
+        run: npm audit --workspace apps/mobile --omit=dev --audit-level=high
         continue-on-error: true
 
       - name: Release text/config scan
@@ -65,6 +68,15 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
     env:
       DB_HOST: 127.0.0.1
       DB_PORT: 3306
@@ -74,6 +86,7 @@ jobs:
       DB_SSL: "false"
       JWT_ACCESS_SECRET: ci-access-secret-at-least-32-characters
       JWT_REFRESH_SECRET: ci-refresh-secret-at-least-32-characters
+      REDIS_URL: redis://127.0.0.1:6379
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -123,6 +136,8 @@ jobs:
             sleep 1
           done
           curl --fail http://localhost:3001/api/health
+          curl --fail http://localhost:3001/api/health/ready
+          npm run e2e:runtime-hardening
           npm run e2e:core
           npm run e2e:roles
           npm run e2e:warehouse
@@ -132,6 +147,15 @@ jobs:
           npm run e2e:claim-evidence-policy
           npm run e2e:admin-crud
           npm run e2e:web
+          PERF_OUTPUT_PATH=/tmp/lnfs-performance.json PERF_REQUESTS=120 PERF_CONCURRENCY=10 PERF_P95_LIMIT_MS=1000 npm run perf:smoke
+
+      - name: Upload performance smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-smoke
+          path: /tmp/lnfs-performance.json
+          if-no-files-found: error
 
   java-build:
     runs-on: ubuntu-latest
@@ -148,3 +172,15 @@ jobs:
 
       - name: Build Java extension
         run: npm run build:java
+
+  container-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build API container
+        run: docker build -f apps/api-node/Dockerfile -t lnfs-api:ci .
+
+      - name: Build web container
+        run: docker build -f apps/web/Dockerfile --build-arg VITE_API_URL=http://localhost:3001/api -t lnfs-web:ci .

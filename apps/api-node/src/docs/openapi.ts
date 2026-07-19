@@ -17,8 +17,33 @@ export const openApiDocument = {
   paths: {
     "/health": {
       get: {
-        summary: "Health check",
+        summary: "Process liveness check",
         responses: { "200": { description: "Service status" } }
+      }
+    },
+    "/health/live": {
+      get: {
+        summary: "Process liveness check for orchestrators",
+        responses: { "200": { description: "Process is alive" } }
+      }
+    },
+    "/health/ready": {
+      get: {
+        summary: "Dependency-aware readiness check for database, matching queue and optional Redis",
+        responses: {
+          "200": { description: "Service is ready" },
+          "503": { description: "One or more required dependencies are unavailable" }
+        }
+      }
+    },
+    "/metrics": {
+      get: {
+        summary: "Prometheus-compatible operational metrics",
+        responses: {
+          "200": { description: "Metrics text" },
+          "403": { description: "Invalid metrics token" },
+          "404": { description: "Metrics are hidden in production when no token is configured" }
+        }
       }
     },
     "/auth/register": {

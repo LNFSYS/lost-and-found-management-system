@@ -1,5 +1,43 @@
 # Đánh giá lại FPTU Lost & Found System sau cải thiện
 
+## Cập nhật hardening - 2026-07-17
+
+Đợt hardening này xử lý trực tiếp các điểm yếu performance, scalability, reliability và DevOps thay vì chỉ sửa nội dung chấm điểm:
+
+- Thêm Redis tùy chọn cho distributed rate limit và Socket.IO adapter; local development vẫn có fallback một process.
+- Xác minh JWT lại trên từng Socket.IO event và giới hạn event theo connection.
+- Thêm structured JSON log, `X-Request-Id`, graceful shutdown, liveness, DB/queue/Redis readiness và metrics dạng Prometheus.
+- Tối ưu matching theo hai bước: chọn bounded candidate ID trước, sau đó chỉ aggregate OCR/image tag của candidate đã chọn.
+- Thêm performance smoke ghi P50/P95/P99/error rate thành CI artifact.
+- Thêm Redis service trong CI và runtime smoke chứng minh limiter/Socket adapter chạy distributed.
+- Thêm API/web Dockerfile, Compose topology có MySQL/Redis/migration gate/healthcheck và tagged release ZIP kèm SHA-256.
+- Thêm deployment/rollback/restore runbook. Việc restore trên provider thật vẫn cần team thực hiện bằng credential và môi trường thật.
+
+Kiểm chứng local ngày 2026-07-17: API build pass, web build pass, API test pass 23/23, secret scan pass, text scan pass và npm audit sau khi cài Redis dependency không có vulnerability. Docker không có trên máy local nên container build và Redis runtime smoke phải chờ GitHub Actions; không được đánh dấu là runtime-pass trước khi CI xanh.
+
+### Ước lượng điểm hiện tại có bằng chứng
+
+| Tiêu chí | MVP /10 | Ghi chú |
+| --- | ---: | --- |
+| Business correctness | 8.8 | Core invariant claim/appointment/warehouse đã được khóa bằng transaction và DB constraint |
+| Architecture | 8.5 | Node write owner, Java extension, optional Redis và container boundary rõ |
+| Security | 8.5 | Privacy guard, upload signature, Redis limiter, socket token revalidation, secret/release gate |
+| Privacy/data protection | 8.6 | Private media proxy, không trả raw URL, log không ghi raw IP |
+| Code quality | 7.6 | Module observability/Redis/health độc lập; các God file cũ vẫn còn |
+| Maintainability | 7.2 | Có domain/service boundary nhưng web App/Admin và một số repository vẫn lớn |
+| Testability/coverage | 8.5 | 23 unit/integration tests, MySQL/Redis E2E, Playwright và performance smoke trong CI |
+| Performance | 7.8 | Bounded candidate trước tag aggregation; cần kết quả dataset lớn để tăng tiếp |
+| Scalability | 7.8 | Redis limiter/Socket adapter đã triển khai; cần multi-instance soak/load test |
+| Reliability/concurrency | 8.6 | DB locks/constraints, durable queue, readiness và graceful shutdown |
+| UX/UI | 7.4 | Không thay đổi lớn trong đợt backend hardening này |
+| Documentation | 9.0 | Architecture, NFR, release, deployment và rollback đã đồng bộ |
+| DevOps/deployment | 8.2 | CI, containers, Compose, release checksum, health/metrics; staging/restore thật còn thiếu |
+| **Tổng MVP ước lượng** | **8.2** | Có thể tăng sau khi CI container/Redis/performance pass |
+
+Để đạt **9.0 có thể bảo vệ bằng bằng chứng**, project vẫn cần: tách tiếp web God file và CSS, bổ sung browser E2E cho toàn workflow, chạy benchmark 10k/100k có query plan, chạy multi-instance Socket.IO soak test, triển khai staging thật và diễn tập backup/restore. Không nên tự chấm 9 trước khi các bằng chứng này tồn tại.
+
+Cập nhật 2026-07-19: luồng tạo LOST/FOUND đã được tách khỏi `App.tsx` sang `features/posts/CreatePostView.tsx`, kèm stylesheet theo feature; claim chat/verification cũng được chuyển sang `features/claims/ClaimChatPanel.tsx`. `App.tsx` giảm còn khoảng 3.5k dòng; nợ kiến trúc Admin/Claim/detail vẫn còn và chưa được tính là hoàn tất.
+
 ## Cập nhật triển khai trên working tree - 2026-07-15
 
 Phần đánh giá bên dưới được tạo từ một ZIP cũ và vẫn hữu ích như bug register. Sau khi đối chiếu lại repository thật, các mục sau đã được triển khai. Trạng thái “đã sửa” ở đây nghĩa là đã có code/migration/test tương ứng; migration 024-025 vẫn phải được chạy trên MySQL cô lập và qua CI trước khi áp dụng vào shared demo DB.
@@ -362,7 +400,7 @@ Redesign mức vừa nên làm sau defense/pilot: tách dashboard admin theo dom
 
 ### Bảng chấm điểm chi tiết
 
-Tôi dùng lại đúng 13 tiêu chí và trọng số đã có trong tài liệu audit trước của repo, để so sánh apples-to-apples. Công thức là `Σ(điểm × trọng số)`. Trọng số gốc thể hiện tại `docs/Checklist/independent-project-audit-2026-07-13.md:339-358`.
+Tôi dùng lại đúng 13 tiêu chí và trọng số đã có trong tài liệu audit trước của repo, để so sánh apples-to-apples. Công thức là `Σ(điểm × trọng số)`. Trọng số gốc được lưu trong `docs/Archive/2026-07-13/independent-project-audit-2026-07-13.md`.
 
 | Tiêu chí | Trọng số | MVP /10 | Quy đổi MVP | Production /10 | Quy đổi Production | Nhận xét ngắn | Độ tin cậy |
 |---|---:|---:|---:|---:|---:|---|---|

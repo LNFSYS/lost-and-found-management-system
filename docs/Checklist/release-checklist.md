@@ -1,6 +1,6 @@
 # Release Checklist
 
-Last audit: 2026-07-15
+Last audit: 2026-07-19
 
 Use this checklist before demo, merge, or submission. Keep evidence screenshots/logs when a step is important for grading.
 
@@ -10,7 +10,8 @@ Use this checklist before demo, merge, or submission. Keep evidence screenshots/
 - [ ] Run `npm run package:release` from a clean committed tree and distribute that ZIP instead of compressing the working directory.
 - [ ] Run `npm run scan:secrets:workspace` before manually sharing a working-directory copy; a local `.env` finding is expected and means the raw copy must not be shared.
 - [ ] Rotate any Aiven/JWT/SMTP/Cloudinary/Google secret that appeared in screenshots, files, or shared artifacts.
-- [ ] Confirm `FRONTEND_URL`, `API_PORT`, and `SOCKET_CORS_ORIGIN` match the demo environment. Socket.IO shares `API_PORT`; Redis is not required by the current MVP.
+- [ ] Confirm `FRONTEND_URL`, `API_PORT`, and `SOCKET_CORS_ORIGIN` match the demo environment. Socket.IO shares `API_PORT`; configure `REDIS_URL` for multi-instance deployment.
+- [ ] Configure `METRICS_TOKEN`, `TRUST_PROXY` and JSON logging for a hosted environment.
 - [ ] Confirm API CORS allowlist covers the deployed web origin; local development origins are allowed only outside production.
 - [ ] Confirm `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` are configured.
 - [ ] Confirm Cloudinary and Google Vision credentials are either configured or the fallback behavior is acceptable for demo; if Cloudinary is missing, live upload will show a friendly 503 and the demo should use seeded images.
@@ -32,10 +33,12 @@ Use this checklist before demo, merge, or submission. Keep evidence screenshots/
 - [ ] Run `npm run quality:release` after migrations 024-025 are verified/applied on the intended database; the 2026-07-15 local run is intentionally pending because shared DB remains at migration 023.
 - [x] GitHub Actions CI runs release text/config scan, API build, web build, and mobile typecheck on pushes/PRs to `main`.
 - [x] GitHub Actions also runs isolated MySQL migration smoke, Java 21/Maven build, and advisory dependency audit.
-- [x] Run `npm run test:api` for policy and image-signature tests (20 tests passed on 2026-07-15).
-- [x] Run public Playwright routing/back-forward smoke; authenticated session smoke is configured for isolated CI.
-- [x] Run `npm run build:api` (passed on 2026-07-15).
-- [x] Run `npm run build:web` (passed on 2026-07-15).
+- [x] API tests include policy, image-signature, rate-limit, request-ID and metrics coverage (25 tests passed locally on 2026-07-19).
+- [x] API + web runtime dependency audit reports 0 vulnerabilities after the Vite 6.4.3 update; Expo/mobile advisories remain deferred with the mobile workstream.
+- [ ] Confirm CI passes Redis-backed runtime hardening, performance artifact and API/web container builds.
+- [x] Run Playwright routing/back-forward smoke plus API-mocked Student create-LOST and Staff permission/warehouse flows; database-backed login remains conditional on demo credentials.
+- [x] Run `npm run build:api` (passed on 2026-07-19).
+- [x] Run `npm run build:web` (passed on 2026-07-19).
 - [x] Run `npm run typecheck:mobile`.
 - [x] Run `npm run e2e:core` when the local API/database are ready.
 - [x] Run `npm run e2e:roles` to verify Staff vs Admin permissions.
@@ -47,6 +50,8 @@ Use this checklist before demo, merge, or submission. Keep evidence screenshots/
 - [ ] Run `npm run e2e:admin-crud` on an isolated test database; do not run it on shared demo data because it intentionally creates admin resources.
 - [ ] Run `npm run build:java` on a machine with Maven installed; current Windows shell does not have `mvn` in PATH.
 - [ ] Open the web app and check the browser console for repeated 4xx/5xx errors.
+- [ ] Review the CI performance artifact and confirm P95/error-rate thresholds pass.
+- [ ] Run the backup/restore drill in [deployment-and-rollback.md](../Overall/deployment-and-rollback.md) for the chosen provider.
 
 ## 4. Core Demo Flow
 

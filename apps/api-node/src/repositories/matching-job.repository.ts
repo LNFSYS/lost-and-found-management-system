@@ -7,6 +7,13 @@ interface MatchingJobRow extends RowDataPacket {
   attempts: number;
 }
 
+interface MatchingJobStatsRow extends RowDataPacket {
+  pending: number;
+  processing: number;
+  failed: number;
+  oldest_wait_seconds: number | null;
+}
+
 export const matchingJobRepository = {
   async enqueue(postId: string) {
     await dbPool.execute(
@@ -107,6 +114,32 @@ export const matchingJobRepository = {
       `,
       [attempt, attempt, message, postId]
     );
+  },
+
+  async getOperationalStats() {
+    const [rows] = await dbPool.query<MatchingJobStatsRow[]>(
+      `
+        SELECT
+          SUM(status = 'PENDING') AS pending,
+          SUM(status = 'PROCESSING') AS processing,
+          SUM(status = 'FAILED') AS failed,
+          MAX(
+            CASE
+              WHEN status IN ('PENDING', 'FAILED') AND requested_version > processed_version
+              THEN TIMESTAMPDIFF(SECOND, available_at, UTC_TIMESTAMP())
+              ELSE NULL
+            END
+          ) AS oldest_wait_seconds
+        FROM matching_jobs
+      `
+    );
+    const row = rows[0];
+    return {
+      pending: Number(row?.pending ?? 0),
+      processing: Number(row?.processing ?? 0),
+      failed: Number(row?.failed ?? 0),
+      oldestWaitSeconds: Math.max(0, Number(row?.oldest_wait_seconds ?? 0))
+    };
   }
 };
 

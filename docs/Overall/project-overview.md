@@ -1,6 +1,6 @@
 # FPTU Lost & Found System - Project Overview
 
-Last updated: 2026-07-08
+Last updated: 2026-07-19
 
 ## 1. One-Line Summary
 
@@ -60,6 +60,7 @@ docs/                   Canonical thesis/project documentation
 | `npm run build:api` | Compile Node API |
 | `npm run build:web` | Build web app |
 | `npm run lint:web` | Type-check web app |
+| `npm run e2e:web` | Run Playwright routing, mocked Student post creation and Staff permission flows; optional seeded login uses E2E credentials |
 | `npm run e2e:core` | Smoke-check LOST/FOUND, claim, appointment, completion, and feedback when API is running |
 | `npm run e2e:roles` | Smoke-check selected Admin vs Staff permission boundaries when API is running |
 | `npm run e2e:warehouse` | Smoke-check warehouse lifecycle and terminal-state guards when API is running |
@@ -96,7 +97,7 @@ For detailed Node/Java boundaries, see `node-java-service-boundary.md`.
 | Surface | Current status |
 | --- | --- |
 | Auth | OTP registration, email/password login, Google OAuth MVP, refresh/logout, forgot/reset password |
-| Public board | Search/filter/sort, post cards, detail drawer, gallery |
+| Public board | Search/filter/sort, post cards, dedicated detail route, gallery |
 | My posts | Owner edit, close and soft-delete |
 | Create post | LOST/FOUND fields, item images, private verification/evidence |
 | Matching | Tiered matching score, image/OCR score support, explanation reasons, matching popup on login/open and 10-minute interval, dismiss remembered, manual admin re-run |
@@ -130,15 +131,15 @@ Current MVP scope:
 - Responsive web app plus Node.js backend and MySQL schema.
 - Google Vision assisted OCR/tags when configured.
 - Rule-based/hybrid matching, not a self-trained AI model.
-- Realtime notification/chat for MVP, with deeper reconnect/offline/socket-isolation tests still needed.
+- Realtime notification/chat for MVP, with JWT event revalidation and optional Redis adapter for multi-instance delivery; deeper reconnect/offline testing remains.
 - Java service as business/admin extension, not a complete production microservice split.
 
 Known remaining work:
 
 - Stronger enrollment verification can be added later through student-code/admin approval, but FPT/edu email must not be mandatory for current students.
 - Notification digest and anti-noise tuning beyond current score tiers.
-- Background queue for matching on large datasets.
-- More automated tests: admin CRUD, realtime isolation, clean blank-DB verification, and broader load/security coverage.
+- Larger 10k/100k dataset benchmarks and query-plan snapshots beyond the bounded CI performance smoke.
+- More browser-level workflow coverage, reconnect testing and provider-specific backup/restore drills.
 - Native mobile hardening: push notifications, offline retry, device testing and packaging.
 - Custom AI training/MLOps pipeline.
 
@@ -155,7 +156,7 @@ Known remaining work:
 | `docs/Checklist/master-dev-checklist.md` | Canonical UC assignment/status |
 | `docs/Checklist/pending-tasks.md` | Remaining implementation/testing backlog |
 | `docs/Checklist/release-checklist.md` | Pre-demo/pre-release technical and product checks |
-| `docs/Archive/2026-07-02/business-product-qa-issue-audit.md` | Archived product/business/QA risk evidence |
+| `docs/Archive/` | Dated audit/review evidence; not the current source of truth |
 | `docs/Requirements and Business Rules/requirements.md` | FR/NFR requirements |
 | `docs/Requirements and Business Rules/business-rules.md` | Business rules |
 | `docs/Requirements and Business Rules/traceability-matrix.md` | BR/FR/NFR/UC traceability |

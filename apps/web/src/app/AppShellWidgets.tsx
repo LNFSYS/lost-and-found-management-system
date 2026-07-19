@@ -1,5 +1,5 @@
 import { Bell, LayoutDashboard, LogOut, UserCircle, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { NotificationItem, PublicUser } from "../services/api";
 import { avatarInitials, formatDate } from "./helpers";
 

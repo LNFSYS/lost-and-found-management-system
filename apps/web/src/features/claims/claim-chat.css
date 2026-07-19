@@ -1,0 +1,85 @@
+.claim-chat-box {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 10px;
+}
+
+.claim-chat-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #0f172a;
+}
+
+.claim-chat-heading small {
+  margin-left: auto;
+  color: #008a3d;
+  font-weight: 800;
+}
+
+.chat-unread-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #fff2e8;
+  color: #c25111;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.claim-chat-messages {
+  display: grid;
+  max-height: 180px;
+  overflow: auto;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.claim-chat-message {
+  display: grid;
+  gap: 3px;
+  max-width: 86%;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.claim-chat-message strong {
+  font-size: 0.76rem;
+  color: #0651a0;
+}
+
+.claim-chat-message span {
+  color: #334155;
+  font-size: 0.86rem;
+}
+
+.claim-chat-message img {
+  max-width: 180px;
+  border-radius: 8px;
+}
+
+.claim-chat-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.claim-chat-form input {
+  min-height: 40px;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  padding: 0 12px;
+}
+
+.claim-chat-form input[type="file"] {
+  min-width: 0;
+  padding: 8px 10px;
+  color: #475569;
+}

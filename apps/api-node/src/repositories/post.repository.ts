@@ -671,6 +671,7 @@ export const postRepository = {
             GROUP_CONCAT(CASE WHEN source IN ('VISION_LABEL', 'VISION_OBJECT', 'MANUAL') THEN tag END SEPARATOR ' ') AS image_tag_text,
             GROUP_CONCAT(CASE WHEN source = 'OCR' THEN tag END SEPARATOR ' ') AS ocr_tag_text
           FROM ai_tags
+          WHERE post_id = ?
           GROUP BY post_id
         ) tags ON tags.post_id = p.id
         WHERE p.id = ?
@@ -678,7 +679,7 @@ export const postRepository = {
           AND p.status IN ('OPEN', 'MATCHED')
         LIMIT 1
       `,
-      [postId]
+      [postId, postId]
     );
 
     const row = rows[0];
@@ -707,13 +708,14 @@ export const postRepository = {
             GROUP_CONCAT(CASE WHEN source IN ('VISION_LABEL', 'VISION_OBJECT', 'MANUAL') THEN tag END SEPARATOR ' ') AS image_tag_text,
             GROUP_CONCAT(CASE WHEN source = 'OCR' THEN tag END SEPARATOR ' ') AS ocr_tag_text
           FROM ai_tags
+          WHERE post_id IN (${placeholders})
           GROUP BY post_id
         ) tags ON tags.post_id = p.id
         WHERE p.id IN (${placeholders})
           AND p.deleted_at IS NULL
           AND p.status IN ('OPEN', 'MATCHED')
       `,
-      uniqueIds
+      [...uniqueIds, ...uniqueIds]
     );
     const order = new Map(uniqueIds.map((id, index) => [id, index]));
     return rows.map(mapMatchPost).sort((left, right) => (order.get(left.id) ?? 0) - (order.get(right.id) ?? 0));
@@ -726,24 +728,11 @@ export const postRepository = {
     const oppositeType: PostType = source.type === "LOST" ? "FOUND" : "LOST";
     const candidateLimit = Math.max(50, Math.min(2_000, Math.trunc(options.candidateLimit)));
     const candidateWindowDays = Math.max(1, Math.min(365, Math.trunc(options.candidateWindowDays)));
-    const [rows] = await dbPool.query<MatchPostRow[]>(
+    const [rows] = await dbPool.query<Array<RowDataPacket & { id: string }>>(
       `
-        SELECT
-          p.id, p.user_id, p.type, p.status, p.title, p.title_normalized, p.description_normalized,
-          tags.ai_tag_text, tags.image_tag_text, tags.ocr_tag_text,
-          p.category_id, c.parent_id AS parent_category_id,
-          p.area_id, p.building_id, p.room_text, p.lost_found_at
+        SELECT p.id
         FROM posts p
         LEFT JOIN item_categories c ON c.id = p.category_id
-        LEFT JOIN (
-          SELECT
-            post_id,
-            GROUP_CONCAT(tag SEPARATOR ' ') AS ai_tag_text,
-            GROUP_CONCAT(CASE WHEN source IN ('VISION_LABEL', 'VISION_OBJECT', 'MANUAL') THEN tag END SEPARATOR ' ') AS image_tag_text,
-            GROUP_CONCAT(CASE WHEN source = 'OCR' THEN tag END SEPARATOR ' ') AS ocr_tag_text
-          FROM ai_tags
-          GROUP BY post_id
-        ) tags ON tags.post_id = p.id
         WHERE p.type = ?
           AND p.id <> ?
           AND p.status IN ('OPEN', 'MATCHED')
@@ -783,7 +772,7 @@ export const postRepository = {
       ]
     );
 
-    return rows.map(mapMatchPost);
+    return this.findMatchPostsByIds(rows.map((row) => row.id));
   },
 
   async upsertMatchResult(input: {

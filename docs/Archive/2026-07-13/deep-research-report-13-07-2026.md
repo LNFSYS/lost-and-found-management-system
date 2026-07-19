@@ -1,6 +1,6 @@
 # Báo cáo tái thẩm định FPTU Lost & Found System
 
-> **Cập nhật triển khai ngày 13/07/2026:** Báo cáo bên dưới là ảnh chụp hiện trạng tại thời điểm audit. Các finding P0/P1 đã được xử lý tuần tự và kiểm chứng trong [`CODEX_IMPLEMENTATION_PLAN.md`](../../CODEX_IMPLEMENTATION_PLAN.md): `secretAnswer` được hash và loại khỏi API; match/explanation có authorization; claim accept có transaction, row lock và unique invariant; update post validate final merged state; status đi qua state machine; private claim evidence chỉ dùng authenticated proxy; mobile refresh dùng single-flight; media privacy và two-claim race chạy trong CI. Phần điểm số và trạng thái “Confirmed” bên dưới được giữ nguyên để bảo toàn lịch sử audit, không phải trạng thái triển khai mới nhất.
+> **Cập nhật triển khai ngày 13/07/2026:** Báo cáo bên dưới là ảnh chụp hiện trạng tại thời điểm audit. Các finding P0/P1 đã được xử lý tuần tự và kiểm chứng trong [`CODEX_IMPLEMENTATION_PLAN.md`](../../../CODEX_IMPLEMENTATION_PLAN.md): `secretAnswer` được hash và loại khỏi API; match/explanation có authorization; claim accept có transaction, row lock và unique invariant; update post validate final merged state; status đi qua state machine; private claim evidence chỉ dùng authenticated proxy; mobile refresh dùng single-flight; media privacy và two-claim race chạy trong CI. Phần điểm số và trạng thái “Confirmed” bên dưới được giữ nguyên để bảo toàn lịch sử audit, không phải trạng thái triển khai mới nhất.
 
 ## Tóm tắt điều hành
 

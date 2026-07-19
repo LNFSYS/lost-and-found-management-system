@@ -1,0 +1,48 @@
+name: Release Artifact
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify release gates
+        run: |
+          npm run scan:secrets
+          npm run scan:text
+          npm audit --workspace apps/api-node --workspace apps/web --omit=dev --audit-level=high
+          npm run build:api
+          npm run test:api
+          npm run build:web
+
+      - name: Build release archive and checksum
+        run: |
+          npm run package:release -- "$RUNNER_TEMP/fptu-lost-found-system-${GITHUB_REF_NAME}.zip"
+          sha256sum "$RUNNER_TEMP/fptu-lost-found-system-${GITHUB_REF_NAME}.zip" > "$RUNNER_TEMP/fptu-lost-found-system-${GITHUB_REF_NAME}.zip.sha256"
+
+      - name: Upload versioned release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fptu-lost-found-system-${{ github.ref_name }}
+          path: |
+            ${{ runner.temp }}/fptu-lost-found-system-${{ github.ref_name }}.zip
+            ${{ runner.temp }}/fptu-lost-found-system-${{ github.ref_name }}.zip.sha256
+          if-no-files-found: error

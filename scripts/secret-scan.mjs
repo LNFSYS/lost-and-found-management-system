@@ -51,8 +51,16 @@ const secretPatterns = [
 ];
 
 const findings = [];
+let scannedFileCount = 0;
 
 for (const relativePath of scannedFiles) {
+  const absolutePath = path.join(repoRoot, relativePath);
+  if (!fs.existsSync(absolutePath)) {
+    // A tracked file can be absent while a rename/delete is still unstaged.
+    continue;
+  }
+
+  scannedFileCount += 1;
   const normalizedPath = relativePath.replaceAll("\\", "/");
   for (const rule of forbiddenFilePatterns) {
     if (rule.pattern.test(normalizedPath) && !(rule.allow?.test(normalizedPath))) {
@@ -60,7 +68,6 @@ for (const relativePath of scannedFiles) {
     }
   }
 
-  const absolutePath = path.join(repoRoot, relativePath);
   const stats = fs.statSync(absolutePath);
   if (stats.size > 2 * 1024 * 1024) {
     continue;
@@ -87,4 +94,4 @@ if (findings.length > 0) {
   process.exit(1);
 }
 
-console.log(`Secret scan passed for ${scannedFiles.length} ${workspaceMode ? "workspace" : "tracked"} file(s).`);
+console.log(`Secret scan passed for ${scannedFileCount} ${workspaceMode ? "workspace" : "tracked"} file(s).`);

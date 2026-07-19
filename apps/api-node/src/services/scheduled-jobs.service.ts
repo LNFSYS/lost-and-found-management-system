@@ -2,7 +2,9 @@ import { adminRepository } from "../repositories/admin.repository.js";
 import { dbPool } from "../config/db.js";
 import type { PoolConnection, RowDataPacket } from "mysql2/promise";
 import { appointmentService } from "./appointment.service.js";
+import { metricsService } from "./metrics.service.js";
 import { postService } from "./post.service.js";
+import { logger } from "../utils/logger.js";
 
 const JOB_INTERVAL_MS = 15 * 60 * 1000;
 
@@ -16,7 +18,8 @@ async function runScheduledJobs() {
       "SELECT GET_LOCK('lnfs:scheduled-jobs:v1', 0) AS acquired"
     );
     if (Number(lockRows[0]?.acquired ?? 0) !== 1) {
-      console.info("[jobs] skipped because another instance owns the scheduler lock");
+      logger.info("scheduled_jobs_skipped", { reason: "lock_not_acquired" });
+      metricsService.increment("lnfs_scheduled_jobs_total", { result: "skipped" });
       return;
     }
     const startedAt = Date.now();
@@ -34,10 +37,19 @@ async function runScheduledJobs() {
       capacity.alerted ||
       reminders.reminded > 0;
     if (changed) {
-      console.info("[jobs] completed", { durationMs: Date.now() - startedAt, posts, warehouse, nearExpiry, capacity, reminders });
+      logger.info("scheduled_jobs_completed", {
+        durationMs: Date.now() - startedAt,
+        posts,
+        warehouse,
+        nearExpiry,
+        capacity,
+        reminders
+      });
     }
+    metricsService.increment("lnfs_scheduled_jobs_total", { result: "completed" });
   } catch (error) {
-    console.warn(`[jobs] failed: ${error instanceof Error ? error.message : "unknown error"}`);
+    logger.warn("scheduled_jobs_failed", { error });
+    metricsService.increment("lnfs_scheduled_jobs_total", { result: "failed" });
   } finally {
     if (!connection) {
       return;

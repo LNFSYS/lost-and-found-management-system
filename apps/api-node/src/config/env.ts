@@ -22,10 +22,50 @@ function numberFromEnv(name: string, fallback: number) {
   return parsedValue;
 }
 
+function booleanFromEnv(name: string, fallback: boolean) {
+  const rawValue = process.env[name]?.trim().toLowerCase();
+  if (!rawValue) {
+    return fallback;
+  }
+  if (["true", "1", "yes", "on"].includes(rawValue)) {
+    return true;
+  }
+  if (["false", "0", "no", "off"].includes(rawValue)) {
+    return false;
+  }
+  throw new Error(`Invalid boolean environment variable: ${name}`);
+}
+
+function logLevelFromEnv(): "debug" | "info" | "warn" | "error" {
+  const value = process.env.LOG_LEVEL?.toLowerCase();
+  return value === "debug" || value === "info" || value === "warn" || value === "error" ? value : "info";
+}
+
+function trustProxyFromEnv() {
+  const value = process.env.TRUST_PROXY?.trim();
+  if (!value || value === "false" || value === "0") {
+    return false;
+  }
+  if (value === "true") {
+    return 1;
+  }
+  const numeric = Number(value);
+  return Number.isInteger(numeric) && numeric >= 0 ? numeric : value;
+}
+
 export const env = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   port: numberFromEnv("API_PORT", numberFromEnv("PORT", 3001)),
   frontendUrl: process.env.FRONTEND_URL ?? "http://localhost:5173",
+  logFormat: process.env.LOG_FORMAT === "json" || process.env.NODE_ENV === "production" ? "json" as const : "pretty" as const,
+  logLevel: logLevelFromEnv(),
+  trustProxy: trustProxyFromEnv(),
+  healthCheckTimeoutMs: numberFromEnv("HEALTH_CHECK_TIMEOUT_MS", 2_000),
+  shutdownTimeoutMs: numberFromEnv("SHUTDOWN_TIMEOUT_MS", 10_000),
+  metricsToken: process.env.METRICS_TOKEN,
+  redisUrl: process.env.REDIS_URL,
+  redisRequired: booleanFromEnv("REDIS_REQUIRED", false),
+  redisConnectTimeoutMs: numberFromEnv("REDIS_CONNECT_TIMEOUT_MS", 3_000),
   db: {
     host: process.env.DB_HOST ?? "localhost",
     port: numberFromEnv("DB_PORT", 3306),

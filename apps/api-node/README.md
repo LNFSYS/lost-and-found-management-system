@@ -20,7 +20,7 @@ src/
 
 ## Auth API
 
-Auth now follows the database design in `docs/db-auth-design.md`:
+Auth follows the current migrations and the [canonical requirements](../../docs/Requirements%20and%20Business%20Rules/requirements.md):
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
@@ -67,7 +67,9 @@ Auth now follows the database design in `docs/db-auth-design.md`:
 | `GET/POST/PUT/PATCH` | `/api/admin/locations...` | Admin-only area/building/room management |
 | `GET/POST/PUT/PATCH` | `/api/admin/handover-points...` | Admin-only handover point management |
 | `GET/PATCH` | `/api/admin/reports...` | Admin-only report review and moderation |
-| `GET` | `/api/health` | Health check |
+| `GET` | `/api/health`, `/api/health/live` | Process liveness |
+| `GET` | `/api/health/ready` | MySQL, matching queue and optional Redis readiness |
+| `GET` | `/api/metrics` | Protected Prometheus-compatible operational metrics |
 
 Example registration OTP request body:
 
@@ -112,3 +114,5 @@ Default URL: `http://localhost:3001`.
 - `posts.handover_point_id` is protected by a foreign key in migration `005_integrity_constraints.sql`.
 - Sensitive admin management endpoints require `ADMIN`; `STAFF` can access warehouse-focused operational surfaces.
 - Google OAuth MVP login and realtime claim chat/notifications are implemented for the current web MVP.
+- Set `REDIS_URL` to enable distributed rate limits and the Socket.IO Redis adapter. With the default `REDIS_REQUIRED=false`, an unavailable Redis instance logs one warning and local development continues with in-memory limits and single-process Socket.IO. Set `REDIS_REQUIRED=true` only where Redis must be enforced, such as a scaled deployment.
+- Production logging is structured JSON with `X-Request-Id`. Configure `METRICS_TOKEN` before exposing operational metrics.

@@ -1,6 +1,6 @@
 # Pending Task Checklist
 
-Last audit: 2026-07-15
+Last audit: 2026-07-19
 
 > Current delivery priority (2026-07-11): finish and harden Web + Node/Java backend first. Mobile implementation/refactor remains deferred by product decision and is not part of this work phase.
 
@@ -8,9 +8,9 @@ Last audit: 2026-07-15
 
 | Metric | Count |
 | --- | ---: |
-| Completed checklist items | 126 |
+| Completed checklist items | 144 |
 | Open MVP-blocking items | 0 |
-| Open future/hardening items | 22 |
+| Open future/hardening items | 24 |
 
 Open work is now concentrated in hardening/future work: advanced AI category selection, optional Java auth extension, background matching queue, notification digest/anti-noise tuning, overdue disposition paperwork, mobile hardening, custom AI inference/MLOps, and deeper automated tests.
 
@@ -29,7 +29,13 @@ Scope note: the current MVP should be demoed as web + Node backend with Google V
 - [x] Avoid incrementing view count for missing or unauthorized hidden posts.
 - [x] Batch-load match suggestions and prefilter a bounded candidate set using category/location/time signals.
 - [ ] Run migrations 024-025 and database-backed E2E only on isolated MySQL/CI before applying them to the shared demo database.
-- [ ] Keep Redis/distributed rate limits, multi-node Socket.IO, observability, and 10k+ load tests as production hardening rather than MVP claims.
+- [x] Add optional Redis-backed distributed rate limits and Socket.IO adapter while retaining a local single-process fallback.
+- [x] Add structured request logs, request IDs, liveness/readiness, matching queue health and protected Prometheus-format metrics.
+- [x] Add CI performance smoke with P50/P95/P99/error-rate artifact and Redis-backed runtime hardening smoke.
+- [x] Add guarded 10k/50k/100k synthetic dataset benchmark workflow with `EXPLAIN ANALYZE` artifacts.
+- [x] Add API/web container builds, production-like Compose topology, migration gate and tagged release ZIP/checksum workflow.
+- [ ] Verify Redis runtime and both container builds in GitHub Actions after this change is pushed.
+- [ ] Execute and retain passing 10k/50k/100k benchmark artifacts, then run a provider-specific backup/restore drill before production claims.
 
 
 ## Auth / Account
@@ -56,8 +62,8 @@ Scope note: the current MVP should be demoed as web + Node backend with Google V
 The current web and mobile MVPs are demo-ready but still carry "God file" debt. Do not block the MVP on this refactor, but plan it before long-term maintenance or team scaling.
 
 - [x] Extract shared web app types/constants/helpers, shell widgets, admin widgets, and private media widgets out of `apps/web/src/App.tsx` as the first low-risk refactor phase.
-- [ ] Continue splitting `apps/web/src/App.tsx` into route-level pages and domain components; shared app modules, `features/posts/PostCard.tsx`, `features/posts/BoardView.tsx`, and the complete `features/account` view/forms are already extracted. `App.tsx` is now about 4.2k lines, so Create/Admin/Claim remain open.
-- [ ] Continue splitting `apps/web/src/styles.css` into feature CSS modules or a consistent utility/component styling strategy. Account/auth/profile styles now live in `features/account/account.css`; the remaining global file is still large.
+- [ ] Continue splitting `apps/web/src/App.tsx` into route-level pages and domain components. Shared app modules, board/post cards, Create Post, account, claim chat/verification, and the active Admin dashboard are extracted; `App.tsx` is now about 1.7k lines. The remaining work is primarily post detail/claim orchestration and smaller route-shell responsibilities.
+- [ ] Continue splitting `apps/web/src/styles.css` into feature CSS modules or a consistent utility/component styling strategy. Account/auth/profile, create-post, and claim-chat styles now live with their features; the remaining global file is still large.
 - [x] Replace manual web `view` state navigation with `react-router-dom`; board/create/account/handover/my-posts/detail now use real URLs and browser history.
 - [ ] Split `apps/mobile/App.tsx` into screens/components/hooks.
 - [ ] Replace manual mobile tab/modal state navigation with React Navigation or Expo Router.
@@ -221,7 +227,7 @@ Recommended order is documented in `docs/Overall/ai-training-roadmap.md`: collec
 - [x] Add Java 21/Maven build to CI quality gates.
 - [x] Add API policy unit tests with Node's built-in test runner.
 - [x] Add validation regression coverage for category multi-select query parsing and legacy compatibility.
-- [x] Add Playwright web routing/auth session smoke; CI runs it against isolated MySQL/API seed data.
+- [x] Add Playwright web routing/auth session smoke plus API-mocked Student create-LOST and Staff warehouse/permission flows; CI runs the suite and retains the optional database-backed login scenario.
 - [x] Add isolated-CI E2E for admin CRUD of categories/areas/buildings/handover/users and report handling.
 - [x] Add role/privacy smoke test for Admin vs Staff permissions.
 - [x] Add media privacy smoke test for public post evidence/contact filtering.

@@ -42,7 +42,7 @@ npm run dev:api
 npm run dev:web
 ```
 
-Socket.IO dùng chung HTTP server và `API_PORT`; không có `SOCKET_PORT` riêng. Redis không phải dependency của MVP hiện tại. Cấu hình origin web bằng `FRONTEND_URL` và `SOCKET_CORS_ORIGIN`.
+Socket.IO dùng chung HTTP server và `API_PORT`; không có `SOCKET_PORT` riêng. Redis là dependency tùy chọn cho local/MVP một instance: đặt `REDIS_REQUIRED=false` để API fallback sang in-memory limiter và Socket.IO single-process khi Redis không chạy. Với triển khai nhiều API instance, cấu hình `REDIS_URL`, đặt `REDIS_REQUIRED=true`, đồng thời cấu hình origin web bằng `FRONTEND_URL` và `SOCKET_CORS_ORIGIN`.
 
 ## 5. Kiểm Tra Trước Demo
 

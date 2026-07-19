@@ -1,6 +1,6 @@
 # Master Dev Checklist - FPTU Lost & Found System
 
-Last audit: 2026-07-11
+Last audit: 2026-07-19
 
 This file is the canonical UC checklist for the project. The old list of nearly 200 UCs has been consolidated to exactly 100 UCs. Each UC starts with a verb, has one primary owner, and is organized by current team member assignment.
 
@@ -13,7 +13,7 @@ This file is the canonical UC checklist for the project. The old list of nearly 
 | Team | The checklist assigns work only to TL, VQ, QD, AK |
 | TL | Tran The Luong is responsible for Java/Spring Boot and planned custom AI training scope |
 | VQ | Vo Chieu Quan is responsible for Node.js backend, matching algorithm, realtime Socket.IO, and chat; not responsible for UI |
-| QD | Truong Quang Dat is responsible for AI/OCR, claim evidence verification, ownership confidence percentage, overdue warehouse processing algorithm, and notification strategy |
+| QD | Truong Quang Dat is responsible for AI/OCR, claim evidence verification, advisory review-confidence percentage, overdue warehouse processing algorithm, and notification strategy |
 | Scope | Do not create separate UCs for buttons/filters/modals/validations that are too granular |
 
 ## Legend
@@ -30,7 +30,7 @@ This file is the canonical UC checklist for the project. The old list of nearly 
 | --- | --- | --- |
 | TL | Tran The Luong | Java/Spring Boot business service and future custom AI training scope |
 | VQ | Vo Chieu Quan | Node.js API, DB migration, auth, post, media, claim base, admin/staff API, matching algorithm, realtime Socket.IO, chat |
-| QD | Truong Quang Dat | AI/OCR/tag extraction, evidence verification, ownership confidence score, overdue warehouse algorithm, disposal/donation workflow, notification strategy |
+| QD | Truong Quang Dat | AI/OCR/tag extraction, evidence verification, advisory review-confidence score, overdue warehouse algorithm, disposal/donation workflow, notification strategy |
 | AK | Pham Nguyen Anh Khoa | React Native mobile app |
 
 ## TL - Tran The Luong - Java / Spring Boot + Future Custom AI Training Scope

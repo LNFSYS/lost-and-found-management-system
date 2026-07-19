@@ -1,5 +1,7 @@
 # FPTU Lost & Found System Architecture
 
+Last updated: 2026-07-19
+
 ## Goal
 
 Build a campus-first Lost & Found platform for FPT University with public boards, verified claims, AI-assisted matching, handover points, appointments, realtime chat, reputation, and admin governance.
@@ -24,7 +26,7 @@ docs/
 | Web App | VQ-supported implementation surface | Guest/User/Staff/Admin UI currently lives in the React web app; no dedicated UI owner is assigned in the canonical UC checklist |
 | Mobile App | AK | Expo React Native MVP for auth, board, post creation, image upload, matching feedback, claims, appointments, handover points, notifications, chat, profile, and staff snapshots |
 | Node API | VQ | Core web-facing REST API, auth, user profile, posts, Cloudinary, claim base, admin/staff API, matching, Socket.IO, chat history, and current web demo orchestration |
-| AI / Evidence / Warehouse Algorithm | QD | Vision/OCR, auto tags, evidence verification, ownership confidence percentage, overdue warehouse processing, disposal/donation algorithm |
+| AI / Evidence / Warehouse Algorithm | QD | Vision/OCR, auto tags, evidence verification, advisory review-confidence percentage, overdue warehouse processing, disposal/donation algorithm |
 | Java Admin Service | TL | Parallel Spring Boot business/admin extension for selected rule-heavy operations; not presented as a complete production microservice split until flow ownership is single-source |
 
 For demo positioning, the React web app talks primarily to the Node API. Java should be described as a business-service extension unless a specific demo flow is intentionally routed through Java.
@@ -85,7 +87,7 @@ Current Node API endpoints:
 | `POST` | `/api/claims` | Submit claim for a FOUND post |
 | `GET` | `/api/claims/:id` | Get claim detail with permission guard |
 | `POST` | `/api/claims/:id/evidence` | Upload claim evidence image to Cloudinary private folder |
-| `GET` | `/api/claims/:id/verification` | Return ownership confidence percentage and evidence breakdown |
+| `GET` | `/api/claims/:id/verification` | Return advisory review confidence and evidence breakdown; never auto-confirm ownership |
 | `PATCH` | `/api/claims/:id/more-info` | Request additional claim information |
 | `PATCH` | `/api/claims/:id/accept` | Accept claim |
 | `PATCH` | `/api/claims/:id/reject` | Reject claim with reason |
@@ -173,7 +175,7 @@ The migration runner creates the configured database if needed and records appli
 
 Security and integrity notes:
 
-- The Node API uses Helmet and route-level rate limiting for sensitive auth/write/upload flows.
+- The Node API uses Helmet and route-level rate limiting for sensitive auth/write/upload flows. Rate limits use Redis when available and fall back to process-local buckets for single-instance development. `REDIS_REQUIRED=true` turns Redis failure into a startup/readiness failure for scaled deployments; its local default is `false`.
 - API CORS is restricted to `FRONTEND_URL` and comma-separated `SOCKET_CORS_ORIGIN`, with localhost-style origins allowed only outside production.
 - Web refresh tokens use an `httpOnly`, `SameSite=Lax` cookie; the short-lived access token is kept in web memory and restored through token rotation after reload. Mobile/API clients may continue sending refresh tokens in the request body.
 - Password and LOST-post secret verification values are stored with bcrypt; default salt rounds are 12.
@@ -183,6 +185,8 @@ Security and integrity notes:
 - Sensitive admin management endpoints require `ADMIN`; `STAFF` can access only the overview-style admin surface.
 - Category administration is limited to two levels: main groups and concrete categories. The API rejects nested child categories and rejects moving a group that already has children under another group.
 - The Node API verifies the configured MySQL connection before listening so DB configuration failures fail fast.
+- Production logs are structured JSON with request IDs and bounded route labels. Liveness, dependency-aware readiness and protected Prometheus-compatible metrics are available under `/api/health*` and `/api/metrics`.
+- Socket.IO uses the Redis adapter when configured; otherwise the API clearly reports single-process mode. CI runs Redis-backed runtime smoke coverage.
 
 ## Known Architecture Debt
 
@@ -190,17 +194,17 @@ These issues are not blockers for the current MVP demo, but they should be ackno
 
 | Area | Current state | Recommended next step |
 | --- | --- | --- |
-| Web frontend | `apps/web/src/App.tsx` and `styles.css` remain large, although shared app modules, post cards, board feed/filter view, the complete account feature and account CSS have been extracted | Continue with Create/Admin/Claim feature modules in small verified steps |
+| Web frontend | `apps/web/src/App.tsx` is about 1.7k lines after shared shell, board/posts, Create Post, account, claim chat/verification and Admin were extracted. `styles.css` and the Admin feature module remain large. | Extract post-detail/claim orchestration next, then split Admin and CSS internally by domain in small verified steps |
 | Web navigation | Public board, my posts, create, handover, account and post detail use `react-router-dom` URLs with browser back/forward and deep-link smoke coverage | Add route-level lazy loading only when bundle/performance measurement justifies it |
 | Mobile frontend | `apps/mobile/App.tsx` still contains many screens and modal flows | Deferred by the current product decision; do not include it in the active Web/backend hardening phase |
 | Node post domain | Post controller/service/repository remain large because posts connect matching, media, claims, reports, and admin moderation | Split by subdomain once demo flow is stable: post CRUD, media, matching, moderation, and search |
-| Testing depth | API policy unit tests, smoke/e2e scripts, isolated MySQL CI and Java build CI exist; browser-level full-flow coverage remains thin | Expand Playwright coverage and load/concurrency tests before a campus pilot |
+| Testing depth | API unit/integration tests, smoke/e2e scripts, isolated MySQL/Redis CI, performance smoke and Java/container build gates exist. Playwright covers routing, mocked Student post creation and Staff permission boundaries, but not the full claim-to-return journey. | Expand Playwright claim/review/appointment coverage and retain large-dataset load artifacts before a broad campus rollout |
 
 ## AI And Matching
 
 Post item image upload sends each Cloudinary `secure_url` through Google Vision when Vision is configured. Claim/post evidence images also run OCR where supported so evidence verification can use extracted text, but evidence remains private and AI remains advisory. The Node API stores label/object/OCR tags in `ai_tags`, returns suggested categories in the upload response, and falls back to empty tags/OCR text if Vision is not configured or fails.
 
-Post create/update/media changes enqueue a MySQL-backed matching job. A Node worker claims jobs in batches, retries failures with backoff, and writes materialized match results; suggestion polling only reads saved results. The engine builds TF-IDF vectors from normalized title, description, Vision/image tags and OCR text, then combines text, category, location, time, image-tag and OCR/serial-like scores. Config keys define score tiers: weak candidate, user suggestion, notification, and high-confidence advisory. Explanation details include matched tokens, image/OCR terms, location reason, time difference and score caps/penalties. High scores notify users, but never approve ownership or return an item automatically. Automatic `MATCHED` status changes are disabled by default.
+Post create/update/media changes enqueue a MySQL-backed matching job. A Node worker claims jobs in batches, retries failures with backoff, and writes materialized match results; suggestion polling only reads saved results. Candidate IDs are bounded by category/location/time before tag aggregation, so OCR/image tags are loaded only for the selected candidate set. The engine builds TF-IDF vectors from normalized title, description, Vision/image tags and OCR text, then combines text, category, location, time, image-tag and OCR/serial-like scores. Config keys define score tiers: weak candidate, user suggestion, notification, and high-confidence advisory. Explanation details include matched tokens, image/OCR terms, location reason, time difference and score caps/penalties. High scores notify users, but never approve ownership or return an item automatically. Automatic `MATCHED` status changes are disabled by default.
 
 Warehouse retention now uses policy defaults from config: general items 60 days, electronics/high-value items 90 days, documents/cards 120 days, and perishable/hygiene/unsafe items 1-7 days depending on configuration. Disposal/donation/transfer is blocked while related claims or return appointments are pending/accepted, and document/card items must be transferred rather than donated or disposed.
 
@@ -246,6 +250,7 @@ Because Node currently also implements several demo-critical APIs, including adm
 7. Each claim has at most one active appointment. Completion records the acting user and updates return state, post/warehouse status, notifications and reputation where applicable.
 8. Users can submit feedback after completed handovers; Staff/Admin can monitor it and Admin can mark items reviewed, flagged or dismissed.
 9. Scheduled Node jobs use a MySQL named lock before handling overdue posts/items, near-expiry alerts, capacity alerts and appointment reminders.
+10. Optional Redis coordinates distributed rate limits and Socket.IO rooms across API instances; health and metrics expose runtime mode and queue pressure.
 
 ## Frontend Foundation
 
@@ -256,7 +261,7 @@ Because Node currently also implements several demo-critical APIs, including adm
 | In-app board view | Public LOST/FOUND board with keyword, type, one-or-more category, area, status, date and match-score filters |
 | In-app create view | Create LOST/FOUND post and upload images |
 | In-app account view | Register, OTP verification, login/logout, profile edit, avatar upload, activity and reputation |
-| Modal/drawer flows | Post detail, AI tags, matches and FOUND-post claim submission |
+| `/posts/:id` | Dedicated post detail page with gallery, AI tags, match explanations and FOUND-post claim submission |
 
 ## Brand Direction
 

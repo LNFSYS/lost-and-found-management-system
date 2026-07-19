@@ -23,4 +23,4 @@ CREATE TABLE IF NOT EXISTS return_feedback (
   CONSTRAINT fk_return_feedback_target FOREIGN KEY (target_user_id) REFERENCES users(id),
   CONSTRAINT fk_return_feedback_reviewer_admin FOREIGN KEY (reviewed_by) REFERENCES users(id),
   CONSTRAINT chk_return_feedback_rating CHECK (rating BETWEEN 1 AND 5)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

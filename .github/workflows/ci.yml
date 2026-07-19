@@ -110,7 +110,7 @@ jobs:
           MIGRATION_STATUS=$?
           cat /tmp/lnfs-migration.log
           if [ "$MIGRATION_STATUS" -ne 0 ]; then
-            MIGRATION_SUMMARY=$(tail -n 12 /tmp/lnfs-migration.log | tr '\n' ' ' | sed 's/%/%25/g; s/\r/%0D/g')
+            MIGRATION_SUMMARY=$(tail -n 40 /tmp/lnfs-migration.log | tr '\n' ' ' | sed 's/%/%25/g; s/\r/%0D/g')
             echo "::error title=Isolated MySQL migration failed::$MIGRATION_SUMMARY"
             exit "$MIGRATION_STATUS"
           fi

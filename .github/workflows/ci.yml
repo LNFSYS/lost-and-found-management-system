@@ -104,7 +104,16 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Migrate isolated MySQL
-        run: npm run migrate:api
+        run: |
+          set +e
+          npm run migrate:api > /tmp/lnfs-migration.log 2>&1
+          MIGRATION_STATUS=$?
+          cat /tmp/lnfs-migration.log
+          if [ "$MIGRATION_STATUS" -ne 0 ]; then
+            MIGRATION_SUMMARY=$(tail -n 12 /tmp/lnfs-migration.log | tr '\n' ' ' | sed 's/%/%25/g; s/\r/%0D/g')
+            echo "::error title=Isolated MySQL migration failed::$MIGRATION_SUMMARY"
+            exit "$MIGRATION_STATUS"
+          fi
 
       - name: Verify migrated schema
         run: npm run smoke:migration
@@ -149,13 +158,16 @@ jobs:
           npm run e2e:web
           PERF_OUTPUT_PATH=/tmp/lnfs-performance.json PERF_REQUESTS=120 PERF_CONCURRENCY=10 PERF_P95_LIMIT_MS=1000 npm run perf:smoke
 
-      - name: Upload performance smoke evidence
+      - name: Upload database smoke diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: performance-smoke
-          path: /tmp/lnfs-performance.json
-          if-no-files-found: error
+          name: database-smoke-diagnostics
+          path: |
+            /tmp/lnfs-migration.log
+            /tmp/lnfs-api.log
+            /tmp/lnfs-performance.json
+          if-no-files-found: warn
 
   java-build:
     runs-on: ubuntu-latest

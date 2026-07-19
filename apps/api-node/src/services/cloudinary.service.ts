@@ -1,4 +1,5 @@
 import { v2 as cloudinary, type UploadApiResponse } from "cloudinary";
+import { randomUUID } from "node:crypto";
 import { Readable } from "node:stream";
 import { env } from "../config/env.js";
 import { isConfigured } from "../utils/configured.js";
@@ -16,6 +17,19 @@ export interface UploadedAsset {
   bytes?: number;
 }
 
+interface TestAsset extends UploadedAsset {
+  content: Buffer;
+  contentType: string;
+}
+
+const testAssetsByPublicId = new Map<string, TestAsset>();
+const testAssetsByUrl = new Map<string, TestAsset>();
+
+function toUploadedAsset(asset: TestAsset): UploadedAsset {
+  const { content: _content, contentType: _contentType, ...uploaded } = asset;
+  return uploaded;
+}
+
 function configured() {
   return (
     isConfigured(env.cloudinary.cloudName) &&
@@ -25,6 +39,9 @@ function configured() {
 }
 
 function ensureConfigured() {
+  if (env.cloudinary.testMode) {
+    return;
+  }
   if (!configured()) {
     console.warn("Cloudinary is not configured. Configure CLOUDINARY_* variables.");
     throw new HttpError(503, "Dịch vụ tải ảnh chưa sẵn sàng. Vui lòng dùng dữ liệu demo hoặc liên hệ quản trị viên.");
@@ -45,6 +62,13 @@ function assertTrustedCloudinaryUrl(value: string) {
     url = new URL(value);
   } catch {
     throw new HttpError(422, "Invalid media URL");
+  }
+
+  if (env.cloudinary.testMode) {
+    if (url.protocol !== "https:" || url.hostname !== "media.test.invalid" || !testAssetsByUrl.has(value)) {
+      throw new HttpError(422, "Untrusted test media source");
+    }
+    return url;
   }
 
   const expectedPathPrefix = `/${env.cloudinary.cloudName}/image/upload/`;
@@ -93,6 +117,24 @@ function streamUpload(buffer: Buffer, folder: string): Promise<UploadApiResponse
 export const cloudinaryService = {
   async uploadImage(buffer: Buffer, folder: string): Promise<UploadedAsset> {
     ensureConfigured();
+    if (env.cloudinary.testMode) {
+      const publicId = `${folder.replace(/^\/+|\/+$/g, "")}/${randomUUID()}`;
+      const secureUrl = `https://media.test.invalid/${encodeURIComponent(publicId)}`;
+      const asset: TestAsset = {
+        secureUrl,
+        publicId,
+        resourceType: "image",
+        format: "png",
+        width: 1,
+        height: 1,
+        bytes: buffer.length,
+        content: Buffer.from(buffer),
+        contentType: "image/png"
+      };
+      testAssetsByPublicId.set(publicId, asset);
+      testAssetsByUrl.set(secureUrl, asset);
+      return toUploadedAsset(asset);
+    }
     const result = await streamUpload(buffer, folder);
 
     return {
@@ -110,12 +152,27 @@ export const cloudinaryService = {
 
   async deleteAsset(publicId: string): Promise<void> {
     ensureConfigured();
+    if (env.cloudinary.testMode) {
+      const asset = testAssetsByPublicId.get(publicId);
+      if (asset) {
+        testAssetsByPublicId.delete(publicId);
+        testAssetsByUrl.delete(asset.secureUrl);
+      }
+      return;
+    }
     await cloudinary.uploader.destroy(publicId, { resource_type: "image" });
   },
 
   async resolveUploadedImage(publicId: string, folder: string): Promise<UploadedAsset> {
     ensureConfigured();
     assertPublicIdInFolder(publicId, folder);
+    if (env.cloudinary.testMode) {
+      const asset = testAssetsByPublicId.get(publicId);
+      if (!asset) {
+        throw new HttpError(404, "Uploaded image not found");
+      }
+      return toUploadedAsset(asset);
+    }
     try {
       const result = (await cloudinary.api.resource(publicId, { resource_type: "image" })) as {
         public_id?: string;
@@ -149,6 +206,13 @@ export const cloudinaryService = {
 
   async downloadTrustedImage(imageUrl: string) {
     assertTrustedCloudinaryUrl(imageUrl);
+    if (env.cloudinary.testMode) {
+      const asset = testAssetsByUrl.get(imageUrl);
+      if (!asset) {
+        throw new HttpError(404, "Uploaded image not found");
+      }
+      return { bytes: Buffer.from(asset.content), contentType: asset.contentType };
+    }
     const upstream = await fetch(imageUrl, { signal: AbortSignal.timeout(10_000) });
     if (!upstream.ok) {
       throw new HttpError(502, "Unable to load protected image");

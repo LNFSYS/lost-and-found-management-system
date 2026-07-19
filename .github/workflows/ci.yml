@@ -124,6 +124,7 @@ jobs:
       - name: Run database-backed core E2E
         env:
           NODE_ENV: test
+          CLOUDINARY_TEST_MODE: "true"
           API_PORT: 3001
           FRONTEND_URL: http://localhost:5173
           SOCKET_CORS_ORIGIN: http://localhost:5173

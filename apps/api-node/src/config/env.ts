@@ -53,8 +53,14 @@ function trustProxyFromEnv() {
   return Number.isInteger(numeric) && numeric >= 0 ? numeric : value;
 }
 
+const nodeEnv = process.env.NODE_ENV ?? "development";
+const cloudinaryTestMode = booleanFromEnv("CLOUDINARY_TEST_MODE", false);
+if (cloudinaryTestMode && nodeEnv !== "test") {
+  throw new Error("CLOUDINARY_TEST_MODE may only be enabled when NODE_ENV=test");
+}
+
 export const env = {
-  nodeEnv: process.env.NODE_ENV ?? "development",
+  nodeEnv,
   port: numberFromEnv("API_PORT", numberFromEnv("PORT", 3001)),
   frontendUrl: process.env.FRONTEND_URL ?? "http://localhost:5173",
   logFormat: process.env.LOG_FORMAT === "json" || process.env.NODE_ENV === "production" ? "json" as const : "pretty" as const,
@@ -92,7 +98,8 @@ export const env = {
   cloudinary: {
     cloudName: process.env.CLOUDINARY_CLOUD_NAME,
     apiKey: process.env.CLOUDINARY_API_KEY,
-    apiSecret: process.env.CLOUDINARY_API_SECRET
+    apiSecret: process.env.CLOUDINARY_API_SECRET,
+    testMode: cloudinaryTestMode
   },
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID,

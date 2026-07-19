@@ -716,6 +716,7 @@ export function App() {
             detail={selectedPostQuery.data}
             handoverPoints={handoverQuery.data?.handoverPoints ?? []}
             currentUserId={meQuery.data?.user.id}
+            canReviewClaims={canUseAdmin}
             onClose={closePost}
             onClaim={(post) => setClaimPost(post)}
           />

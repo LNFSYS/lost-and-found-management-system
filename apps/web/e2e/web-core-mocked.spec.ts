@@ -47,11 +47,17 @@ function makePost(id = "post-existing", type: "LOST" | "FOUND" = "LOST") {
 async function installMockApi(
   page: Page,
   role: "STUDENT" | "STAFF",
-  onCreatePost?: (payload: Record<string, unknown>) => void,
-  onSubmitClaim?: (payload: Record<string, unknown>) => void
+  options: {
+    onCreatePost?: (payload: Record<string, unknown>) => void;
+    onSubmitClaim?: (payload: Record<string, unknown>) => void;
+    claimStatus?: "PENDING" | "ACCEPTED";
+    onAcceptClaim?: () => void;
+    onCreateAppointment?: (payload: Record<string, unknown>) => void;
+  } = {}
 ) {
   const user = makeUser(role);
   const existingPost = makePost("post-existing", "FOUND");
+  let claimStatus: "PENDING" | "ACCEPTED" = options.claimStatus ?? "PENDING";
 
   await page.route("**/api/**", async (route) => {
     const request = route.request();
@@ -87,18 +93,18 @@ async function installMockApi(
       data = { suggestions: [] };
     } else if (path === "/posts" && method === "POST") {
       const payload = request.postDataJSON() as Record<string, unknown>;
-      onCreatePost?.(payload);
+      options.onCreatePost?.(payload);
       data = { post: { ...existingPost, id: "post-created", ...payload }, matchSuggestions: [] };
     } else if (path === "/claims" && method === "POST") {
       const payload = request.postDataJSON() as Record<string, unknown>;
-      onSubmitClaim?.(payload);
+      options.onSubmitClaim?.(payload);
       data = {
         claim: {
           id: "claim-created",
           postId: "post-existing",
           postOwnerId: "user-finder",
           claimant: { id: user.id, fullName: user.fullName },
-          status: "PENDING",
+          status: claimStatus,
           description: payload.description ?? null,
           approximateLostAt: payload.approximateLostAt ?? null,
           approximateLocation: payload.approximateLocation ?? null,
@@ -111,7 +117,46 @@ async function installMockApi(
     } else if (path === "/posts/post-existing") {
       data = { post: existingPost, media: [], tags: [], matches: [] };
     } else if (path === "/posts/post-existing/claims") {
-      data = { claims: [] };
+      data = {
+        claims: options.claimStatus ? [{
+          id: "claim-pending",
+          postId: "post-existing",
+          postOwnerId: "user-finder",
+          claimant: { id: "user-student", fullName: "Demo Student" },
+          status: claimStatus,
+          description: "Ví có vết xước nhỏ",
+          approximateLostAt: now,
+          approximateLocation: "Sảnh Alpha",
+          rejectionReason: null,
+          moreInfoRequest: null,
+          acceptedAt: claimStatus === "ACCEPTED" ? now : null,
+          rejectedAt: null,
+          cancelledAt: null,
+          createdAt: now,
+          updatedAt: now
+        }] : []
+      };
+    } else if (path === "/claims/claim-pending/verification") {
+      data = {
+        verification: {
+          claimId: "claim-pending",
+          ownershipConfidence: 78,
+          level: "HIGH",
+          reviewConfidenceTier: "HIGH_REVIEW",
+          isSystemVerified: false,
+          note: "Mức hỗ trợ review, không tự động xác nhận quyền sở hữu.",
+          breakdown: { matchScore: 80, textScore: 75, locationScore: 90, timeScore: 70, evidenceScore: 75 },
+          signals: { hasClaimantMatchedLostPost: true, evidenceCount: 1, hasEvidenceOcrText: false, hasApproximateLostTime: true, hasApproximateLocation: true }
+        }
+      };
+    } else if (path === "/claims/claim-pending/accept" && method === "PATCH") {
+      claimStatus = "ACCEPTED";
+      options.onAcceptClaim?.();
+      data = { claim: { id: "claim-pending", status: "ACCEPTED" }, evidence: [] };
+    } else if (path === "/appointments" && method === "POST") {
+      const payload = request.postDataJSON() as Record<string, unknown>;
+      options.onCreateAppointment?.(payload);
+      data = { appointment: { id: "appointment-created", claimId: "claim-pending", status: "PENDING", ...payload } };
     } else if (path === "/posts/post-created/claims") {
       data = { claims: [] };
     } else if (path === "/posts/post-created/matches") {
@@ -168,9 +213,9 @@ async function login(page: Page, role: "STUDENT" | "STAFF") {
 
 test("student creates a LOST post through the web form", async ({ page }) => {
   let submittedPayload: Record<string, unknown> | undefined;
-  await installMockApi(page, "STUDENT", (payload) => {
+  await installMockApi(page, "STUDENT", { onCreatePost: (payload) => {
     submittedPayload = payload;
-  });
+  } });
   await login(page, "STUDENT");
 
   await page.getByRole("button", { name: "Đăng tin" }).first().click();
@@ -209,9 +254,9 @@ test("staff sees warehouse operations without admin-only tabs", async ({ page })
 
 test("student opens a FOUND post route and submits an ownership claim", async ({ page }) => {
   let submittedClaim: Record<string, unknown> | undefined;
-  await installMockApi(page, "STUDENT", undefined, (payload) => {
+  await installMockApi(page, "STUDENT", { onSubmitClaim: (payload) => {
     submittedClaim = payload;
-  });
+  } });
   await login(page, "STUDENT");
 
   await page.getByRole("heading", { name: "Ví sinh viên nhặt được" }).click();
@@ -232,4 +277,48 @@ test("student opens a FOUND post route and submits an ownership claim", async ({
     description: "Ví có một vết xước nhỏ ở góc phải",
     approximateLocation: "Sảnh Alpha gần quầy lễ tân"
   });
+});
+
+test("staff can review and accept a pending ownership claim", async ({ page }) => {
+  let accepted = false;
+  await installMockApi(page, "STAFF", {
+    claimStatus: "PENDING",
+    onAcceptClaim: () => {
+      accepted = true;
+    }
+  });
+  await login(page, "STAFF");
+
+  await page.getByRole("heading", { name: "Ví sinh viên nhặt được" }).click();
+  await expect(page).toHaveURL(/\/posts\/post-existing$/);
+  await expect(page.getByText("Mức hỗ trợ xác thực: 78%", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Chấp nhận" }).click();
+
+  expect(accepted).toBe(true);
+  await expect(page.getByText("Đã chấp nhận yêu cầu nhận đồ.")).toBeVisible();
+});
+
+test("staff creates a handover appointment for an accepted claim", async ({ page }) => {
+  let appointmentPayload: Record<string, unknown> | undefined;
+  await installMockApi(page, "STAFF", {
+    claimStatus: "ACCEPTED",
+    onCreateAppointment: (payload) => {
+      appointmentPayload = payload;
+    }
+  });
+  await login(page, "STAFF");
+
+  await page.getByRole("heading", { name: "Ví sinh viên nhặt được" }).click();
+  await expect(page).toHaveURL(/\/posts\/post-existing$/);
+
+  const appointmentForm = page.locator("form.claim-appointment-form").first();
+  await appointmentForm.locator('input[name="proposedAt"]').fill("2026-07-20T10:00");
+  await appointmentForm.locator('input[name="customLocation"]').fill("Quầy bàn giao Alpha");
+  await appointmentForm.getByRole("button", { name: "Tạo lịch hẹn" }).click();
+
+  expect(appointmentPayload).toMatchObject({
+    claimId: "claim-pending",
+    customLocation: "Quầy bàn giao Alpha"
+  });
+  expect(appointmentPayload?.proposedAt).toEqual(expect.any(String));
 });

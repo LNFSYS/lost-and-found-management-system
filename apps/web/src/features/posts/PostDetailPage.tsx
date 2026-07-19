@@ -10,6 +10,7 @@ export function PostDetailPage(props: {
   detail?: Awaited<ReturnType<typeof api.getPost>>;
   handoverPoints: Array<{ id: string; name: string }>;
   currentUserId?: string;
+  canReviewClaims: boolean;
   onClose: () => void;
   onClaim: (post: BoardPost) => void;
 }) {
@@ -311,6 +312,7 @@ export function PostDetailPage(props: {
                   claims={claimsQuery.data.claims}
                   handoverPoints={props.handoverPoints}
                   currentUserId={props.currentUserId}
+                  canReviewClaims={props.canReviewClaims}
                   pending={appointmentMutation.isPending}
                   error={appointmentMutation.error}
                   onCreate={(payload) => appointmentMutation.mutate(payload)}
@@ -405,4 +407,3 @@ export function PostDetailPage(props: {
     </>
   );
 }
-

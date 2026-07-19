@@ -10,6 +10,7 @@ export function ClaimAppointmentPanel(props: {
   claims: PostClaimSummary[];
   handoverPoints: Array<{ id: string; name: string }>;
   currentUserId?: string;
+  canReviewClaims: boolean;
   pending: boolean;
   error: unknown;
   onCreate: (payload: Record<string, unknown>) => void;
@@ -38,7 +39,7 @@ export function ClaimAppointmentPanel(props: {
               <span className={`status-pill claim-${claim.status.toLowerCase()}`}>{claim.status}</span>
               <strong>{claim.claimant.fullName}</strong>
               <ClaimVerificationBadge claimId={claim.id} />
-              <ClaimExtraActions claim={claim} currentUserId={props.currentUserId} />
+              <ClaimExtraActions claim={claim} currentUserId={props.currentUserId} canReviewClaims={props.canReviewClaims} />
               <small>{claim.approximateLocation || "Chưa có vị trí mất gần đúng"} - {formatDate(claim.createdAt)}</small>
             </div>
             {claim.status === "ACCEPTED" && (
@@ -190,13 +191,13 @@ function ClaimAppointmentTimeline(props: { claimId: string }) {
   );
 }
 
-function ClaimExtraActions(props: { claim: PostClaimSummary; currentUserId?: string }) {
+function ClaimExtraActions(props: { claim: PostClaimSummary; currentUserId?: string; canReviewClaims: boolean }) {
   const { claim } = props;
   const queryClient = useQueryClient();
   const [detailOpen, setDetailOpen] = useState(false);
   const [actionForm, setActionForm] = useState<"more-info" | "reject" | "cancel" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const canReview = Boolean(props.currentUserId && props.currentUserId === claim.postOwnerId);
+  const canReview = props.canReviewClaims || Boolean(props.currentUserId && props.currentUserId === claim.postOwnerId);
   const canCancel = Boolean(props.currentUserId && (props.currentUserId === claim.claimant.id || canReview));
   const canUploadEvidence = Boolean(
     props.currentUserId === claim.claimant.id && (claim.status === "PENDING" || claim.status === "NEED_MORE_INFO")
@@ -216,9 +217,17 @@ function ClaimExtraActions(props: { claim: PostClaimSummary; currentUserId?: str
       if (input.action === "cancel") return api.cancelClaim(claim.id, input.reason ?? "");
       return api.rejectClaim(claim.id, input.reason ?? "");
     },
-    onSuccess: async (_result, input) => {
+    onSuccess: async (result, input) => {
       setActionForm(null);
       setMessage(input.action === "accept" ? "Đã chấp nhận yêu cầu nhận đồ." : "Đã cập nhật trạng thái yêu cầu nhận đồ.");
+      queryClient.setQueryData<{ claims: PostClaimSummary[] }>(["post-claims", claim.postId], (current) => {
+        if (!current) return current;
+        return {
+          claims: current.claims.map((item) => item.id === claim.id
+            ? { ...item, status: result.claim.status as PostClaimSummary["status"] }
+            : item)
+        };
+      });
       await queryClient.invalidateQueries({ queryKey: ["post-claims", claim.postId] });
       await queryClient.invalidateQueries({ queryKey: ["claim-detail", claim.id] });
       await queryClient.invalidateQueries({ queryKey: ["claim-verification", claim.id] });

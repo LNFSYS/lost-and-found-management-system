@@ -134,6 +134,22 @@ jobs:
           E2E_CLAIMANT_EMAIL: studentlnf@gmail.com
           E2E_CLAIMANT_PASSWORD: "12345678"
         run: |
+          run_ci_check() {
+            local check_name="$1"
+            shift
+            local check_log="/tmp/lnfs-${check_name}.log"
+            set +e
+            "$@" 2>&1 | tee "$check_log"
+            local check_status=${PIPESTATUS[0]}
+            set -e
+            if [ "$check_status" -ne 0 ]; then
+              local check_summary
+              check_summary=$(tail -n 50 "$check_log" | tr '\n' ' ' | sed 's/%/%25/g; s/\r/%0D/g')
+              echo "::error title=${check_name} failed::$check_summary"
+              return "$check_status"
+            fi
+          }
+
           npm run build:api
           npm --workspace apps/api-node run start > /tmp/lnfs-api.log 2>&1 &
           API_PID=$!
@@ -146,17 +162,17 @@ jobs:
           done
           curl --fail http://localhost:3001/api/health
           curl --fail http://localhost:3001/api/health/ready
-          npm run e2e:runtime-hardening
-          npm run e2e:core
-          npm run e2e:roles
-          npm run e2e:warehouse
-          npm run e2e:claim-race
-          npm run e2e:media-privacy
-          npm run e2e:chat-gating
-          npm run e2e:claim-evidence-policy
-          npm run e2e:admin-crud
-          npm run e2e:web
-          PERF_OUTPUT_PATH=/tmp/lnfs-performance.json PERF_REQUESTS=120 PERF_CONCURRENCY=10 PERF_P95_LIMIT_MS=1000 npm run perf:smoke
+          run_ci_check e2e-runtime-hardening npm run e2e:runtime-hardening
+          run_ci_check e2e-core npm run e2e:core
+          run_ci_check e2e-roles npm run e2e:roles
+          run_ci_check e2e-warehouse npm run e2e:warehouse
+          run_ci_check e2e-claim-race npm run e2e:claim-race
+          run_ci_check e2e-media-privacy npm run e2e:media-privacy
+          run_ci_check e2e-chat-gating npm run e2e:chat-gating
+          run_ci_check e2e-claim-evidence-policy npm run e2e:claim-evidence-policy
+          run_ci_check e2e-admin-crud npm run e2e:admin-crud
+          run_ci_check e2e-web npm run e2e:web
+          PERF_OUTPUT_PATH=/tmp/lnfs-performance.json PERF_REQUESTS=120 PERF_CONCURRENCY=10 PERF_P95_LIMIT_MS=1000 run_ci_check performance-smoke npm run perf:smoke
 
       - name: Upload database smoke diagnostics
         if: always()
@@ -165,7 +181,7 @@ jobs:
           name: database-smoke-diagnostics
           path: |
             /tmp/lnfs-migration.log
-            /tmp/lnfs-api.log
+            /tmp/lnfs-*.log
             /tmp/lnfs-performance.json
           if-no-files-found: warn
 

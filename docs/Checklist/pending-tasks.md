@@ -8,7 +8,7 @@ Last audit: 2026-07-27
 
 | Metric | Count |
 | --- | ---: |
-| Completed checklist items | 150 |
+| Completed checklist items | 151 |
 | Open MVP-blocking items | 0 |
 | Open future/hardening items | 20 |
 
@@ -64,7 +64,8 @@ The current web and mobile MVPs are demo-ready but still carry "God file" debt. 
 - [x] Extract shared web app types/constants/helpers, shell widgets, admin widgets, and private media widgets out of `apps/web/src/App.tsx` as the first low-risk refactor phase.
 - [x] Split `apps/web/src/App.tsx` into route-level/domain components. Board/posts, Create Post, account, Post Detail, claim dialogs/workflows, claim chat/verification and Admin are extracted; `App.tsx` is now about 750 lines and retains application-shell orchestration.
 - [x] Continue splitting `apps/web/src/styles.css` by feature. Account/auth/profile, create-post, claim-chat, claim workflow/proof, post detail, and match review styles now live with their owning components; the remaining global file is shared shell/feed/admin styling.
-- [x] Replace manual web `view` state navigation with `react-router-dom`; board/create/account/handover/my-posts/detail now use real URLs and browser history.
+- [x] Replace manual web `view` state navigation with real URLs and a tested browser History API adapter; board/create/account/handover/my-posts/detail support back/forward without the unused React Router RSC/SSR surface.
+- [x] Normalize MySQL JSON activity metadata returned as object, string, or buffer so audit/activity endpoints do not fail across local, CI, and hosted MySQL drivers.
 - [ ] Split `apps/mobile/App.tsx` into screens/components/hooks.
 - [ ] Replace manual mobile tab/modal state navigation with React Navigation or Expo Router.
 

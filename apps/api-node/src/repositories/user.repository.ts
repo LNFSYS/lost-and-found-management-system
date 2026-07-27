@@ -2,6 +2,7 @@ import type { PoolConnection, ResultSetHeader, RowDataPacket } from "mysql2/prom
 import { randomUUID } from "node:crypto";
 import { dbPool } from "../config/db.js";
 import type { User, UserRole, UserStatus } from "../models/user.model.js";
+import { parseJsonObjectColumn } from "../utils/json-column.js";
 
 interface UserRow extends RowDataPacket {
   id: string;
@@ -58,7 +59,7 @@ interface ActivityLogRow extends RowDataPacket {
   action: string;
   entity_type: string | null;
   entity_id: string | null;
-  metadata: string | null;
+  metadata: unknown;
   created_at: string;
 }
 
@@ -582,7 +583,7 @@ export const userRepository = {
       action: row.action,
       entityType: row.entity_type,
       entityId: row.entity_id,
-      metadata: row.metadata ? (JSON.parse(row.metadata) as Record<string, unknown>) : null,
+      metadata: parseJsonObjectColumn(row.metadata),
       createdAt: row.created_at
     }));
   },

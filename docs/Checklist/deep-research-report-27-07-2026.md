@@ -37,7 +37,7 @@ Mốc 9.0 phản ánh độ hoàn chỉnh của MVP web/backend, không phải p
 GitHub Actions run `29693045128` đã pass:
 
 - Secret scan và release packaging từ clean checkout.
-- API build và 26 API unit/policy/schema tests.
+- API build và 26 API unit/policy/schema tests tại CI baseline.
 - Web production build và Playwright.
 - Blank MySQL 8 migrations 001-025, schema smoke và demo seed.
 - Core, role/privacy, warehouse, claim-race, media-privacy, chat-gating, evidence-policy và Admin CRUD E2E.
@@ -50,9 +50,10 @@ GitHub Actions run `29693045128` đã pass:
 Local verification sau refactor:
 
 - `npm run build:api`: pass.
-- `npm run test:api`: 26/26 pass.
+- `npm run test:api`: 29/29 pass.
 - `npm run build:web`: pass.
 - `npm run e2e:web`: 10 pass, 1 credential-dependent skip.
+- `npm audit --workspace apps/api-node --workspace apps/web --omit=dev --audit-level=high`: 0 vulnerabilities.
 - `npm run scan:secrets`: pass.
 - `git diff --check`: pass.
 - `npm run smoke:migration`: local database còn dưới migration 024 nên thiếu `return_appointments.active_claim_id`; blank MySQL CI 001-025 pass. Không tự động mutate database dùng chung trong phiên kiểm tra.
@@ -74,6 +75,8 @@ Local verification sau refactor:
 - [x] Match feedback có UI giải thích score và nhãn dành cho owner/Staff/Admin.
 - [x] Claim evidence view, Admin role/status và warehouse lifecycle có activity-audit assertion trong E2E.
 - [x] CSS claim workflow, post detail và match review đã được tách khỏi global stylesheet.
+- [x] Activity/audit metadata đọc an toàn với cả JSON object, string và buffer từ MySQL; malformed metadata không còn làm endpoint trả `500`.
+- [x] Web dùng browser History API adapter nhỏ, loại bỏ dependency React Router không cần thiết và các advisory liên quan.
 
 ## Finding còn mở
 

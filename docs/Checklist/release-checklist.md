@@ -33,12 +33,12 @@ Use this checklist before demo, merge, or submission. Keep evidence screenshots/
 - [ ] Run `npm run quality:release` after migrations 024-025 are verified/applied on the intended database; the 2026-07-15 local run is intentionally pending because shared DB remains at migration 023.
 - [x] GitHub Actions CI runs release text/config scan, API build, web build, and mobile typecheck on pushes/PRs to `main`.
 - [x] GitHub Actions also runs isolated MySQL migration smoke, Java 21/Maven build, and advisory dependency audit.
-- [x] API tests include policy, migration schema, image-signature, rate-limit, request-ID and metrics coverage (26 tests passed locally on 2026-07-19).
-- [x] API + web runtime dependency audit reports 0 vulnerabilities after the Vite 6.4.3 update; Expo/mobile advisories remain deferred with the mobile workstream.
+- [x] API tests include policy, migration schema, image-signature, JSON-column compatibility, rate-limit, request-ID and metrics coverage (29 tests passed locally on 2026-07-27).
+- [x] API + web runtime dependency audit reports 0 vulnerabilities after updating transitive `body-parser`/`postcss` and removing the unused React Router dependency; Expo/mobile advisories remain deferred with the mobile workstream.
 - [x] Confirm CI passes Redis-backed runtime hardening, two-instance Socket.IO isolation, performance artifact and API/web container builds (`29693045128`).
 - [x] Run Playwright routing/back-forward smoke plus API-mocked Student create-LOST/create-FOUND, Student FOUND-detail-to-claim, Staff claim review/appointment lifecycle, proof upload/completion/feedback, match feedback, Staff permission/warehouse and Admin navigation flows; database-backed login remains conditional on demo credentials.
-- [x] Run `npm run build:api` (passed on 2026-07-19).
-- [x] Run `npm run build:web` (passed on 2026-07-19).
+- [x] Run `npm run build:api` (passed on 2026-07-27).
+- [x] Run `npm run build:web` (passed on 2026-07-27).
 - [x] Run `npm run typecheck:mobile`.
 - [x] Run `npm run e2e:core` when the local API/database are ready.
 - [x] Run `npm run e2e:roles` to verify Staff vs Admin permissions.

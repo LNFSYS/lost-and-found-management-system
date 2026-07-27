@@ -16,7 +16,6 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { io } from "socket.io-client";
-import { useLocation, useNavigate } from "react-router-dom";
 import {
   api,
   clearTokens,
@@ -36,6 +35,7 @@ import type { AdminTab, AuthEntryMode, View } from "./app/types";
 import { getImageUploadRules, matchSuggestionsSignature, viewTitle } from "./app/helpers";
 import { RealtimeNotificationToast, UserMenu } from "./app/AppShellWidgets";
 import { pathForView, postPath, routeState } from "./app/routes";
+import { useBrowserLocation, useBrowserNavigate } from "./app/browser-navigation";
 import { BoardView } from "./features/posts/BoardView";
 import { CreatePostView } from "./features/posts/CreatePostView";
 import { ClaimDialog, MatchSuggestionsDialog } from "./features/posts/PostDialogs";
@@ -45,8 +45,8 @@ import { AdminDashboardView } from "./features/admin/AdminDashboardView";
 
 export function App() {
   const queryClient = useQueryClient();
-  const location = useLocation();
-  const navigate = useNavigate();
+  const location = useBrowserLocation();
+  const navigate = useBrowserNavigate();
   const currentRoute = useMemo(() => routeState(location.pathname, location.search), [location.pathname, location.search]);
   const view = currentRoute.view;
   const [filters, setFilters] = useState<ListPostsParams>({ page: 1, pageSize: 12, sort: "latest" });

@@ -2,8 +2,8 @@
 
 ## Phạm vi đánh giá
 
-- Snapshot đánh giá: working tree nhánh `main` ngày 27/07/2026; commit/CI mới được ghi sau khi merge.
-- CI evidence: GitHub Actions run `29693045128` - **pass**.
+- Snapshot đánh giá: nhánh `main` tại commit `ced447d` ngày 27/07/2026.
+- CI evidence: GitHub Actions run `30250868954` - **pass**.
 - Core được chấm: React Web + Node.js API + MySQL + Socket.IO; Java/Spring Boot là business extension read-only mặc định.
 - Mobile, custom AI training/MLOps và production microservices không được tính là core hoàn thành.
 
@@ -34,10 +34,10 @@ Mốc 9.0 phản ánh độ hoàn chỉnh của MVP web/backend, không phải p
 
 ## Evidence đã xác minh
 
-GitHub Actions run `29693045128` đã pass:
+GitHub Actions run `30250868954` đã pass:
 
 - Secret scan và release packaging từ clean checkout.
-- API build và 26 API unit/policy/schema tests tại CI baseline.
+- API build và 29 API unit/policy/schema/JSON-compatibility tests.
 - Web production build và Playwright.
 - Blank MySQL 8 migrations 001-025, schema smoke và demo seed.
 - Core, role/privacy, warehouse, claim-race, media-privacy, chat-gating, evidence-policy và Admin CRUD E2E.

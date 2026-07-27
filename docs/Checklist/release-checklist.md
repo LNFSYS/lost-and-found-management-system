@@ -35,7 +35,7 @@ Use this checklist before demo, merge, or submission. Keep evidence screenshots/
 - [x] GitHub Actions also runs isolated MySQL migration smoke, Java 21/Maven build, and advisory dependency audit.
 - [x] API tests include policy, migration schema, image-signature, JSON-column compatibility, rate-limit, request-ID and metrics coverage (29 tests passed locally on 2026-07-27).
 - [x] API + web runtime dependency audit reports 0 vulnerabilities after updating transitive `body-parser`/`postcss` and removing the unused React Router dependency; Expo/mobile advisories remain deferred with the mobile workstream.
-- [x] Confirm CI passes Redis-backed runtime hardening, two-instance Socket.IO isolation, performance artifact and API/web container builds (`29693045128`).
+- [x] Confirm CI passes Redis-backed runtime hardening, two-instance Socket.IO isolation, performance artifact, activity-log compatibility and API/web container builds (`30250868954`).
 - [x] Run Playwright routing/back-forward smoke plus API-mocked Student create-LOST/create-FOUND, Student FOUND-detail-to-claim, Staff claim review/appointment lifecycle, proof upload/completion/feedback, match feedback, Staff permission/warehouse and Admin navigation flows; database-backed login remains conditional on demo credentials.
 - [x] Run `npm run build:api` (passed on 2026-07-27).
 - [x] Run `npm run build:web` (passed on 2026-07-27).

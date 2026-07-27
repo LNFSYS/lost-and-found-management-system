@@ -34,7 +34,7 @@ Scope note: the current MVP should be demoed as web + Node backend with Google V
 - [x] Add CI performance smoke with P50/P95/P99/error-rate artifact and Redis-backed runtime hardening smoke.
 - [x] Add guarded 10k/50k/100k synthetic dataset benchmark workflow with `EXPLAIN ANALYZE` artifacts.
 - [x] Add API/web container builds, production-like Compose topology, migration gate and tagged release ZIP/checksum workflow.
-- [x] Verify Redis runtime, two-instance Socket.IO room isolation, and both container builds in GitHub Actions (`29693045128`).
+- [x] Verify Redis runtime, two-instance Socket.IO room isolation, both container builds, activity-log compatibility, and 29 API tests in GitHub Actions (`30250868954`).
 - [ ] Execute and retain passing 10k/50k/100k benchmark artifacts, then run a provider-specific backup/restore drill before production claims.
 
 

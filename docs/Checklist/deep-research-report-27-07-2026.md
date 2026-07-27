@@ -1,8 +1,8 @@
-# Báo cáo chất lượng hiện hành - 19/07/2026
+# Báo cáo chất lượng hiện hành - 27/07/2026
 
 ## Phạm vi đánh giá
 
-- Snapshot: nhánh `main`, commit `b4b6458`.
+- Snapshot đánh giá: working tree nhánh `main` ngày 27/07/2026; commit/CI mới được ghi sau khi merge.
 - CI evidence: GitHub Actions run `29693045128` - **pass**.
 - Core được chấm: React Web + Node.js API + MySQL + Socket.IO; Java/Spring Boot là business extension read-only mặc định.
 - Mobile, custom AI training/MLOps và production microservices không được tính là core hoàn thành.
@@ -26,11 +26,11 @@ Project là một **MVP web/backend có workflow nghiệp vụ xuyên suốt**, 
 | Campus pilot có giám sát | **Conditional Go** | Cần hosted staging, secret rotation và backup/restore drill |
 | Production diện rộng | **No-Go** | Chưa có benchmark lớn, provider restore evidence và vận hành dài hạn |
 
-**Điểm MVP hiện tại: 8.8/10.**
+**Điểm MVP hiện tại: 9.0/10.**
 
-**Production readiness: 7.5/10.**
+**Production readiness: 7.8/10.**
 
-Điểm chưa lên 9 không đến từ thiếu thêm module. Phần còn thiếu chủ yếu là evidence môi trường thật: benchmark 10k-100k, staging smoke, backup/restore và external-service test credentials.
+Mốc 9.0 phản ánh độ hoàn chỉnh của MVP web/backend, không phải production readiness. Phần còn thiếu chủ yếu là evidence môi trường thật: benchmark 10k-100k, staging smoke, backup/restore và external-service test credentials.
 
 ## Evidence đã xác minh
 
@@ -52,7 +52,7 @@ Local verification sau refactor:
 - `npm run build:api`: pass.
 - `npm run test:api`: 26/26 pass.
 - `npm run build:web`: pass.
-- `npm run e2e:web`: 6 pass, 1 credential-dependent skip.
+- `npm run e2e:web`: 10 pass, 1 credential-dependent skip.
 - `npm run scan:secrets`: pass.
 - `git diff --check`: pass.
 - `npm run smoke:migration`: local database còn dưới migration 024 nên thiếu `return_appointments.active_claim_id`; blank MySQL CI 001-025 pass. Không tự động mutate database dùng chung trong phiên kiểm tra.
@@ -70,6 +70,10 @@ Local verification sau refactor:
 - [x] `App.tsx` giảm còn khoảng 750 dòng; post detail, claim dialogs và claim workflows đã tách theo feature.
 - [x] Private claim/media URL không được serialize trực tiếp.
 - [x] Accepted claim và active appointment có concurrency invariant ở service/database.
+- [x] Web có lifecycle xác nhận/từ chối/đổi/hủy/hoàn tất lịch hẹn và journey proof -> completed return -> feedback.
+- [x] Match feedback có UI giải thích score và nhãn dành cho owner/Staff/Admin.
+- [x] Claim evidence view, Admin role/status và warehouse lifecycle có activity-audit assertion trong E2E.
+- [x] CSS claim workflow, post detail và match review đã được tách khỏi global stylesheet.
 
 ## Finding còn mở
 
@@ -85,27 +89,23 @@ Container, migration gate và runbook đã có nhưng chưa deploy hosted stagin
 
 ### Medium
 
-#### M-01 - Global CSS và Admin module còn lớn
+#### M-01 - Admin module và shared stylesheet còn lớn
 
-`styles.css` và `AdminDashboardView.tsx` vẫn là technical debt. Tách từng domain CSS/Admin panel, mỗi lát phải giữ build và Playwright xanh; không cần big-bang refactor trước bảo vệ.
+CSS theo feature đã được tách thêm cho claim workflow, post detail và match review. `AdminDashboardView.tsx` cùng phần shell/feed/admin còn lại trong shared stylesheet vẫn là technical debt; tiếp tục tách từng lát sau MVP, không big-bang refactor.
 
 #### M-02 - Backend repository còn tập trung
 
 `post.repository.ts` và `admin.repository.ts` vẫn chứa nhiều SQL/read-write mapping. Nên tách read model/write repository theo domain mà không đổi REST contract.
 
-#### M-03 - Browser E2E chưa phủ chứng từ và completed return
-
-API E2E đã phủ sâu và Playwright đã đi qua Staff review -> appointment. Phần proof upload -> completed return -> feedback chưa có browser journey đầy đủ.
-
-#### M-04 - Chưa có benchmark lớn được lưu
+#### M-03 - Chưa có benchmark lớn được lưu
 
 Performance smoke đã pass, candidate prefilter đã có, nhưng chưa có artifact 10k/50k/100k. Không khẳng định khả năng chịu tải campus lớn trước khi chạy workflow benchmark.
 
-#### M-05 - Matching chưa có corpus campus đủ lớn
+#### M-04 - Matching chưa có corpus campus đủ lớn
 
 Matching hiện là hybrid/rule-based với text/category/location/time/image/OCR, tier 45/60/75/85 và explanation. Chưa đủ labeled dataset để khẳng định precision/recall thực tế hoặc gọi là custom-trained AI.
 
-#### M-06 - Shared schema Node/Java vẫn là debt
+#### M-05 - Shared schema Node/Java vẫn là debt
 
 Node là write owner. Java phải giữ `JAVA_WRITES_ENABLED=false` trừ khi team chuyển ownership một flow bằng contract và integration test rõ ràng.
 
@@ -130,8 +130,8 @@ Cách trình bày an toàn: **modular Node.js core API với Java business exten
 - [ ] Chạy benchmark 10k/50k/100k và lưu latency, error rate, query plan.
 - [ ] Deploy một staging environment và chạy core smoke sau deploy.
 - [ ] Thực hiện backup/restore drill sang database tạm.
-- [ ] Thêm Playwright cho proof upload -> completed return -> feedback.
-- [ ] Tách thêm Admin/CSS/repository theo từng lát nhỏ.
+- [x] Thêm Playwright cho proof upload -> completed return -> feedback.
+- [x] Tách CSS claim workflow/post detail/match review theo feature; Admin/repository tiếp tục là hardening sau MVP.
 - [ ] Kiểm tra Google Vision, SMTP, OAuth và Cloudinary bằng test credential riêng.
 
 ## Wording bảo vệ

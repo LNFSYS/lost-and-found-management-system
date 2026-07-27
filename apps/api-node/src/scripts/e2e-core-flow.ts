@@ -12,6 +12,13 @@ interface Envelope<T> {
   error?: string;
 }
 
+function tinyPngFile() {
+  const base64 =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
+  const bytes = Uint8Array.from(Buffer.from(base64, "base64"));
+  return new File([bytes], "e2e-handover-proof.png", { type: "image/png" });
+}
+
 async function request<T>(path: string, init: RequestInit = {}, token?: string, expectedStatus = 200) {
   const headers = new Headers(init.headers);
   if (token) {
@@ -127,6 +134,22 @@ async function main() {
     })
   }, token2, 409);
   await request(`/appointments/${appointment.appointment.id}/accept`, { method: "PATCH" }, token2);
+  const proofForm = new FormData();
+  proofForm.append("proof", tinyPngFile());
+  proofForm.append("note", "E2E authenticated handover proof");
+  const proofResult = await request<{ appointment: { proof: { imageUrl: string } | null } }>(
+    `/appointments/${appointment.appointment.id}/proof`,
+    { method: "POST", body: proofForm },
+    token2,
+    201
+  );
+  const serializedProof = JSON.stringify(proofResult);
+  if (
+    !proofResult.appointment.proof?.imageUrl.endsWith(`/appointments/${appointment.appointment.id}/proof-image`) ||
+    /publicId|cloudinary|res\.cloudinary\.com/i.test(serializedProof)
+  ) {
+    throw new Error("Appointment proof response must expose only its authenticated application proxy path.");
+  }
   await request(`/appointments/${appointment.appointment.id}/complete`, { method: "PATCH" }, token);
   await request(`/appointments/${appointment.appointment.id}/feedback`, {
     method: "POST",

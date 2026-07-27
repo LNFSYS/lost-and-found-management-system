@@ -28,7 +28,7 @@ This folder is intentionally kept small. Use these files as the canonical docume
 | `Checklist/master-dev-checklist.md` | Canonical UC assignment/status |
 | `Checklist/pending-tasks.md` | Remaining work and backlog |
 | `Checklist/release-checklist.md` | Pre-demo/pre-release technical and product checks |
-| `Checklist/deep-research-report-19-07-2026.md` | Current three-lens architecture, backend, code-quality and readiness assessment |
+| `Checklist/deep-research-report-27-07-2026.md` | Current three-lens architecture, backend, code-quality and readiness assessment |
 
 ## Archived Evidence
 

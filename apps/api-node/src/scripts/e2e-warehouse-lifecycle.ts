@@ -74,6 +74,11 @@ async function main() {
     body: JSON.stringify({ status: "EXPIRED" })
   }, token);
 
+  await request(`/admin/warehouse-items/${created.id}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status: "DONATED" })
+  }, token, 409);
+
   await request(`/admin/warehouse-items/${created.id}/process`, {
     method: "POST",
     body: JSON.stringify({
@@ -87,9 +92,30 @@ async function main() {
     body: JSON.stringify({ status: "STORED" })
   }, token, 409);
 
+  const activity = await request<{
+    activity: Array<{ action: string; entityId: string | null }>;
+  }>("/auth/activity", {}, token);
+  for (const expectedAction of [
+    "WAREHOUSE_ITEM_CREATED",
+    "WAREHOUSE_ITEM_STATUS_CHANGED",
+    "WAREHOUSE_OVERDUE_ITEM_PROCESSED"
+  ]) {
+    if (!activity.activity.some((item) => item.action === expectedAction && item.entityId === created.id)) {
+      throw new Error(`${expectedAction} audit event is missing for the warehouse item.`);
+    }
+  }
+
   await request(`/admin/warehouse-items/${created.id}`, { method: "DELETE" }, token).catch((error: unknown) => {
     console.warn(`Warehouse e2e cleanup skipped: ${error instanceof Error ? error.message : "unknown error"}`);
   });
+  const activityAfterDelete = await request<{
+    activity: Array<{ action: string; entityId: string | null }>;
+  }>("/auth/activity", {}, token);
+  if (!activityAfterDelete.activity.some(
+    (item) => item.action === "WAREHOUSE_ITEM_SOFT_DELETED" && item.entityId === created.id
+  )) {
+    throw new Error("WAREHOUSE_ITEM_SOFT_DELETED audit event is missing.");
+  }
 
   console.log(`Warehouse lifecycle smoke passed. ITEM=${created.id}`);
 }

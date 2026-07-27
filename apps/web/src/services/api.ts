@@ -175,7 +175,6 @@ export interface ReturnAppointment {
   completedAt: string | null;
   proof: {
     imageUrl: string;
-    publicId: string | null;
     uploadedBy: { id: string; fullName: string | null } | null;
     uploadedAt: string | null;
     note: string | null;
@@ -279,6 +278,22 @@ export interface MatchResult {
   timeScore: number;
   isNotified?: boolean;
   createdAt: string;
+}
+
+export type MatchFeedbackLabel =
+  | "TRUE_MATCH"
+  | "FALSE_MATCH"
+  | "UNCERTAIN"
+  | "DUPLICATE"
+  | "INSUFFICIENT_EVIDENCE";
+
+export interface MatchExplanation {
+  matchId: string;
+  lostPostId: string;
+  foundPostId: string;
+  totalScore: number;
+  summary: string;
+  reasons: string[];
 }
 
 export interface PostMatchSuggestion {
@@ -554,9 +569,20 @@ export const api = {
     return request<{ matches: MatchResult[] }>(`/posts/${id}/matches`);
   },
   getMatchExplanations(id: string) {
-    return request<{
-      explanations: Array<{ matchId: string; lostPostId: string; foundPostId: string; totalScore: number; summary: string; reasons: string[] }>;
-    }>(`/posts/${id}/matches/explanations`);
+    return request<{ explanations: MatchExplanation[] }>(`/posts/${id}/matches/explanations`);
+  },
+  recordMatchFeedback(
+    postId: string,
+    matchId: string,
+    input: { label: MatchFeedbackLabel; note?: string | null }
+  ) {
+    return request<{ feedback: { id: string; matchId: string; label: MatchFeedbackLabel } }>(
+      `/posts/${postId}/matches/${matchId}/feedback`,
+      {
+        method: "POST",
+        body: JSON.stringify(input)
+      }
+    );
   },
   postClaims(id: string) {
     return request<{ claims: PostClaimSummary[] }>(`/posts/${id}/claims`);
@@ -685,6 +711,28 @@ export const api = {
   },
   appointmentProofImage(id: string) {
     return fetchAuthorizedBlobUrl(`/appointments/${id}/proof-image`);
+  },
+  acceptAppointment(id: string) {
+    return request<{ appointment: ReturnAppointment }>(`/appointments/${id}/accept`, {
+      method: "PATCH"
+    });
+  },
+  rejectAppointment(id: string, reason: string) {
+    return request<{ appointment: ReturnAppointment }>(`/appointments/${id}/reject`, {
+      method: "PATCH",
+      body: JSON.stringify({ reason })
+    });
+  },
+  cancelAppointment(id: string, reason: string) {
+    return request<{ appointment: ReturnAppointment }>(`/appointments/${id}/cancel`, {
+      method: "PATCH",
+      body: JSON.stringify({ reason })
+    });
+  },
+  completeAppointment(id: string) {
+    return request<{ appointment: ReturnAppointment }>(`/appointments/${id}/complete`, {
+      method: "PATCH"
+    });
   },
   rescheduleAppointment(id: string, input: Record<string, unknown>) {
     return request<{ appointment: ReturnAppointment }>(`/appointments/${id}/reschedule`, {

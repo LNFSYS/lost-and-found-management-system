@@ -1,6 +1,6 @@
 # Master Dev Checklist - FPTU Lost & Found System
 
-Last audit: 2026-07-19
+Last audit: 2026-07-27
 
 This file is the canonical UC checklist for the project. The old list of nearly 200 UCs has been consolidated to exactly 100 UCs. Each UC starts with a verb, has one primary owner, and is organized by current team member assignment.
 
@@ -55,10 +55,10 @@ This file is the canonical UC checklist for the project. The old list of nearly 
 | [x] | UC-021 | Create return appointment after accepted claim | `appointmentService.create`, accepted-claim transaction guard, migration 024 one-active-appointment invariant |
 | [x] | UC-022 | Reject appointment with reason | `PATCH /appointments/:id/reject` |
 | [x] | UC-023 | Reschedule or cancel return appointment | `PATCH /appointments/:id/reschedule` and `PATCH /appointments/:id/cancel` |
-| [x] | UC-024 | Complete appointment and update to resolved | Transaction-safe completion updates appointment/post/warehouse once, records the actual actor, and serves proof through the authenticated media proxy |
+| [x] | UC-024 | Complete appointment and update to resolved | Transaction-safe completion updates appointment/post/warehouse once, records the actual actor, serves proof through the authenticated media proxy, and has a web lifecycle/proof/feedback journey |
 | [x] | UC-025 | Calculate reputation score after business event | Appointment completion adds reputation logs and score updates |
 | [x] | UC-026 | Collect AI training data | Match feedback, suggestion impressions, persisted explanations, and export fields |
-| [x] | UC-027 | Label match correct/incorrect data | `match_feedback` supports true/false/uncertain/duplicate/insufficient evidence labels |
+| [x] | UC-027 | Label match correct/incorrect data | `match_feedback` plus the post-detail review panel support true/false/uncertain/duplicate/insufficient-evidence labels for owners, Staff and Admin |
 | [x] | UC-028 | Anonymize AI training data | Redacted JSONL export removes direct identifiers before training/evaluation |
 | [~] | UC-029 | Train AI model from labeled data | Lightweight local logistic-regression reranker script exists; not claimed as production custom AI |
 | [x] | UC-030 | Evaluate and save AI model version | Training script writes metrics and version metadata for the local reranker |

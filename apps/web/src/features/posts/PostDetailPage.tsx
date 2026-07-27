@@ -4,6 +4,8 @@ import { Boxes, Calendar, ChevronLeft, ChevronRight, Flag, MapPin, MoreVertical,
 import { formNullable, locationText } from "../../app/helpers";
 import { api, hasAccessToken, type BoardPost } from "../../services/api";
 import { ClaimAppointmentPanel } from "../claims/ClaimWorkflowPanels";
+import { MatchReviewPanel } from "./MatchReviewPanel";
+import "./post-detail.css";
 
 export function PostDetailPage(props: {
   loading: boolean;
@@ -305,6 +307,10 @@ export function PostDetailPage(props: {
                     ))}
                   </div>
                 </div>
+              )}
+
+              {(props.canReviewClaims || props.currentUserId === post.userId) && props.detail.matches.length > 0 && (
+                <MatchReviewPanel postId={post.id} matches={props.detail.matches} />
               )}
 
               {post.type === "FOUND" && claimsQuery.data?.claims && claimsQuery.data.claims.length > 0 && (

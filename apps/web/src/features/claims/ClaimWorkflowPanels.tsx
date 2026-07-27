@@ -5,6 +5,7 @@ import { formNullable, formatDate, toDateTimeIso } from "../../app/helpers";
 import { AppointmentProofImage, ClaimEvidenceImage } from "../../app/MediaWidgets";
 import { api, hasAccessToken, type PostClaimSummary } from "../../services/api";
 import { ClaimChatBox, ClaimVerificationBadge } from "./ClaimChatPanel";
+import "./claim-workflow.css";
 
 export function ClaimAppointmentPanel(props: {
   claims: PostClaimSummary[];
@@ -73,6 +74,10 @@ export function ClaimAppointmentPanel(props: {
 function ClaimAppointmentTimeline(props: { claimId: string }) {
   const queryClient = useQueryClient();
   const [message, setMessage] = useState<string | null>(null);
+  const [actionForm, setActionForm] = useState<{
+    appointmentId: string;
+    action: "reject" | "cancel" | "reschedule";
+  } | null>(null);
   const appointmentsQuery = useQuery({
     queryKey: ["claim-appointments", props.claimId],
     queryFn: () => api.claimAppointments(props.claimId),
@@ -97,6 +102,39 @@ function ClaimAppointmentTimeline(props: { claimId: string }) {
     onSuccess: async () => {
       setMessage("Đã tải chứng từ bàn giao.");
       await queryClient.invalidateQueries({ queryKey: ["claim-appointments", props.claimId] });
+    }
+  });
+  const lifecycleMutation = useMutation({
+    mutationFn: (input: {
+      appointmentId: string;
+      action: "accept" | "reject" | "cancel" | "reschedule" | "complete";
+      reason?: string;
+      proposedAt?: string;
+      customLocation?: string;
+    }) => {
+      if (input.action === "accept") return api.acceptAppointment(input.appointmentId);
+      if (input.action === "reject") return api.rejectAppointment(input.appointmentId, input.reason ?? "");
+      if (input.action === "cancel") return api.cancelAppointment(input.appointmentId, input.reason ?? "");
+      if (input.action === "complete") return api.completeAppointment(input.appointmentId);
+      return api.rescheduleAppointment(input.appointmentId, {
+        proposedAt: input.proposedAt,
+        handoverPointId: null,
+        customLocation: input.customLocation
+      });
+    },
+    onSuccess: async (_result, input) => {
+      const labels = {
+        accept: "Đã xác nhận lịch hẹn.",
+        reject: "Đã từ chối lịch hẹn.",
+        cancel: "Đã hủy lịch hẹn.",
+        reschedule: "Đã gửi đề xuất đổi lịch.",
+        complete: "Đã hoàn tất bàn giao."
+      };
+      setMessage(labels[input.action]);
+      setActionForm(null);
+      await queryClient.invalidateQueries({ queryKey: ["claim-appointments", props.claimId] });
+      await queryClient.invalidateQueries({ queryKey: ["post-claims"] });
+      await queryClient.invalidateQueries({ queryKey: ["posts"] });
     }
   });
 
@@ -128,6 +166,23 @@ function ClaimAppointmentTimeline(props: { claimId: string }) {
     event.currentTarget.reset();
   }
 
+  function submitLifecycleAction(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!actionForm) return;
+    const data = new FormData(event.currentTarget);
+    lifecycleMutation.mutate({
+      appointmentId: actionForm.appointmentId,
+      action: actionForm.action,
+      reason: String(data.get("reason") ?? "").trim(),
+      proposedAt: actionForm.action === "reschedule"
+        ? toDateTimeIso(data.get("proposedAt")) ?? undefined
+        : undefined,
+      customLocation: actionForm.action === "reschedule"
+        ? String(data.get("customLocation") ?? "").trim()
+        : undefined
+    });
+  }
+
   const appointments = appointmentsQuery.data?.appointments ?? [];
   if (appointmentsQuery.isLoading) {
     return <small>Đang tải lịch bàn giao...</small>;
@@ -146,6 +201,75 @@ function ClaimAppointmentTimeline(props: { claimId: string }) {
             <strong>{appointment.handoverPoint?.name ?? appointment.customLocation ?? "Campus"}</strong>
             <small>{formatDate(appointment.proposedAt)}</small>
           </div>
+          <div className="claim-action-row appointment-lifecycle-actions">
+            {(appointment.status === "PENDING" || appointment.status === "RESCHEDULED") && (
+              <>
+                <button
+                  className="secondary-button"
+                  disabled={lifecycleMutation.isPending}
+                  type="button"
+                  onClick={() => lifecycleMutation.mutate({ appointmentId: appointment.id, action: "accept" })}
+                >
+                  Xác nhận lịch
+                </button>
+                <button
+                  className="secondary-button danger"
+                  type="button"
+                  onClick={() => setActionForm({ appointmentId: appointment.id, action: "reject" })}
+                >
+                  Từ chối lịch
+                </button>
+              </>
+            )}
+            {appointment.status === "ACCEPTED" && (
+              <button
+                className="primary-button"
+                disabled={lifecycleMutation.isPending}
+                type="button"
+                onClick={() => lifecycleMutation.mutate({ appointmentId: appointment.id, action: "complete" })}
+              >
+                Hoàn tất bàn giao
+              </button>
+            )}
+            {!["COMPLETED", "CANCELLED", "REJECTED"].includes(appointment.status) && (
+              <>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={() => setActionForm({ appointmentId: appointment.id, action: "reschedule" })}
+                >
+                  Đổi lịch
+                </button>
+                <button
+                  className="secondary-button danger"
+                  type="button"
+                  onClick={() => setActionForm({ appointmentId: appointment.id, action: "cancel" })}
+                >
+                  Hủy lịch
+                </button>
+              </>
+            )}
+          </div>
+          {actionForm?.appointmentId === appointment.id && (
+            <form className="claim-action-form appointment-lifecycle-form" onSubmit={submitLifecycleAction}>
+              {actionForm.action === "reschedule" ? (
+                <>
+                  <input name="proposedAt" required type="datetime-local" />
+                  <input name="customLocation" required minLength={2} placeholder="Địa điểm bàn giao mới" />
+                </>
+              ) : (
+                <textarea name="reason" required minLength={2} rows={2} placeholder="Nhập lý do" />
+              )}
+              <div className="claim-action-row">
+                <button className="primary-button" disabled={lifecycleMutation.isPending} type="submit">
+                  Lưu thay đổi
+                </button>
+                <button className="secondary-button" type="button" onClick={() => setActionForm(null)}>
+                  Đóng
+                </button>
+              </div>
+            </form>
+          )}
           {appointment.proof && (
             <div className="appointment-proof-preview">
               <AppointmentProofImage appointmentId={appointment.id} alt="Chứng từ bàn giao" />
@@ -187,6 +311,7 @@ function ClaimAppointmentTimeline(props: { claimId: string }) {
       ))}
       {proofMutation.error instanceof Error && <div className="notice error">{proofMutation.error.message}</div>}
       {feedbackMutation.error instanceof Error && <div className="notice error">{feedbackMutation.error.message}</div>}
+      {lifecycleMutation.error instanceof Error && <div className="notice error">{lifecycleMutation.error.message}</div>}
     </div>
   );
 }

@@ -344,8 +344,8 @@ export const appointmentService = {
       entityType: "APPOINTMENT",
       entityId: appointmentId,
       metadata: {
-        publicId: uploaded.publicId,
-        bytes: uploaded.bytes ?? null
+        bytes: uploaded.bytes ?? null,
+        storage: "private-media"
       }
     });
     await notifyAppointmentUsers(

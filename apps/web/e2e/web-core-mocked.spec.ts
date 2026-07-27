@@ -2,11 +2,13 @@ import { expect, type Page, test } from "@playwright/test";
 
 const now = "2026-07-19T08:00:00.000Z";
 
-function makeUser(role: "STUDENT" | "STAFF") {
+type MockRole = "STUDENT" | "STAFF" | "ADMIN";
+
+function makeUser(role: MockRole) {
   return {
     id: `user-${role.toLowerCase()}`,
     email: `${role.toLowerCase()}@example.test`,
-    fullName: role === "STAFF" ? "Demo Staff" : "Demo Student",
+    fullName: role === "ADMIN" ? "Demo Admin" : role === "STAFF" ? "Demo Staff" : "Demo Student",
     studentCode: role === "STUDENT" ? "DEMO001" : null,
     roles: [role, "USER"],
     status: "ACTIVE",
@@ -46,18 +48,26 @@ function makePost(id = "post-existing", type: "LOST" | "FOUND" = "LOST") {
 
 async function installMockApi(
   page: Page,
-  role: "STUDENT" | "STAFF",
+  role: MockRole,
   options: {
     onCreatePost?: (payload: Record<string, unknown>) => void;
     onSubmitClaim?: (payload: Record<string, unknown>) => void;
     claimStatus?: "PENDING" | "ACCEPTED";
     onAcceptClaim?: () => void;
     onCreateAppointment?: (payload: Record<string, unknown>) => void;
+    includeMatch?: boolean;
+    onMatchFeedback?: (payload: Record<string, unknown>) => void;
+    appointmentStatus?: "PENDING" | "ACCEPTED" | "COMPLETED";
+    onAppointmentProof?: () => void;
+    onCompleteAppointment?: () => void;
+    onAppointmentFeedback?: (payload: Record<string, unknown>) => void;
   } = {}
 ) {
   const user = makeUser(role);
   const existingPost = makePost("post-existing", "FOUND");
   let claimStatus: "PENDING" | "ACCEPTED" = options.claimStatus ?? "PENDING";
+  let appointmentStatus = options.appointmentStatus;
+  let proofUploaded = false;
 
   await page.route("**/api/**", async (route) => {
     const request = route.request();
@@ -115,7 +125,43 @@ async function installMockApi(
     } else if (path === "/posts/post-created") {
       data = { post: makePost("post-created"), media: [], tags: [], matches: [] };
     } else if (path === "/posts/post-existing") {
-      data = { post: existingPost, media: [], tags: [], matches: [] };
+      data = {
+        post: existingPost,
+        media: [],
+        tags: [],
+        matches: options.includeMatch ? [{
+          id: "match-review-1",
+          lostPostId: "post-lost-related",
+          foundPostId: "post-existing",
+          totalScore: 0.82,
+          textScore: 0.76,
+          categoryScore: 1,
+          locationScore: 0.8,
+          timeScore: 0.7,
+          createdAt: now
+        }] : []
+      };
+    } else if (path === "/posts/post-existing/matches/explanations") {
+      data = {
+        explanations: options.includeMatch ? [{
+          matchId: "match-review-1",
+          lostPostId: "post-lost-related",
+          foundPostId: "post-existing",
+          totalScore: 0.82,
+          summary: "Cùng danh mục và khu vực Alpha",
+          reasons: ["Trùng danh mục Ví", "Cùng tòa Alpha", "Thời gian chênh lệch dưới 24 giờ"]
+        }] : []
+      };
+    } else if (path === "/posts/post-existing/matches/match-review-1/feedback" && method === "POST") {
+      const payload = request.postDataJSON() as Record<string, unknown>;
+      options.onMatchFeedback?.(payload);
+      data = {
+        feedback: {
+          id: "feedback-review-1",
+          matchId: "match-review-1",
+          label: payload.label
+        }
+      };
     } else if (path === "/posts/post-existing/claims") {
       data = {
         claims: options.claimStatus ? [{
@@ -157,6 +203,43 @@ async function installMockApi(
       const payload = request.postDataJSON() as Record<string, unknown>;
       options.onCreateAppointment?.(payload);
       data = { appointment: { id: "appointment-created", claimId: "claim-pending", status: "PENDING", ...payload } };
+    } else if (path === "/appointments/claim/claim-pending") {
+      data = {
+        appointments: appointmentStatus ? [{
+          id: "appointment-existing",
+          claimId: "claim-pending",
+          postId: "post-existing",
+          proposer: { id: "user-staff", fullName: "Demo Staff" },
+          status: appointmentStatus,
+          proposedAt: now,
+          handoverPoint: null,
+          customLocation: "Quầy bàn giao Alpha",
+          rejectionReason: null,
+          cancellationReason: null,
+          acceptedAt: appointmentStatus === "PENDING" ? null : now,
+          completedAt: appointmentStatus === "COMPLETED" ? now : null,
+          proof: proofUploaded ? {
+            imageUrl: "/api/appointments/appointment-existing/proof-image",
+            uploadedBy: { id: "user-staff", fullName: "Demo Staff" },
+            uploadedAt: now,
+            note: "Biên nhận bàn giao"
+          } : null,
+          createdAt: now,
+          updatedAt: now
+        }] : []
+      };
+    } else if (path === "/appointments/appointment-existing/proof" && method === "POST") {
+      proofUploaded = true;
+      options.onAppointmentProof?.();
+      data = { appointment: { id: "appointment-existing", status: appointmentStatus } };
+    } else if (path === "/appointments/appointment-existing/complete" && method === "PATCH") {
+      appointmentStatus = "COMPLETED";
+      options.onCompleteAppointment?.();
+      data = { appointment: { id: "appointment-existing", status: appointmentStatus } };
+    } else if (path === "/appointments/appointment-existing/feedback" && method === "POST") {
+      const payload = request.postDataJSON() as Record<string, unknown>;
+      options.onAppointmentFeedback?.(payload);
+      data = { feedback: { id: "feedback-existing", appointmentId: "appointment-existing", ...payload } };
     } else if (path === "/posts/post-created/claims") {
       data = { claims: [] };
     } else if (path === "/posts/post-created/matches") {
@@ -182,6 +265,14 @@ async function installMockApi(
       };
     } else if (path === "/admin/categories") {
       data = { categories: [] };
+    } else if (path === "/admin/users") {
+      data = { users: [] };
+    } else if (path === "/admin/reports") {
+      data = { reports: [] };
+    } else if (path === "/admin/config") {
+      data = { entries: [] };
+    } else if (path === "/admin/config/history") {
+      data = { history: [] };
     } else if (path === "/admin/locations/areas") {
       data = { areas: [] };
     } else if (path === "/admin/locations/buildings") {
@@ -202,7 +293,7 @@ async function installMockApi(
   });
 }
 
-async function login(page: Page, role: "STUDENT" | "STAFF") {
+async function login(page: Page, role: MockRole) {
   await page.goto("/account");
   const form = page.locator("section.auth-card form");
   await form.getByLabel("Email").fill(`${role.toLowerCase()}@example.test`);
@@ -240,6 +331,35 @@ test("student creates a LOST post through the web form", async ({ page }) => {
   });
 });
 
+test("student creates a FOUND post through the web form", async ({ page }) => {
+  let submittedPayload: Record<string, unknown> | undefined;
+  await installMockApi(page, "STUDENT", { onCreatePost: (payload) => {
+    submittedPayload = payload;
+  } });
+  await login(page, "STUDENT");
+
+  await page.getByRole("button", { name: "Đăng tin" }).first().click();
+  const form = page.locator("form.create-report-form");
+  await form.getByRole("button", { name: "Tôi nhặt được" }).click();
+  await form.getByLabel("Tiêu đề").fill("Nhặt được ví sinh viên");
+  await form.getByLabel("Mô tả", { exact: true }).fill("Nhặt được một chiếc ví sinh viên màu nâu tại sảnh Alpha.");
+  await form.getByLabel("Thông tin liên hệ").fill("student@example.test");
+  await form.getByLabel("Nhóm danh mục").selectOption("category-wallet");
+  await form.locator('select[name="areaId"]').selectOption("area-alpha");
+  await form.locator('select[name="buildingId"]').selectOption("building-alpha");
+  await form.getByRole("button", { name: "Đăng tin", exact: true }).click();
+
+  await expect(page).toHaveURL(/\/posts\/post-created$/);
+  expect(submittedPayload).toMatchObject({
+    type: "FOUND",
+    title: "Nhặt được ví sinh viên",
+    categoryId: "category-wallet",
+    areaId: "area-alpha",
+    buildingId: "building-alpha",
+    secretVerification: null
+  });
+});
+
 test("staff sees warehouse operations without admin-only tabs", async ({ page }) => {
   await installMockApi(page, "STAFF");
   await login(page, "STAFF");
@@ -250,6 +370,24 @@ test("staff sees warehouse operations without admin-only tabs", async ({ page })
   await expect(page.getByRole("button", { name: "Quản lý kho" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Người dùng" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Cấu hình" })).toHaveCount(0);
+});
+
+test("admin sees dashboard, user, report and configuration navigation", async ({ page }) => {
+  await installMockApi(page, "ADMIN");
+  await login(page, "ADMIN");
+  await page.getByRole("button", { name: "Mở menu tài khoản" }).click();
+  await page.getByRole("button", { name: "Mở bảng quản trị" }).click();
+
+  await expect(page.getByRole("heading", { name: "Bảng quản trị" })).toBeVisible();
+  for (const label of ["Dashboard", "Người dùng", "Báo cáo", "Cấu hình"]) {
+    await expect(page.getByRole("button", { name: label, exact: true })).toBeVisible();
+  }
+  await page.getByRole("button", { name: "Người dùng", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Người dùng", exact: true })).toHaveClass(/active/);
+  await page.getByRole("button", { name: "Báo cáo", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Báo cáo", exact: true })).toHaveClass(/active/);
+  await page.getByRole("button", { name: "Cấu hình", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Cấu hình", exact: true })).toHaveClass(/active/);
 });
 
 test("student opens a FOUND post route and submits an ownership claim", async ({ page }) => {
@@ -321,4 +459,79 @@ test("staff creates a handover appointment for an accepted claim", async ({ page
     customLocation: "Quầy bàn giao Alpha"
   });
   expect(appointmentPayload?.proposedAt).toEqual(expect.any(String));
+});
+
+test("staff reviews a match with an explainable feedback label", async ({ page }) => {
+  let feedbackPayload: Record<string, unknown> | undefined;
+  await installMockApi(page, "STAFF", {
+    includeMatch: true,
+    onMatchFeedback: (payload) => {
+      feedbackPayload = payload;
+    }
+  });
+  await login(page, "STAFF");
+
+  await page.getByRole("heading", { name: "Ví sinh viên nhặt được" }).click();
+  await expect(page).toHaveURL(/\/posts\/post-existing$/);
+  await expect(page.getByRole("heading", { name: "Đánh giá kết quả tương đồng" })).toBeVisible();
+  await expect(page.getByText("Cùng danh mục và khu vực Alpha")).toBeVisible();
+
+  const panel = page.locator(".match-review-panel");
+  await panel.getByLabel("Kết luận review").selectOption("FALSE_MATCH");
+  await panel.getByLabel("Ghi chú").fill("Màu sắc và dấu hiệu nhận dạng không trùng.");
+  await panel.getByRole("button", { name: "Lưu đánh giá" }).click();
+
+  await expect(panel.getByRole("button", { name: "Đã lưu" })).toBeVisible();
+  expect(feedbackPayload).toEqual({
+    label: "FALSE_MATCH",
+    note: "Màu sắc và dấu hiệu nhận dạng không trùng."
+  });
+});
+
+test("staff uploads proof, completes handover and submits return feedback", async ({ page }) => {
+  let proofUploaded = false;
+  let appointmentCompleted = false;
+  let feedbackPayload: Record<string, unknown> | undefined;
+  await installMockApi(page, "STAFF", {
+    claimStatus: "ACCEPTED",
+    appointmentStatus: "ACCEPTED",
+    onAppointmentProof: () => {
+      proofUploaded = true;
+    },
+    onCompleteAppointment: () => {
+      appointmentCompleted = true;
+    },
+    onAppointmentFeedback: (payload) => {
+      feedbackPayload = payload;
+    }
+  });
+  await login(page, "STAFF");
+
+  await page.getByRole("heading", { name: "Ví sinh viên nhặt được" }).click();
+  const proofForm = page.locator("form.appointment-proof-form");
+  await proofForm.locator('input[name="proof"]').setInputFiles({
+    name: "handover-proof.png",
+    mimeType: "image/png",
+    buffer: Buffer.from("89504e470d0a1a0a", "hex")
+  });
+  await proofForm.locator('input[name="note"]').fill("Biên nhận bàn giao");
+  await proofForm.getByRole("button", { name: "Tải chứng từ" }).click();
+  await expect(page.getByText("Đã tải chứng từ bàn giao.")).toBeVisible();
+  expect(proofUploaded).toBe(true);
+
+  await page.getByRole("button", { name: "Hoàn tất bàn giao" }).click();
+  await expect(page.getByText("Đã hoàn tất bàn giao.")).toBeVisible();
+  expect(appointmentCompleted).toBe(true);
+
+  const feedbackForm = page.locator("form.claim-appointment-form").filter({
+    has: page.getByRole("button", { name: "Gửi feedback" })
+  });
+  await feedbackForm.locator('select[name="rating"]').selectOption("5");
+  await feedbackForm.locator('input[name="comment"]').fill("Bàn giao đúng lịch và đầy đủ.");
+  await feedbackForm.getByRole("button", { name: "Gửi feedback" }).click();
+  await expect(page.getByText("Đã gửi feedback sau bàn giao.")).toBeVisible();
+  expect(feedbackPayload).toEqual({
+    rating: 5,
+    comment: "Bàn giao đúng lịch và đầy đủ."
+  });
 });

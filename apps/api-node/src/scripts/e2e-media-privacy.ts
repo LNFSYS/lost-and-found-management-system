@@ -56,6 +56,23 @@ function tinyPngFile() {
   return new File([bytes], "e2e-private-evidence.png", { type: "image/png" });
 }
 
+async function waitForMatch(ownerToken: string, lostPostId: string, foundPostId: string) {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    const result = await request<{
+      matches: Array<{ id: string; lostPostId: string; foundPostId: string }>;
+    }>(`/posts/${lostPostId}/matches`, {}, ownerToken);
+    const match = result.matches.find(
+      (item) => item.lostPostId === lostPostId && item.foundPostId === foundPostId
+    );
+    if (match) {
+      return match;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+  }
+  throw new Error("Timed out waiting for a match result in the media privacy smoke.");
+}
+
 async function main() {
   const ownerToken = await login(ownerEmail, ownerPassword);
   const viewerToken = await login(publicViewerEmail, publicViewerPassword);
@@ -122,6 +139,16 @@ async function main() {
     }, ownerToken, 201);
     foundPostId = found.post.id;
 
+    const match = await waitForMatch(ownerToken, created.post.id, found.post.id);
+    await request(`/posts/${created.post.id}/matches/${match.id}/feedback`, {
+      method: "POST",
+      body: JSON.stringify({ label: "FALSE_MATCH", note: "Unrelated reviewer must be denied" })
+    }, unrelatedToken, 403);
+    await request(`/posts/${created.post.id}/matches/${match.id}/feedback`, {
+      method: "POST",
+      body: JSON.stringify({ label: "TRUE_MATCH", note: "E2E owner review" })
+    }, ownerToken);
+
     const claim = await request<{ claim: { id: string } }>("/claims", {
       method: "POST",
       body: JSON.stringify({
@@ -153,6 +180,15 @@ async function main() {
     const ownerImage = await imageRequest(evidence.imagePath, ownerToken);
     if (ownerImage.status !== 200 || !ownerImage.contentType.startsWith("image/")) {
       throw new Error(`Authorized owner could not stream private evidence: ${ownerImage.status} ${ownerImage.contentType}`);
+    }
+    await request(`/claims/${claim.claim.id}`, {}, ownerToken);
+    const activity = await request<{
+      activity: Array<{ action: string; entityId: string | null }>;
+    }>("/auth/activity", {}, ownerToken);
+    if (!activity.activity.some(
+      (item) => item.action === "CLAIM_EVIDENCE_VIEWED" && item.entityId === claim.claim.id
+    )) {
+      throw new Error("Claim evidence view did not write the expected activity audit event.");
     }
 
     console.log(`Media privacy smoke passed. POST=${created.post.id} CLAIM=${claim.claim.id}`);

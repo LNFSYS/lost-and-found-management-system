@@ -269,7 +269,7 @@ These tasks improve future AI readiness without claiming custom AI training:
 - Store claim evidence OCR in structured fields instead of only embedding it into descriptions.
 - Add OCR PII redaction before analytics/export.
 - Add offline evaluation scripts over historical match candidates.
-- Add admin/staff label review UI later.
+- Match-label review UI is implemented on authorized post detail for owners, Staff and Admin. A centralized category/tag dataset review queue remains future work after enough real Vision samples exist.
 - Keep all current matching and evidence confidence outputs advisory.
 
 ## 6. Slide And Defense Wording

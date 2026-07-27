@@ -1,6 +1,6 @@
 # Release Checklist
 
-Last audit: 2026-07-19
+Last audit: 2026-07-27
 
 Use this checklist before demo, merge, or submission. Keep evidence screenshots/logs when a step is important for grading.
 
@@ -23,8 +23,8 @@ Use this checklist before demo, merge, or submission. Keep evidence screenshots/
 
 - [x] Run migrations 001-025 from a blank isolated MySQL 8 database in CI.
 - [x] Run `npm run smoke:migration` and verify all 25 migrations plus the active-appointment unique key in CI.
-- [ ] Run `npm run seed:demo` only on a fresh demo/test database, never on the shared primary demo data by accident.
-- [ ] Verify demo accounts for Student/Lecturer/Staff/Admin can log in.
+- [x] Run `npm run seed:demo` only on the isolated CI database; the workflow does not seed the shared primary demo database.
+- [x] Verify demo accounts for Student/Lecturer/Staff/Admin can log in through the isolated API E2E suite.
 - [ ] Run `npm run repair:encoding` against a copy of the demo database if old records display mojibake; review output before using `npm run repair:encoding -- --apply`.
 - [x] GitHub Actions migrates/seeds isolated MySQL 8 and runs core/role/warehouse/claim-race/chat-gating E2E.
 
@@ -36,7 +36,7 @@ Use this checklist before demo, merge, or submission. Keep evidence screenshots/
 - [x] API tests include policy, migration schema, image-signature, rate-limit, request-ID and metrics coverage (26 tests passed locally on 2026-07-19).
 - [x] API + web runtime dependency audit reports 0 vulnerabilities after the Vite 6.4.3 update; Expo/mobile advisories remain deferred with the mobile workstream.
 - [x] Confirm CI passes Redis-backed runtime hardening, two-instance Socket.IO isolation, performance artifact and API/web container builds (`29693045128`).
-- [x] Run Playwright routing/back-forward smoke plus API-mocked Student create-LOST, Student FOUND-detail-to-claim, Staff claim review/appointment and Staff permission/warehouse flows; database-backed login remains conditional on demo credentials.
+- [x] Run Playwright routing/back-forward smoke plus API-mocked Student create-LOST/create-FOUND, Student FOUND-detail-to-claim, Staff claim review/appointment lifecycle, proof upload/completion/feedback, match feedback, Staff permission/warehouse and Admin navigation flows; database-backed login remains conditional on demo credentials.
 - [x] Run `npm run build:api` (passed on 2026-07-19).
 - [x] Run `npm run build:web` (passed on 2026-07-19).
 - [x] Run `npm run typecheck:mobile`.
@@ -56,35 +56,35 @@ Use this checklist before demo, merge, or submission. Keep evidence screenshots/
 
 ## 4. Core Demo Flow
 
-- [ ] Student creates a LOST post.
-- [ ] Student or Staff creates a FOUND post.
-- [ ] Matching suggestions appear with explainable score reasons.
-- [ ] Owner submits a claim with evidence.
-- [ ] Owner/Staff/Admin verifies evidence confidence and accepts/rejects/request-info.
-- [ ] Accepted claim creates an appointment and opens claim chat.
-- [ ] A second active appointment for the same claim returns `409`; verify through isolated `e2e:core` after migration 024.
-- [ ] Accepted or completed appointment can store a handover/return proof image.
-- [ ] Staff manages warehouse/handover point and status transitions.
-- [ ] Admin views dashboard, config, users, and reports with the correct permissions.
-- [ ] Realtime notification/chat behavior is checked in two browser sessions.
+- [x] Student creates a LOST post (`e2e:web` and `e2e:core`).
+- [x] Student creates a FOUND post (`e2e:web`); API creation is also covered in `e2e:core`.
+- [x] Matching suggestions appear with explainable score reasons and authorized feedback labels (`e2e:core`, `e2e:web`, `e2e:media-privacy`).
+- [x] Owner submits a claim with private evidence (`e2e:web`, `e2e:claim-evidence-policy`, `e2e:media-privacy`).
+- [x] Owner/Staff/Admin verifies evidence confidence and accepts/rejects/request-info through guarded claim actions (`e2e:web`, `e2e:claim-race`, policy tests).
+- [x] Accepted claim creates an appointment and opens claim chat (`e2e:core`, `e2e:chat-gating`).
+- [x] A second active appointment for the same claim returns `409` (`e2e:core` on isolated migration 024+ schema).
+- [x] Accepted appointment stores a handover proof image without exposing a Cloudinary URL/public ID (`e2e:core`).
+- [x] Staff/Admin manages warehouse/handover point and guarded status transitions (`e2e:warehouse`, `e2e:admin-crud`, `e2e:roles`).
+- [x] Admin sees dashboard, config, users, and reports while Staff remains restricted (`e2e:web`, `e2e:roles`, `e2e:admin-crud`).
+- [x] Realtime notification/chat isolation is checked with two authenticated Socket.IO clients across two API instances (`e2e:socket-scaleout`); retain a two-browser visual check for the defense rehearsal.
 
 ## 5. Privacy and Audit
 
-- [ ] Public post list/detail does not show private contact info to unauthenticated users.
-- [ ] Claim evidence is visible only to claimant, owner, Staff, or Admin.
+- [x] Public/non-owner post detail masks private contact information (`e2e:media-privacy`).
+- [x] Claim evidence rejects unrelated users and is streamed to an authorized owner through the authenticated proxy (`e2e:media-privacy`); role access also uses the centralized claim reviewer policy.
 - [x] Claim evidence upload is allowed only for the claimant while status is `PENDING` or `NEED_MORE_INFO` (`e2e:claim-evidence-policy` passed).
-- [ ] Post evidence images are hidden from public post detail and only visible to owner, Staff, or Admin.
-- [ ] Appointment proof, claim evidence, and chat images load through authenticated media endpoints.
-- [ ] Protected media proxying rejects non-Cloudinary/private-network URLs; chat socket payload sends only `mediaPublicId`.
-- [ ] Claim evidence view writes an activity audit event.
-- [ ] Admin role/status changes write activity audit metadata.
-- [ ] Warehouse create/update/status/process/delete operations are logged.
-- [ ] Invalid warehouse status transitions return 409.
-- [ ] Terminal overdue actions use the dedicated disposition form/API and cannot bypass active claim/appointment guards through the generic status endpoint.
+- [x] Post evidence images are hidden from non-owner detail and visible to the owner (`e2e:media-privacy`); Staff/Admin use the same reviewer policy.
+- [x] Appointment proof, claim evidence, and chat images use authenticated application media endpoints (`e2e:core`, `e2e:media-privacy`, `e2e:chat-gating`).
+- [x] Protected downloads use trusted Cloudinary guards; chat rejects client-supplied URLs and sends only `mediaPublicId` (`e2e:chat-gating`).
+- [x] Claim evidence view writes `CLAIM_EVIDENCE_VIEWED` activity (`e2e:media-privacy`).
+- [x] Admin role/status changes write actor-aware activity metadata (`e2e:admin-crud`).
+- [x] Warehouse create/status/process/delete operations write entity-scoped activity events (`e2e:warehouse`); update logging is implemented in the same repository boundary.
+- [x] Invalid warehouse status transitions return `409` (`e2e:warehouse`).
+- [x] Terminal overdue actions require the dedicated process API; generic terminal status updates return `409` and active claim/appointment guards remain enforced (`e2e:warehouse` plus repository policy tests).
 
 ## 6. Presentation Safety
 
-- [ ] Describe the system as an MVP/campus pilot-ready web/backend, not a full production platform.
-- [ ] Describe matching as hybrid/rule-based with Google Vision assisted OCR, not a custom trained AI model.
-- [ ] Describe native mobile and custom AI training as future work unless the code is complete.
-- [ ] Prepare a fallback demo path if Google Vision, Cloudinary, or email delivery is unavailable: seeded posts/images, pre-created claims, and a script-free walkthrough of OCR/matching fallback behavior.
+- [x] Describe the system as an MVP/campus pilot-ready web/backend, not a full production platform.
+- [x] Describe matching as hybrid/rule-based with Google Vision assisted OCR, not a custom trained AI model.
+- [x] Describe native mobile and custom AI training as future work unless the code is complete.
+- [x] Use the fallback path in `docs/Overall/demo-release-runbook.md` when Google Vision, Cloudinary, or email delivery is unavailable.

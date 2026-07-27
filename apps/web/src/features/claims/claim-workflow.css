@@ -1,0 +1,173 @@
+.claim-appointment-list {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.claim-appointment-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fbfdff;
+}
+
+.claim-appointment-card > div {
+  display: grid;
+  gap: 5px;
+}
+
+.claim-appointment-card strong {
+  color: #1e293b;
+}
+
+.claim-appointment-card small {
+  color: #64748b;
+  font-weight: 650;
+}
+
+.appointment-proof-preview {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #f8fbff;
+}
+
+.appointment-proof-preview img {
+  display: block;
+  width: 92px;
+  height: 68px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.appointment-proof-preview > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.appointment-proof-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto;
+  gap: 8px;
+}
+
+.appointment-proof-form input {
+  min-height: 42px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 8px 12px;
+}
+
+.claim-extra-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.claim-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.claim-action-form,
+.claim-evidence-upload {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.claim-action-form textarea,
+.appointment-lifecycle-form input,
+.claim-evidence-upload select,
+.claim-evidence-upload input {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.appointment-lifecycle-actions {
+  padding-top: 2px;
+}
+
+.claim-evidence-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #f8fbff;
+}
+
+.claim-evidence-panel p,
+.claim-evidence-panel small,
+.claim-evidence-panel .notice {
+  grid-column: 1 / -1;
+}
+
+.claim-evidence-panel figure {
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.claim-evidence-panel img {
+  width: 100%;
+  height: 110px;
+  object-fit: cover;
+  display: block;
+}
+
+.claim-evidence-panel figcaption {
+  padding: 8px;
+  color: #475569;
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.claim-appointment-form {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.8fr) minmax(160px, 0.8fr) minmax(180px, 1fr) auto;
+  gap: 8px;
+}
+
+.claim-appointment-form input,
+.claim-appointment-form select {
+  min-height: 42px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 0 12px;
+}
+
+@media (max-width: 640px) {
+  .claim-appointment-form,
+  .appointment-proof-form {
+    grid-template-columns: 1fr;
+  }
+
+  .appointment-proof-preview {
+    grid-template-columns: 1fr;
+  }
+
+  .appointment-proof-preview img {
+    width: 100%;
+    height: 160px;
+  }
+}

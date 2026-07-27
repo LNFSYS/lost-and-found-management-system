@@ -14,4 +14,4 @@ Use the canonical docs in `docs/README.md` for thesis preparation, demo setup, r
 | `2026-07-13/` | Independent architecture/code review snapshots |
 | `2026-07-15/` | Previous readiness and scoring report |
 
-Archived findings describe the repository at their recorded date. The current status belongs in `docs/Checklist/deep-research-report-19-07-2026.md`, `pending-tasks.md`, and `release-checklist.md`.
+Archived findings describe the repository at their recorded date. The current status belongs in `docs/Checklist/deep-research-report-27-07-2026.md`, `pending-tasks.md`, and `release-checklist.md`.

@@ -1,6 +1,6 @@
 # Pending Task Checklist
 
-Last audit: 2026-07-19
+Last audit: 2026-07-27
 
 > Current delivery priority (2026-07-11): finish and harden Web + Node/Java backend first. Mobile implementation/refactor remains deferred by product decision and is not part of this work phase.
 
@@ -8,11 +8,11 @@ Last audit: 2026-07-19
 
 | Metric | Count |
 | --- | ---: |
-| Completed checklist items | 148 |
+| Completed checklist items | 150 |
 | Open MVP-blocking items | 0 |
-| Open future/hardening items | 21 |
+| Open future/hardening items | 20 |
 
-Open work is now concentrated in hardening/future work: advanced AI category selection, optional Java auth extension, background matching queue, notification digest/anti-noise tuning, overdue disposition paperwork, mobile hardening, custom AI inference/MLOps, and deeper automated tests.
+Open work is now concentrated in external/future work: provider-scale benchmark and restore drills, optional Java auth/evidence ownership, notification digest tuning, mobile hardening, category/tag dataset review, custom image/semantic inference and OTP provider E2E.
 
 Scope note: the current MVP should be demoed as web + Node backend with Google Vision assisted OCR/tags and rule-based/hybrid matching. Expo mobile MVP and training-data baseline scripts are present, while native mobile hardening and production custom AI inference remain future work.
 
@@ -63,7 +63,7 @@ The current web and mobile MVPs are demo-ready but still carry "God file" debt. 
 
 - [x] Extract shared web app types/constants/helpers, shell widgets, admin widgets, and private media widgets out of `apps/web/src/App.tsx` as the first low-risk refactor phase.
 - [x] Split `apps/web/src/App.tsx` into route-level/domain components. Board/posts, Create Post, account, Post Detail, claim dialogs/workflows, claim chat/verification and Admin are extracted; `App.tsx` is now about 750 lines and retains application-shell orchestration.
-- [ ] Continue splitting `apps/web/src/styles.css` into feature CSS modules or a consistent utility/component styling strategy. Account/auth/profile, create-post, and claim-chat styles now live with their features; the remaining global file is still large.
+- [x] Continue splitting `apps/web/src/styles.css` by feature. Account/auth/profile, create-post, claim-chat, claim workflow/proof, post detail, and match review styles now live with their owning components; the remaining global file is shared shell/feed/admin styling.
 - [x] Replace manual web `view` state navigation with `react-router-dom`; board/create/account/handover/my-posts/detail now use real URLs and browser history.
 - [ ] Split `apps/mobile/App.tsx` into screens/components/hooks.
 - [ ] Replace manual mobile tab/modal state navigation with React Navigation or Expo Router.
@@ -202,7 +202,8 @@ Recommended order is documented in `docs/Overall/ai-training-roadmap.md`: collec
 - [x] Add explicit match feedback table for true match, false match, uncertain, duplicate, and insufficient evidence.
 - [x] Log match suggestion impressions and prepare action fields for clicks, dismissals, claim starts, and outcomes.
 - [x] Persist image/OCR scores, penalties, explanation JSON, score tier, and matcher version for each match.
-- [ ] Build admin tool for labeling category/tag/match correct/incorrect.
+- [x] Build owner/Staff/Admin match-review tool for true/false/uncertain/duplicate/insufficient-evidence labels with score explanations.
+- [ ] Build a separate category/tag dataset review tool after enough real Google Vision samples are collected.
 - [x] Build dataset export pipeline for redacted JSONL match-training data.
 - [x] Clean and anonymize dataset before training.
 - [ ] Train image/category classification model.
@@ -228,7 +229,7 @@ Recommended order is documented in `docs/Overall/ai-training-roadmap.md`: collec
 - [x] Add Java 21/Maven build to CI quality gates.
 - [x] Add API policy unit tests with Node's built-in test runner.
 - [x] Add validation regression coverage for category multi-select query parsing and legacy compatibility.
-- [x] Add Playwright routing/auth smoke plus API-mocked Student create-LOST, Student FOUND-detail-to-claim, Staff review/accept/appointment, and Staff warehouse/permission flows; CI retains the optional database-backed login scenario.
+- [x] Add Playwright routing/auth smoke plus API-mocked Student create-LOST/create-FOUND, Student FOUND-detail-to-claim, Staff review/accept/appointment lifecycle, proof/completion/feedback, match feedback, Staff warehouse/permission and Admin navigation flows; CI retains the optional database-backed login scenario.
 - [x] Add isolated-CI E2E for admin CRUD of categories/areas/buildings/handover/users and report handling.
 - [x] Add role/privacy smoke test for Admin vs Staff permissions.
 - [x] Add media privacy smoke test for public post evidence/contact filtering.

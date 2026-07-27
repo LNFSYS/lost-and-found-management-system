@@ -77,7 +77,6 @@ function mapAppointment(row: AppointmentRow) {
     proof: row.proof_image_url
       ? {
           imageUrl: `/api/appointments/${row.id}/proof-image`,
-          publicId: row.proof_public_id,
           uploadedBy: row.proof_uploaded_by ? { id: row.proof_uploaded_by, fullName: row.proof_uploader_name } : null,
           uploadedAt: row.proof_uploaded_at,
           note: row.proof_note

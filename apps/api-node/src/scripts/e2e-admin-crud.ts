@@ -37,7 +37,9 @@ async function login(email: string) {
 async function main() {
   const adminToken = await login(adminEmail);
   const staffToken = await login(staffEmail);
+  const admin = await request<{ user: { id: string } }>("/auth/me", {}, adminToken);
   const marker = Date.now();
+  const createdUserEmail = `e2e-admin-crud-${marker}@example.com`;
   const publicCategories = await request<{ categories: Array<{ id: string }> }>("/categories", {}, adminToken);
   const publicCategoryId = publicCategories.categories[0]?.id;
   if (!publicCategoryId) {
@@ -106,7 +108,7 @@ async function main() {
   const user = await request<{ id: string }>("/admin/users", {
     method: "POST",
     body: JSON.stringify({
-      email: `e2e-admin-crud-${marker}@example.com`,
+      email: createdUserEmail,
       password: "12345678",
       fullName: `E2E User ${marker}`,
       status: "ACTIVE",
@@ -136,6 +138,22 @@ async function main() {
   if (handovers.handoverPoints.find((item) => item.id === handover.id)?.isActive !== false) throw new Error("Handover toggle failed");
   const createdUser = users.users.find((item) => item.id === user.id);
   if (createdUser?.status !== "LOCKED" || !createdUser.roles.includes("LECTURER")) throw new Error("User CRUD failed");
+  await request(`/admin/users/${user.id}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status: "ACTIVE" })
+  }, adminToken);
+  const createdUserToken = await login(createdUserEmail);
+  const userActivity = await request<{
+    activity: Array<{ action: string; entityId: string | null; metadata: Record<string, unknown> | null }>;
+  }>("/auth/activity", {}, createdUserToken);
+  for (const expectedAction of ["ADMIN_USER_STATUS_CHANGED", "ADMIN_USER_ROLES_CHANGED"]) {
+    const audit = userActivity.activity.find(
+      (item) => item.action === expectedAction && item.entityId === user.id
+    );
+    if (!audit || audit.metadata?.actorId !== admin.user.id) {
+      throw new Error(`${expectedAction} audit metadata is missing or has the wrong actor.`);
+    }
+  }
 
   const reportPost = await request<{ post: { id: string } }>("/posts", {
     method: "POST",

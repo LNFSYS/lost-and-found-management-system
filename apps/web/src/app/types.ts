@@ -2,7 +2,19 @@ export type View = "board" | "my-posts" | "create" | "handover" | "account" | "p
 export type AuthMode = "login" | "register" | "forgot" | "reset";
 export type AuthEntryMode = Extract<AuthMode, "login" | "register">;
 export type AudienceRole = "STUDENT" | "LECTURER";
-export type AdminTab = "overview" | "moderation" | "categories" | "locations" | "handover" | "warehouse" | "users" | "reports" | "feedback" | "config";
+export type AdminTab =
+  | "overview"
+  | "moderation"
+  | "categories"
+  | "locations"
+  | "handover"
+  | "warehouse"
+  | "visual-hunt"
+  | "radar"
+  | "users"
+  | "reports"
+  | "feedback"
+  | "config";
 
 export type ChatMessageView = {
   id: string;

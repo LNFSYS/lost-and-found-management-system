@@ -18,9 +18,10 @@ const authLoginAccountLimit = rateLimit({
   }
 });
 const authOtpLimit = rateLimit({ keyPrefix: "auth-otp", windowMs: 10 * 60 * 1000, max: 5 });
+const authOAuthStartLimit = rateLimit({ keyPrefix: "auth-google-start", windowMs: 15 * 60 * 1000, max: 30 });
 const mediaUploadLimit = rateLimit({ keyPrefix: "auth-media-upload", windowMs: 10 * 60 * 1000, max: 20 });
 
-authRoutes.get("/google", (request, response, next) => {
+authRoutes.get("/google", authOAuthStartLimit, (request, response, next) => {
   authController.googleStart(request, response).catch(next);
 });
 

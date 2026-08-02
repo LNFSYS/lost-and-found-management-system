@@ -27,6 +27,7 @@ export interface CreateNotificationInput {
   body?: string | null;
   entityType?: string | null;
   entityId?: string | null;
+  dedupeKey?: string | null;
 }
 
 function mapNotification(row: NotificationRow) {
@@ -44,24 +45,38 @@ function mapNotification(row: NotificationRow) {
   };
 }
 
+function isDuplicateEntry(error: unknown) {
+  return typeof error === "object" && error !== null && "errno" in error && error.errno === 1062;
+}
+
 export const notificationRepository = {
   async create(input: CreateNotificationInput) {
     const id = randomUUID();
-    await dbPool.execute(
-      `
-        INSERT INTO notifications (id, user_id, type, title, body, entity_type, entity_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        id,
-        input.userId,
-        input.type,
-        input.title,
-        input.body ?? null,
-        input.entityType ?? null,
-        input.entityId ?? null
-      ]
-    );
+    try {
+      await dbPool.execute<ResultSetHeader>(
+        `
+          INSERT INTO notifications (
+            id, user_id, type, title, body, entity_type, entity_id, dedupe_key
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          id,
+          input.userId,
+          input.type,
+          input.title,
+          input.body ?? null,
+          input.entityType ?? null,
+          input.entityId ?? null,
+          input.dedupeKey ?? null
+        ]
+      );
+    } catch (error) {
+      if (input.dedupeKey && isDuplicateEntry(error)) {
+        return { id: null, created: false };
+      }
+      throw error;
+    }
     emitUserNotification(input.userId, {
       id,
       userId: input.userId,
@@ -74,7 +89,7 @@ export const notificationRepository = {
       readAt: null,
       createdAt: new Date().toISOString()
     });
-    return { id };
+    return { id, created: true };
   },
 
   async createMany(inputs: CreateNotificationInput[]) {

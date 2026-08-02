@@ -1,4 +1,35 @@
-export const openApiDocument = {
+const uuidPathParameter = (name: string) => ({
+  name,
+  in: "path",
+  required: true,
+  schema: { type: "string", format: "uuid" }
+});
+
+const jsonRequestBody = (schema: Record<string, unknown>) => ({
+  required: true,
+  content: { "application/json": { schema } }
+});
+
+function withPathParameters<T extends { paths: Record<string, Record<string, unknown>> }>(document: T): T {
+  for (const [path, pathItem] of Object.entries(document.paths)) {
+    const names = [...path.matchAll(/\{([^}]+)\}/g)].map((match) => match[1]);
+    if (names.length === 0) continue;
+    for (const operation of Object.values(pathItem)) {
+      if (!operation || typeof operation !== "object") continue;
+      const mutableOperation = operation as { parameters?: Array<Record<string, unknown>> };
+      const parameters = mutableOperation.parameters ? [...mutableOperation.parameters] : [];
+      for (const name of names) {
+        if (!parameters.some((parameter) => parameter.in === "path" && parameter.name === name)) {
+          parameters.push(uuidPathParameter(name));
+        }
+      }
+      mutableOperation.parameters = parameters;
+    }
+  }
+  return document;
+}
+
+export const openApiDocument = withPathParameters({
   openapi: "3.0.3",
   info: {
     title: "FPTU Lost & Found Node API",
@@ -308,6 +339,124 @@ export const openApiDocument = {
         responses: { "200": { description: "Return feedback reviewed" } }
       }
     },
+    "/admin/radar/events": {
+      get: {
+        security: [{ bearerAuth: [] }],
+        summary: "Staff/Admin list sourced campus events for LOST Radar",
+        responses: { "200": { description: "Campus Radar event list" } }
+      },
+      post: {
+        security: [{ bearerAuth: [] }],
+        summary: "Admin create a sourced campus event",
+        requestBody: jsonRequestBody({
+          type: "object",
+          required: ["eventType", "sourceType", "sourceReference", "startsAt", "endsAt"],
+          properties: {
+            eventType: { type: "string", enum: ["ACADEMIC", "SPORTS", "CULTURAL", "CAMPUS_OPERATIONS", "WEATHER", "OTHER"] },
+            sourceType: { type: "string", enum: ["OFFICIAL_CALENDAR", "CAMPUS_NOTICE", "SECURITY_LOG", "WEATHER_BULLETIN"] },
+            sourceReference: { type: "string", minLength: 3, maxLength: 255 },
+            areaId: { type: "string", format: "uuid", nullable: true },
+            buildingId: { type: "string", format: "uuid", nullable: true },
+            startsAt: { type: "string", format: "date-time" },
+            endsAt: { type: "string", format: "date-time" }
+          }
+        }),
+        responses: { "201": { description: "Campus Radar event created" }, "403": { description: "Admin required" } }
+      }
+    },
+    "/admin/radar/events/{id}/analyze": {
+      post: {
+        security: [{ bearerAuth: [] }],
+        summary: "Admin run sliding-window LOST anomaly analysis",
+        parameters: [uuidPathParameter("id")],
+        responses: { "200": { description: "Aggregate analysis and emitted alert counts" } }
+      }
+    },
+    "/admin/radar/alerts": {
+      get: {
+        security: [{ bearerAuth: [] }],
+        summary: "Staff/Admin list privacy-preserving Radar alerts",
+        responses: { "200": { description: "Campus Radar alert list" } }
+      }
+    },
+    "/admin/radar/alerts/{id}/posts": {
+      get: {
+        security: [{ bearerAuth: [] }],
+        summary: "Staff/Admin list public LOST summaries within an alert scope",
+        description: "No contact, media, evidence or OCR data is returned.",
+        parameters: [
+          uuidPathParameter("id"),
+          { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 100, default: 50 } }
+        ],
+        responses: { "200": { description: "Related LOST post summaries" }, "404": { description: "Alert not found" } }
+      }
+    },
+    "/admin/radar/alerts/{id}/status": {
+      patch: {
+        security: [{ bearerAuth: [] }],
+        summary: "Staff/Admin acknowledge, resolve or dismiss a Radar alert",
+        parameters: [uuidPathParameter("id")],
+        requestBody: jsonRequestBody({
+          type: "object",
+          required: ["status", "reason"],
+          properties: {
+            status: { type: "string", enum: ["ACKNOWLEDGED", "RESOLVED", "DISMISSED"] },
+            reason: { type: "string", enum: ["REVIEWED_NO_ACTION", "MONITORING", "OPERATIONAL_FOLLOW_UP", "FALSE_POSITIVE"] }
+          }
+        }),
+        responses: { "200": { description: "Alert disposition updated" } }
+      }
+    },
+    "/admin/radar/audit": {
+      get: {
+        security: [{ bearerAuth: [] }],
+        summary: "Admin list Campus Radar audit records",
+        responses: { "200": { description: "Radar audit records" } }
+      }
+    },
+    "/admin/visual-hunt": {
+      post: {
+        security: [{ bearerAuth: [] }],
+        summary: "Staff/Admin rank candidates from one explicit image/frame",
+        description: "Google Vision metadata/OCR-assisted ranking; raw input is ephemeral and no post state changes automatically.",
+        requestBody: {
+          required: true,
+          content: {
+            "multipart/form-data": {
+              schema: {
+                type: "object",
+                required: ["image"],
+                properties: {
+                  image: { type: "string", format: "binary" },
+                  targetType: { type: "string", enum: ["LOST", "FOUND"] },
+                  categoryId: { type: "string", format: "uuid" },
+                  areaId: { type: "string", format: "uuid" },
+                  maxResults: { type: "integer", minimum: 1, maximum: 20, default: 20 }
+                }
+              }
+            }
+          }
+        },
+        responses: { "200": { description: "Advisory candidate list" }, "403": { description: "Staff/Admin required" } }
+      }
+    },
+    "/admin/visual-hunt/feedback": {
+      post: {
+        security: [{ bearerAuth: [] }],
+        summary: "Record Staff/Admin candidate or not-relevant feedback",
+        requestBody: jsonRequestBody({
+          type: "object",
+          required: ["postId", "decision", "source"],
+          properties: {
+            postId: { type: "string", format: "uuid" },
+            decision: { type: "string", enum: ["CANDIDATE", "NOT_RELEVANT"] },
+            similarityScore: { type: "number", minimum: 0, maximum: 1, nullable: true },
+            source: { type: "string", enum: ["CAMERA", "IMAGE", "VIDEO_FRAMES", "BATCH_IMAGES"] }
+          }
+        }),
+        responses: { "200": { description: "Visual Hunt feedback recorded" } }
+      }
+    },
     "/posts": {
       post: {
         security: [{ bearerAuth: [] }],
@@ -458,6 +607,78 @@ export const openApiDocument = {
         security: [{ bearerAuth: [] }],
         summary: "Upload claim evidence image",
         responses: { "201": { description: "Claim evidence uploaded" } }
+      }
+    },
+    "/claims/{id}/verification-questions": {
+      get: {
+        security: [{ bearerAuth: [] }],
+        summary: "List version-pinned claim verification questions",
+        description: "Claimants never receive expected answers or per-attempt correctness; reviewers receive advisory comparison data.",
+        parameters: [uuidPathParameter("id")],
+        responses: { "200": { description: "Role-aware claim question list" } }
+      }
+    },
+    "/claims/{id}/verification-questions/{questionId}/answer": {
+      post: {
+        security: [{ bearerAuth: [] }],
+        summary: "Claimant submit a private verification answer",
+        parameters: [uuidPathParameter("id"), uuidPathParameter("questionId")],
+        requestBody: jsonRequestBody({
+          type: "object",
+          required: ["answer"],
+          properties: { answer: { type: "string", minLength: 1, maxLength: 500, writeOnly: true } }
+        }),
+        responses: { "200": { description: "Answer recorded without correctness disclosure" }, "429": { description: "Attempt limit reached" } }
+      }
+    },
+    "/posts/{id}/verification-questions/suggest": {
+      post: {
+        security: [{ bearerAuth: [] }],
+        summary: "Suggest item-specific private verification questions",
+        description: "Suggestions are deterministic/template-driven and never contain an expected answer.",
+        parameters: [uuidPathParameter("id")],
+        responses: { "200": { description: "Question suggestions" } }
+      }
+    },
+    "/posts/{id}/verification-questions": {
+      get: {
+        security: [{ bearerAuth: [] }],
+        summary: "List verification questions using role-aware redaction",
+        parameters: [uuidPathParameter("id")],
+        responses: { "200": { description: "Redacted question list" } }
+      },
+      post: {
+        security: [{ bearerAuth: [] }],
+        summary: "Create a verification question with a hashed expected answer",
+        parameters: [uuidPathParameter("id")],
+        requestBody: jsonRequestBody({
+          type: "object",
+          required: ["prompt", "questionType", "sourceSignal", "expectedAnswer"],
+          properties: {
+            prompt: { type: "string", minLength: 8, maxLength: 500 },
+            questionType: { type: "string", enum: ["TEXT", "MASKED_SERIAL", "MULTIPLE_CHOICE", "VISUAL_DETAIL"] },
+            sourceSignal: { type: "string", minLength: 2, maxLength: 100 },
+            expectedAnswer: { type: "string", minLength: 2, maxLength: 500, writeOnly: true },
+            options: { type: "array", minItems: 2, maxItems: 8, items: { type: "string", maxLength: 200 } },
+            weight: { type: "number", minimum: 0.1, maximum: 1, default: 0.5 },
+            privacyLevel: { type: "string", enum: ["PRIVATE", "HIGHLY_PRIVATE"], default: "PRIVATE" },
+            approved: { type: "boolean", default: false }
+          }
+        }),
+        responses: { "201": { description: "Verification question created" } }
+      }
+    },
+    "/posts/{id}/verification-questions/{questionId}/status": {
+      patch: {
+        security: [{ bearerAuth: [] }],
+        summary: "Approve or disable a verification question",
+        parameters: [uuidPathParameter("id"), uuidPathParameter("questionId")],
+        requestBody: jsonRequestBody({
+          type: "object",
+          required: ["status"],
+          properties: { status: { type: "string", enum: ["APPROVED", "DISABLED"] } }
+        }),
+        responses: { "200": { description: "Question status updated" } }
       }
     },
     "/claims/{id}/evidence/{evidenceId}/image": {
@@ -636,4 +857,4 @@ export const openApiDocument = {
       }
     }
   }
-} as const;
+} as const);

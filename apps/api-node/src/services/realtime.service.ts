@@ -8,6 +8,7 @@ import type { AccessTokenPayload } from "../middlewares/auth.middleware.js";
 import { chatRepository } from "../repositories/chat.repository.js";
 import { isConfigured } from "../utils/configured.js";
 import { logger } from "../utils/logger.js";
+import { validateAccessSession } from "./access-session.service.js";
 import { cloudinaryService } from "./cloudinary.service.js";
 import { metricsService } from "./metrics.service.js";
 
@@ -55,14 +56,19 @@ export async function setupRealtimeServer(server: HttpServer) {
     metricsService.increment("lnfs_socket_adapter_initializations_total", { mode: "single_process" });
   }
 
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     const token = authFromSocket(socket.handshake.auth);
     if (!token || !isConfigured(env.jwtAccessSecret)) {
       next(new Error("Unauthorized socket"));
       return;
     }
     try {
-      socket.data.auth = jwt.verify(token, env.jwtAccessSecret) as AccessTokenPayload;
+      const payload = jwt.verify(token, env.jwtAccessSecret) as AccessTokenPayload;
+      if (!(await validateAccessSession(payload))) {
+        next(new Error("Unauthorized socket"));
+        return;
+      }
+      socket.data.auth = payload;
       socket.data.token = token;
       next();
     } catch {
@@ -73,9 +79,14 @@ export async function setupRealtimeServer(server: HttpServer) {
   io.on("connection", (socket) => {
     const auth = socket.data.auth as AccessTokenPayload;
     const eventWindow = { startedAt: Date.now(), count: 0 };
-    socket.use(([event], next) => {
+    socket.use(async ([event], next) => {
       try {
-        jwt.verify(socket.data.token as string, env.jwtAccessSecret!);
+        const payload = jwt.verify(socket.data.token as string, env.jwtAccessSecret!) as AccessTokenPayload;
+        if (!(await validateAccessSession(payload))) {
+          metricsService.increment("lnfs_socket_event_rejections_total", { reason: "inactive_session" });
+          next(new Error("Socket session is no longer active"));
+          return;
+        }
       } catch {
         metricsService.increment("lnfs_socket_event_rejections_total", { reason: "invalid_token" });
         next(new Error("Socket token expired or invalid"));

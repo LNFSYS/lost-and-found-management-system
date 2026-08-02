@@ -10,6 +10,8 @@ import { normalizeText } from "../utils/normalize-text.js";
 import type { CreateClaimInput } from "../validators/claim.validator.js";
 import { containsPrivateOwnershipSignal, protectClaimSecret } from "./claim-secret.service.js";
 import { matchingService } from "./matching.service.js";
+import { verificationQuestionService } from "./verification-question.service.js";
+import { configRepository } from "../repositories/config.repository.js";
 
 function canReviewClaims(auth: AccessTokenPayload, ownerId: string) {
   return auth.sub === ownerId || auth.roles.includes("STAFF") || auth.roles.includes("ADMIN");
@@ -239,6 +241,12 @@ export const claimService = {
     if (detail.claim.status !== "PENDING" && detail.claim.status !== "NEED_MORE_INFO") {
       throw new HttpError(409, "Only pending claims can be accepted");
     }
+    if (await configRepository.booleanValue("ai.verification_questions_enabled")) {
+      const verificationCompletion = await verificationQuestionService.completionForClaim(claimId);
+      if (!verificationCompletion.complete) {
+        throw new HttpError(409, "Required private verification questions must be answered before claim acceptance");
+      }
+    }
     const acceptance = await claimRepository.acceptClaim({ id: claimId, actorId: auth.sub });
     if (acceptance.outcome !== "ACCEPTED") {
       if (acceptance.outcome === "NOT_FOUND") {
@@ -319,6 +327,9 @@ export const claimService = {
 
   async verifyClaimEvidence(auth: AccessTokenPayload, claimId: string) {
     const detail = await this.getClaim(auth, claimId);
+    if (!canReviewClaims(auth, detail.claim.postOwnerId)) {
+      throw new HttpError(403, "Only the post owner, Staff or Admin can view verification scoring details");
+    }
     const post = await postRepository.findById(detail.claim.postId);
     if (!post) {
       throw new HttpError(404, "Post not found");
@@ -355,15 +366,23 @@ export const claimService = {
     const matchScore = claimantMatch?.totalScore ?? 0;
     const consistencyScore = Math.min(1, (textScore + locationScore + timeScore) / 3 + (privateSignal > 0 ? 0.15 : 0));
 
-    const ownershipScore =
+    const baseOwnershipScore =
       0.25 * matchScore +
       0.2 * textScore +
       0.15 * locationScore +
       0.1 * timeScore +
       0.2 * evidenceScore +
       0.1 * consistencyScore;
+    const questionsEnabled = await configRepository.booleanValue("ai.verification_questions_enabled");
+    const questionReview = questionsEnabled
+      ? await verificationQuestionService.scoreForClaim(claimId)
+      : { score: null, completeness: 0, hasQuestions: false };
+    const ownershipScore = questionReview.score === null
+      ? baseOwnershipScore
+      : 0.85 * baseOwnershipScore + 0.15 * questionReview.score;
+    const hasMatchedPrivateQuestion = questionReview.score !== null && questionReview.score > 0;
     const cappedOwnershipScore =
-      privateSignal === 0 && !claimantMatch ? Math.min(ownershipScore, 0.65) : ownershipScore;
+      privateSignal === 0 && !claimantMatch && !hasMatchedPrivateQuestion ? Math.min(ownershipScore, 0.65) : ownershipScore;
     const ownershipConfidence = Math.round(Math.max(0, Math.min(1, cappedOwnershipScore)) * 100);
     const reviewConfidenceTier =
       ownershipConfidence >= 85
@@ -380,7 +399,7 @@ export const claimService = {
       level: ownershipConfidence >= 70 ? "HIGH" : ownershipConfidence >= 45 ? "MEDIUM" : "LOW",
       reviewConfidenceTier,
       isSystemVerified: false,
-      note: "Muc ho tro xac thuc chi la diem tham khao. Staff hoac chu bai FOUND phai doi chieu bang chung rieng truoc khi tra do.",
+      note: "Mức hỗ trợ xác thực chỉ là điểm tham khảo. Staff hoặc chủ bài FOUND phải đối chiếu bằng chứng riêng trước khi trả đồ.",
       breakdown: {
         matchScore: Math.round(matchScore * 100),
         textScore: Math.round(textScore * 100),
@@ -388,7 +407,9 @@ export const claimService = {
         timeScore: Math.round(timeScore * 100),
         evidenceScore: Math.round(evidenceScore * 100),
         privateSignalScore: Math.round(privateSignal * 100),
-        consistencyScore: Math.round(consistencyScore * 100)
+        consistencyScore: Math.round(consistencyScore * 100),
+        privateQuestionScore: questionReview.score === null ? null : Math.round(questionReview.score * 100),
+        privateQuestionCompleteness: Math.round(questionReview.completeness * 100)
       },
       signals: {
         hasClaimantMatchedLostPost: Boolean(claimantMatch),
@@ -396,7 +417,8 @@ export const claimService = {
         hasEvidenceOcrText: detail.evidence.some((item) => item.description?.includes("OCR:")),
         hasPrivateSignal: privateSignal > 0,
         hasApproximateLostTime: Boolean(detail.claim.approximateLostAt),
-        hasApproximateLocation: Boolean(detail.claim.approximateLocation)
+        hasApproximateLocation: Boolean(detail.claim.approximateLocation),
+        hasVerificationQuestions: questionReview.hasQuestions
       }
     };
   }

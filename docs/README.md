@@ -1,8 +1,20 @@
 # Documentation Index
 
-Last updated: 2026-07-19
+Last updated: 2026-08-02
 
 This folder is intentionally kept small. Use these files as the canonical documentation set for the thesis/demo.
+
+## Current Implementation Baseline
+
+The current Web/Node MVP includes the original LOST/FOUND, claim, appointment, warehouse/handover and realtime flows plus the following hardening completed through migrations `026`-`033`:
+
+- session-version invalidation, notification idempotency, operational indexes and migration checksum/lock integrity;
+- reviewer-approved item-specific verification questions with bcrypt expected answers, version-pinned claim assignments and transaction-safe terminal-state locking;
+- aggregate Campus LOST Radar with sourced events, sliding-window/baseline analysis, bounded thresholds, dedupe/cooldown, related public post summaries and Staff/Admin dispositions;
+- Staff/Admin Visual Hunt using explicit camera/image/video-frame/batch input, Google Vision assisted metadata/OCR, ephemeral input handling, bounded candidate scoring and human feedback;
+- independent feature flags, role/rate/privacy guards, operational metrics, synchronized OpenAPI/Swagger contracts and CI/E2E coverage.
+
+Local verification on 2026-08-01 passed API/web builds, migration smoke with 36 records, 56 API tests with two opt-in MySQL tests skipped, verification/role E2E, and Playwright with 13 passed plus one credential-dependent login test skipped. Google Vision live behavior still depends on a valid API key, enabled Cloud Vision API and billing; otherwise the documented rule-based fallback remains active.
 
 ## Read First
 
@@ -17,6 +29,7 @@ This folder is intentionally kept small. Use these files as the canonical docume
 | `Overall/demo-release-runbook.md` | Secret, database, migration, test, and demo preparation |
 | `Overall/deployment-and-rollback.md` | Container topology, health/metrics, deployment order, rollback and restore rules |
 | `Overall/thesis-defense-guide-2026.md` | Defense script, demo flow, judge Q&A |
+| `tutorial/ai-camera-radar-demo-guide.md` | Phone camera, image/video fallback, Radar and verification-question demo guide |
 
 ## Requirements And Tracking
 
@@ -28,7 +41,8 @@ This folder is intentionally kept small. Use these files as the canonical docume
 | `Checklist/master-dev-checklist.md` | Canonical UC assignment/status |
 | `Checklist/pending-tasks.md` | Remaining work and backlog |
 | `Checklist/release-checklist.md` | Pre-demo/pre-release technical and product checks |
-| `Checklist/deep-research-report-27-07-2026.md` | Current three-lens architecture, backend, code-quality and readiness assessment |
+| `Checklist/project-independent-reassessment-2026-07-27.md` | Current independent weighted reassessment with verified findings and fix priorities |
+| `Checklist/deep-research-report-27-07-2026.md` | Earlier readiness snapshot retained for comparison with the independent reassessment |
 
 ## Archived Evidence
 

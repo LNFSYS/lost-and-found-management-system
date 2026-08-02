@@ -126,8 +126,8 @@ if (missingCloudinary.length > 0) {
   console.log("Cloudinary config check passed.");
 }
 
-if (!isConfigured(process.env.GOOGLE_VISION_API_KEY) && !isConfigured(process.env.GOOGLE_APPLICATION_CREDENTIALS)) {
-  console.warn("Release warning: Google Vision credentials are missing. OCR/tagging may use fallback behavior.");
+if (!isConfigured(process.env.GOOGLE_VISION_API_KEY)) {
+  console.warn("Release warning: GOOGLE_VISION_API_KEY is missing. OCR/tagging may use fallback behavior.");
 } else {
   console.log("Google Vision config check passed.");
 }

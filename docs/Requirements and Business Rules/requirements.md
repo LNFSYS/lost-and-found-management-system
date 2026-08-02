@@ -1,6 +1,6 @@
 # Functional and Non-Functional Requirements
 
-Last audit: 2026-07-08
+Last audit: 2026-08-01
 
 This document uses the canonical 100-UC set from `docs/Checklist/master-dev-checklist.md`. Each UC has exactly one primary owner and the set is grouped by current team member assignment: TL, VQ, QD, and AK.
 
@@ -27,6 +27,9 @@ This document uses the canonical 100-UC set from `docs/Checklist/master-dev-chec
 | FR-MEDIA-01 | The system must upload, validate MIME/size/file signature, store, display, and delete item images, evidence images, and avatars. | UC-038, UC-048, UC-049, UC-050, UC-087 | P0 | Implemented for MVP |
 | FR-AI-01 | The system must call Vision/OCR, store AI tags, suggest categories, let the user accept/edit a category suggestion, and provide AI metadata for matching. | UC-086, UC-087, UC-088, UC-091 | P1 | Implemented for MVP |
 | FR-AI-02 | Future custom AI work should prepare a training pipeline with collection, labeling, anonymization, training, evaluation, and versioning before any custom model is claimed. Current repo has a data/export and lightweight local reranker foundation, not production custom AI. | UC-026, UC-027, UC-028, UC-029, UC-030 | P2 | Partial foundation |
+| FR-AI-03 | The system must let the FOUND owner or Staff create and approve item-specific verification questions, keep expected answers hashed, pin the approved question version to each claim, limit answer attempts, and expose only advisory confidence to authorized reviewers. | UC-049, UC-052, UC-054, UC-089, UC-090, UC-092 | P1 | Implemented for MVP |
+| FR-AI-04 | Staff/Admin must be able to view privacy-preserving campus LOST anomaly alerts and public related-post summaries based on time, area/building and category. Admin may enter a sourced campus event and run analysis; alerts require a configurable bounded threshold, baseline, dedupe, cooldown, explanation and human disposition. | UC-067, UC-073, UC-083, UC-084, UC-085 | P1 | Implemented for MVP |
+| FR-AI-05 | Staff/Admin must be able to scan one image, a captured phone-camera frame, a prerecorded video frame, or a small image batch and receive ranked LOST candidates above a bounded configurable threshold from Google Vision metadata/OCR-assisted similarity. The scan must not store raw input by default or change post/claim state. | UC-059, UC-070, UC-076, UC-084, UC-086, UC-091 | P1 | Implemented for MVP |
 | FR-MATCH-01 | The system must enqueue matching after create/update/upload, prefilter a bounded candidate set, compute tiered scores in a retryable worker, include image/OCR signals, save materialized results, batch-read suggestions, explain reasons, and allow manual re-run. | UC-068, UC-069, UC-070, UC-071, UC-072, UC-074, UC-075, UC-076 | P0 | Implemented |
 | FR-NOTI-01 | The system must send matching notifications and support realtime notifications for chat, claims, and appointments; polling is only a fallback. | UC-073, UC-074, UC-083, UC-020 | P1 | Partial |
 | FR-CLAIM-01 | Claimants must be able to submit claims for FOUND posts with ownership descriptions/evidence, and the system must prevent duplicate claims. | UC-049, UC-052, UC-053 | P0 | Implemented |
@@ -54,6 +57,7 @@ This document uses the canonical 100-UC set from `docs/Checklist/master-dev-chec
 | NFR-RT-01 | Socket realtime must have JWT authentication and event revalidation, accepted-claim gating, room isolation, unread state, and no cross-room leaks. Multi-instance deployments must use the Redis adapter. | UC-077, UC-078, UC-079, UC-080, UC-082, UC-083 | P1 | Implemented; reconnect/soak matrix pending |
 | NFR-OPS-01 | The API must provide request IDs, structured production logs, liveness, dependency-aware readiness, protected operational metrics and graceful shutdown. Release CI must build API/web containers and versioned source artifacts. | UC-067, UC-068, UC-077, UC-083, UC-084 | P1 | Implemented in code/CI; hosted staging and provider restore drill pending |
 | NFR-AI-01 | AI/matching/evidence scoring serves only as decision support; it must not automatically approve claims, verify ownership, or return items. | UC-070, UC-076, UC-089, UC-090, UC-092 | P0 | Implemented |
+| NFR-AI-02 | AI-assisted verification, Radar and Visual Hunt must be separately feature-flagged, role/rate limited and explainable. Raw Visual Hunt frames are ephemeral, face recognition is prohibited, private expected answers are never returned, and Radar aggregates must not expose claimant/evidence data. | UC-049, UC-054, UC-067, UC-078, UC-084, UC-089 | P0 | Implemented for MVP |
 | NFR-AUDIT-01 | Sensitive operations such as claim transitions, role/status changes, warehouse processing, configuration, and evidence review must have log/audit trails. Moderation/export depth remains hardening. | UC-003, UC-004, UC-005, UC-006, UC-015, UC-066, UC-085 | P1 | Partial |
 
 ## Notes

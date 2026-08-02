@@ -1,6 +1,6 @@
 # Traceability Matrix
 
-Last audit: 2026-07-08
+Last audit: 2026-08-01
 
 This document links Business Rules, Requirements, and the canonical 100-UC set in `docs/Checklist/master-dev-checklist.md`. Each UC has exactly one primary owner.
 
@@ -36,6 +36,10 @@ This document links Business Rules, Requirements, and the canonical 100-UC set i
 | BR-28 | FR-MOBILE-01, NFR-SEC-02, NFR-RT-01 | UC-093, UC-094, UC-095, UC-096, UC-097, UC-098, UC-099, UC-100 | Partial |
 | BR-29 | FR-DEMO-01 | UC-031, UC-032, UC-040, UC-041, UC-059 | Implemented |
 | BR-30 | NFR-AUDIT-01, NFR-DATA-01, NFR-PERF-01, NFR-RT-01, NFR-PRIV-01 | UC-007, UC-015, UC-054, UC-071, UC-078, UC-089 | Core smoke implemented; browser/load hardening pending |
+| BR-31 | FR-AI-03, FR-CLAIM-01, FR-CLAIM-03, NFR-AI-01, NFR-AI-02 | UC-049, UC-052, UC-054, UC-089, UC-090, UC-092 | Implemented for MVP |
+| BR-32 | FR-AI-04, FR-NOTI-01, NFR-AI-02, NFR-PRIV-01 | UC-067, UC-073, UC-083, UC-084, UC-085 | Implemented for MVP |
+| BR-33 | FR-AI-05, FR-MATCH-01, NFR-AI-01, NFR-AI-02 | UC-059, UC-070, UC-076, UC-084, UC-086, UC-091 | Implemented for MVP |
+| BR-34 | FR-AI-03, FR-AI-04, FR-AI-05, FR-ADMIN-01, NFR-SEC-02 | UC-062, UC-066, UC-070, UC-084, UC-085 | Implemented |
 
 ## UC Count
 

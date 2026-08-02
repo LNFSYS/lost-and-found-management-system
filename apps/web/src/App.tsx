@@ -8,6 +8,8 @@ import {
   Key,
   LayoutDashboard,
   MessageCircle,
+  Radar,
+  ScanSearch,
   Search,
   ShieldCheck,
   UserCircle,
@@ -67,6 +69,15 @@ export function App() {
   const areasQuery = useQuery({ queryKey: ["areas"], queryFn: () => api.areas() });
   const handoverQuery = useQuery({ queryKey: ["handover-points"], queryFn: () => api.handoverPoints() });
   const publicConfigQuery = useQuery({ queryKey: ["public-config"], queryFn: () => api.publicConfig() });
+  const publicFeatureEnabled = (key: string) => publicConfigQuery.data?.entries.find((entry) => entry.key === key)?.value === true;
+  const verificationQuestionsEnabled = publicFeatureEnabled("ai.verification_questions_enabled");
+  const campusRadarEnabled = publicFeatureEnabled("ai.campus_radar_enabled");
+  const visualHuntEnabled = publicFeatureEnabled("ai.visual_hunt_enabled");
+  useEffect(() => {
+    if ((adminTab === "visual-hunt" && !visualHuntEnabled) || (adminTab === "radar" && !campusRadarEnabled)) {
+      setAdminTab("overview");
+    }
+  }, [adminTab, campusRadarEnabled, visualHuntEnabled]);
   const allBuildingsQuery = useQuery({
     queryKey: ["all-buildings", areasQuery.data?.areas],
     queryFn: async () => {
@@ -280,7 +291,8 @@ export function App() {
   }, [realtimeToast]);
 
   useEffect(() => {
-    if (adminMode && !isAdmin && adminTab !== "overview" && adminTab !== "warehouse" && adminTab !== "feedback") {
+    const staffTabs: AdminTab[] = ["overview", "warehouse", "feedback", "visual-hunt", "radar"];
+    if (adminMode && !isAdmin && !staffTabs.includes(adminTab)) {
       setAdminTab("warehouse");
     }
   }, [adminMode, adminTab, isAdmin]);
@@ -443,6 +455,16 @@ export function App() {
               <button className={adminTab === "overview" ? "active" : ""} type="button" onClick={() => setAdminTab("overview")}>
                 <LayoutDashboard size={18} /> Dashboard
               </button>
+              {visualHuntEnabled && (
+                <button className={adminTab === "visual-hunt" ? "active" : ""} type="button" onClick={() => setAdminTab("visual-hunt")}>
+                  <ScanSearch size={18} /> Visual Hunt
+                </button>
+              )}
+              {campusRadarEnabled && (
+                <button className={adminTab === "radar" ? "active" : ""} type="button" onClick={() => setAdminTab("radar")}>
+                  <Radar size={18} /> Radar campus
+                </button>
+              )}
               {!isAdmin && (
                 <>
                 <button className={adminTab === "warehouse" ? "active" : ""} type="button" onClick={() => setAdminTab("warehouse")}>
@@ -717,6 +739,7 @@ export function App() {
             handoverPoints={handoverQuery.data?.handoverPoints ?? []}
             currentUserId={meQuery.data?.user.id}
             canReviewClaims={canUseAdmin}
+            verificationQuestionsEnabled={verificationQuestionsEnabled}
             onClose={closePost}
             onClaim={(post) => setClaimPost(post)}
           />
@@ -762,6 +785,7 @@ export function App() {
           post={claimPost}
           signedIn={isSignedIn}
           imageRules={imageRules}
+          verificationQuestionsEnabled={verificationQuestionsEnabled}
           onClose={() => setClaimPost(null)}
           onCreated={async () => {
             setClaimPost(null);

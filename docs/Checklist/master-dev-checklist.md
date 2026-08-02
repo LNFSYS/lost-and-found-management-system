@@ -1,6 +1,6 @@
 # Master Dev Checklist - FPTU Lost & Found System
 
-Last audit: 2026-07-27
+Last audit: 2026-08-01
 
 This file is the canonical UC checklist for the project. The old list of nearly 200 UCs has been consolidated to exactly 100 UCs. Each UC starts with a verb, has one primary owner, and is organized by current team member assignment.
 
@@ -52,10 +52,10 @@ This file is the canonical UC checklist for the project. The old list of nearly 
 | [x] | UC-013 | Record item condition notes upon receipt | `StorageActionRequest.conditionNotes` |
 | [x] | UC-014 | Confirm item returned to recipient | `HandoverService.returnItem` |
 | [x] | UC-015 | Write storage log for warehouse operations | `StorageLogEntity`, `StorageLogRepository` |
-| [x] | UC-021 | Create return appointment after accepted claim | `appointmentService.create`, accepted-claim transaction guard, migration 024 one-active-appointment invariant |
-| [x] | UC-022 | Reject appointment with reason | `PATCH /appointments/:id/reject` |
-| [x] | UC-023 | Reschedule or cancel return appointment | `PATCH /appointments/:id/reschedule` and `PATCH /appointments/:id/cancel` |
-| [x] | UC-024 | Complete appointment and update to resolved | Transaction-safe completion updates appointment/post/warehouse once, records the actual actor, serves proof through the authenticated media proxy, and has a web lifecycle/proof/feedback journey |
+| [x] | UC-021 | Create return appointment after accepted claim | `appointmentService.create`, migration 024 one-active-appointment invariant, and named handover-slot lock |
+| [x] | UC-022 | Reject appointment with reason | Compare-and-set transition at `PATCH /appointments/:id/reject`; accept-vs-reject race E2E |
+| [x] | UC-023 | Reschedule or cancel return appointment | Compare-and-set reschedule/cancel transitions plus reschedule-vs-complete race E2E |
+| [x] | UC-024 | Complete appointment and update to resolved | Transaction-safe completion, stale-write protection, complete-vs-cancel race E2E, actor audit, protected proof and web lifecycle |
 | [x] | UC-025 | Calculate reputation score after business event | Appointment completion adds reputation logs and score updates |
 | [x] | UC-026 | Collect AI training data | Match feedback, suggestion impressions, persisted explanations, and export fields |
 | [x] | UC-027 | Label match correct/incorrect data | `match_feedback` plus the post-detail review panel support true/false/uncertain/duplicate/insufficient-evidence labels for owners, Staff and Admin |
@@ -68,9 +68,9 @@ This file is the canonical UC checklist for the project. The old list of nearly 
 | Done | UC | Use case | Evidence / note |
 | --- | --- | --- | --- |
 | [x] | UC-031 | Request registration OTP via email | `/auth/register/request-otp` |
-| [x] | UC-032 | Verify OTP and create account | register flow |
+| [x] | UC-032 | Verify OTP and create account | One-time conditional OTP consumption; 10-request DB concurrency test |
 | [x] | UC-033 | Log in with email and password | `auth.service.login` |
-| [x] | UC-034 | Refresh access token | `POST /auth/refresh` |
+| [x] | UC-034 | Refresh access token | Single-use transactional rotation; concurrent replay integration test; `session_version` invalidates stale HTTP/socket tokens |
 | [x] | UC-035 | Log out and revoke refresh token | `POST /auth/logout` |
 | [x] | UC-036 | Reset password via OTP | forgot/reset password flow |
 | [x] | UC-037 | Provide user profile API | `/auth/me`, `/auth/profile` |
@@ -95,8 +95,8 @@ This file is the canonical UC checklist for the project. The old list of nearly 
 | [x] | UC-056 | Manage handover points via Admin API | `/admin/handover-points` |
 | [x] | UC-057 | Store campus map image and handover point marker coordinates | handover map fields |
 | [x] | UC-058 | Count stored items at handover point | handover stored-item counts |
-| [x] | UC-059 | Manage warehouse items via API | `/admin/warehouse-items` |
-| [x] | UC-060 | Update warehouse item status | warehouse status API |
+| [x] | UC-059 | Manage warehouse items via API | `/admin/warehouse-items`; capacity/state writes serialized and covered by concurrent E2E |
+| [x] | UC-060 | Update warehouse item status | Terminal states only through guarded process API; active claims and PENDING/ACCEPTED/RESCHEDULED appointments block disposition |
 | [x] | UC-061 | Save warehouse item retention deadline | `retentionDeadline` |
 | [x] | UC-062 | Restrict staff permissions below admin | staff/admin route guard |
 | [x] | UC-063 | Manage users via Admin API | `/admin/users` |
@@ -152,6 +152,17 @@ This file is the canonical UC checklist for the project. The old list of nearly 
 | [x] | UC-098 | Submit claim, upload evidence, and view claim status on mobile | Claim modal, evidence upload, verification confidence |
 | [x] | UC-099 | View handover map/points and create return appointment on mobile | Handover list and appointment creation implemented; map image view can be deepened later |
 | [x] | UC-100 | Chat realtime, receive notifications, and handle offline/retry on mobile | Socket.IO claim chat and notification list implemented; offline/retry and native push remain hardening |
+
+## Cross-cutting AI-assisted Feature Evidence
+
+These capabilities reuse existing UCs and owners; they do not expand the canonical set beyond 100.
+
+| Done | Capability | Primary UC/owner mapping | Evidence / note |
+| --- | --- | --- | --- |
+| [x] | Generate and review item-specific verification questions | QD: UC-089, UC-090, UC-092; VQ: UC-049, UC-052, UC-054 | Migrations 029/032, version-pinned assignments, bcrypt expected answers, owner/Staff approval, reviewer-only confidence, authorization/privacy unit and E2E coverage |
+| [x] | Detect campus LOST anomaly clusters | VQ: UC-067, UC-073, UC-083, UC-084, UC-085 | Migration 030, statistical baseline/sliding-window detector, sourced Admin event input, dedupe/cooldown, alert lifecycle, Staff/Admin UI and realtime notification |
+| [x] | Scan warehouse images with Visual Hunt | QD: UC-086, UC-091; VQ: UC-059, UC-070, UC-076, UC-084 | Google Vision metadata/OCR-assisted candidate ranking, explicit camera/image/video/batch input, ephemeral frame handling, Staff/Admin guard, feedback and Playwright permission-denied/batch fallback test |
+| [x] | Independently disable AI-assisted tools | VQ: UC-062, UC-066, UC-084, UC-085 | Migration 031 and backend feature-flag middleware; web flags fail closed |
 
 ## Summary
 

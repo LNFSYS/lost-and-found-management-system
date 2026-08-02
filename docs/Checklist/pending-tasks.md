@@ -1,6 +1,6 @@
 # Pending Task Checklist
 
-Last audit: 2026-07-27
+Last audit: 2026-08-01
 
 > Current delivery priority (2026-07-11): finish and harden Web + Node/Java backend first. Mobile implementation/refactor remains deferred by product decision and is not part of this work phase.
 
@@ -8,13 +8,48 @@ Last audit: 2026-07-27
 
 | Metric | Count |
 | --- | ---: |
-| Completed checklist items | 151 |
+| Completed checklist items | 173 |
 | Open MVP-blocking items | 0 |
-| Open future/hardening items | 20 |
+| Open future/hardening items | 27 |
 
 Open work is now concentrated in external/future work: provider-scale benchmark and restore drills, optional Java auth/evidence ownership, notification digest tuning, mobile hardening, category/tag dataset review, custom image/semantic inference and OTP provider E2E.
 
-Scope note: the current MVP should be demoed as web + Node backend with Google Vision assisted OCR/tags and rule-based/hybrid matching. Expo mobile MVP and training-data baseline scripts are present, while native mobile hardening and production custom AI inference remain future work.
+Scope note: the current MVP should be demoed as web + Node backend with Google Vision assisted OCR/tags, rule-based/hybrid matching, statistical Campus Radar, reviewer-approved verification questions and metadata/OCR-assisted Visual Hunt. Expo mobile and production custom AI inference remain outside this Web/backend phase.
+
+## AI-assisted Operations - 2026-08-01
+
+- [x] Add private item-specific verification questions with owner/Staff approval and hashed expected answers.
+- [x] Pin an approved question version to each claim, prevent acceptance while its required answer is missing, and transaction-lock the claim before accepting any answer so terminal claims cannot be changed by a race.
+- [x] Remove claimant correctness leakage and preserve a prior successful answer across later attempts.
+- [x] Add statistical Campus LOST Radar with sourced Admin events, baseline, sliding windows, threshold, dedupe, cooldown and alert dispositions.
+- [x] Add a Staff/Admin-only related-post endpoint and panel that returns public LOST summaries without contact, evidence, media or OCR data.
+- [x] Notify Staff/Admin when Radar emits an actionable alert without exposing private post/evidence data.
+- [x] Add Visual Hunt for explicit camera frame, image, prerecorded video frame and bounded image batch input.
+- [x] Add Staff/Admin role guard, rate limit, signature/size validation, ephemeral scan handling and candidate feedback.
+- [x] Add independent feature flags and operational metrics for all three tools.
+- [x] Add bounded Admin-editable Radar and Visual Hunt thresholds through migration 033; enforce the same ranges in API update/rollback and the config UI.
+- [x] Add API/unit/role/privacy regression tests plus Playwright coverage for permission denial, batch-upload fallback and category-scoped Radar counts.
+- [ ] Add real bounding-box overlays when a provider returns stable object coordinates; current MVP uses candidate cards.
+- [ ] Add a controlled pretrained embedding adapter only after privacy, latency and operating-cost evaluation; current Visual Hunt uses Google Vision metadata/OCR, not exact-instance recognition.
+- [ ] Add a real weather/calendar adapter only after the campus provides an authoritative source; current Radar accepts explicitly sourced Admin events.
+- [ ] Validate phone-camera HTTPS flow on the actual defense Wi-Fi/device and retain the prerecorded-video fallback.
+
+## Independent Review Remediation - 2026-07-27
+
+- [x] Block warehouse terminal-state bypasses and serialize capacity/state transitions.
+- [x] Include `RESCHEDULED` appointments in warehouse disposition guards.
+- [x] Make appointment transitions compare-and-set safe and serialize conflicting handover slots.
+- [x] Make refresh-token rotation single-use under concurrent requests.
+- [x] Invalidate existing HTTP and Socket.IO sessions after account status, role, or password changes.
+- [x] Bind Google OAuth requests with one-time state and PKCE.
+- [x] Make OTP consumption one-time under concurrent requests.
+- [x] Proxy private post evidence without exposing raw storage URLs or public IDs.
+- [x] Add migration lock, checksum-drift detection, and explicit apply/failure status.
+- [x] Apply and smoke-test migrations 001-028 on the local development database.
+- [x] Add idempotency keys for matching notifications and mark matches notified only after notification persistence.
+- [ ] Run the updated migration/auth/concurrency suite in CI on the new commit.
+- [ ] Add one live browser-to-API-to-MySQL core journey; current Playwright business journeys remain API-mocked.
+- [ ] Generalize the matching notification safeguard into a transactional outbox for all critical side effects.
 
 ## Deep Review Follow-up - 2026-07-15
 
@@ -28,7 +63,7 @@ Scope note: the current MVP should be demoed as web + Node backend with Google V
 - [x] Preserve Lecturer selection in the legacy OTP verification endpoint.
 - [x] Avoid incrementing view count for missing or unauthorized hidden posts.
 - [x] Batch-load match suggestions and prefilter a bounded candidate set using category/location/time signals.
-- [x] Run migrations 001-025 and database-backed E2E on isolated MySQL 8 in CI before applying new migrations to the shared demo database.
+- [x] Run migrations 001-025 and database-backed E2E on isolated MySQL 8 in the prior CI baseline; migrations 026-028 pass locally and await CI evidence on the new commit.
 - [x] Add optional Redis-backed distributed rate limits and Socket.IO adapter while retaining a local single-process fallback.
 - [x] Add structured request logs, request IDs, liveness/readiness, matching queue health and protected Prometheus-format metrics.
 - [x] Add CI performance smoke with P50/P95/P99/error-rate artifact and Redis-backed runtime hardening smoke.

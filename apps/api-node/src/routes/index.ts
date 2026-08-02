@@ -13,6 +13,8 @@ import { configRoutes } from "./config.routes.js";
 import { docsRoutes } from "./docs.routes.js";
 import { categoryRoutes, handoverPointRoutes, locationRoutes } from "./lookup.routes.js";
 import { postRoutes, searchRoutes } from "./post.routes.js";
+import { radarRoutes } from "./radar.routes.js";
+import { visualHuntRoutes } from "./visual-hunt.routes.js";
 
 export const apiRoutes = Router();
 
@@ -46,6 +48,8 @@ apiRoutes.get("/metrics", (request, response) => {
 });
 
 apiRoutes.use("/auth", authRoutes);
+apiRoutes.use("/admin/radar", radarRoutes);
+apiRoutes.use("/admin/visual-hunt", visualHuntRoutes);
 apiRoutes.use("/admin", adminRoutes);
 apiRoutes.use("/appointments", appointmentRoutes);
 apiRoutes.use("/claims", claimRoutes);

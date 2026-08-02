@@ -421,12 +421,6 @@ async function notifyHighConfidenceMatch(
     return;
   }
 
-  const claimedNotification = await postRepository.markMatchNotified(match.id);
-  if (!claimedNotification) {
-    match.isNotified = true;
-    return;
-  }
-
   if (options.autoMarkMatchedEnabled) {
     await postRepository.markPairMatched(match.lostPostId, match.foundPostId);
   }
@@ -442,7 +436,8 @@ async function notifyHighConfidenceMatch(
       title: "Có vật nhặt được giống bài mất đồ của bạn",
       body: `"${foundPost.title}" giống ${scoreText} với bài "${lostPost.title}". Hãy kiểm tra thông tin trước khi gửi yêu cầu nhận đồ.`,
       entityType: "POST",
-      entityId: foundPost.id
+      entityId: foundPost.id,
+      dedupeKey: `match:${match.id}:lost-owner`
     },
     {
       userId: foundPost.userId,
@@ -450,10 +445,12 @@ async function notifyHighConfidenceMatch(
       title: "Có bài mất đồ mới giống vật bạn đã đăng",
       body: `"${lostPost.title}" giống ${scoreText} với bài "${foundPost.title}". Kết quả chỉ là gợi ý để đối chiếu.`,
       entityType: "POST",
-      entityId: lostPost.id
+      entityId: lostPost.id,
+      dedupeKey: `match:${match.id}:found-owner`
     }
   ]);
 
+  await postRepository.markMatchNotified(match.id);
   match.isNotified = true;
 }
 

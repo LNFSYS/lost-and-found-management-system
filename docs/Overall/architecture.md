@@ -1,6 +1,6 @@
 # FPTU Lost & Found System Architecture
 
-Last updated: 2026-07-19
+Last updated: 2026-07-27
 
 ## Goal
 
@@ -158,6 +158,14 @@ All Node API responses use `{ success, data?, error?, message? }`.
 | `023_one_accepted_claim_per_post.sql` | Enforce one accepted claim for each FOUND post |
 | `024_one_active_appointment_per_claim.sql` | Enforce one active appointment for each accepted claim |
 | `025_matching_candidate_prefilter.sql` | Add bounded matching candidate settings and supporting index |
+| `026_user_session_version.sql` | Add per-user session version so role, status and password changes invalidate existing access tokens |
+| `027_notification_idempotency.sql` | Add optional notification dedupe keys for retry-safe matching notifications |
+| `028_operational_guard_indexes.sql` | Add claim and appointment guard indexes used by warehouse lifecycle checks |
+| `029_ai_verification_questions.sql` | Add private item-specific questions and claim answer records without plaintext expected answers |
+| `030_campus_event_radar.sql` | Add sourced campus events, aggregate anomaly alerts and Radar audit logs |
+| `031_ai_feature_flags.sql` | Add independent public kill switches for verification questions, Radar and Visual Hunt |
+| `032_ai_feedback_and_question_options.sql` | Add multiple-choice metadata, version-pinned claim assignments and Visual Hunt feedback |
+| `033_ai_operational_thresholds.sql` | Add bounded Admin-editable Radar and Visual Hunt candidate thresholds |
 
 Run migrations with:
 
@@ -171,13 +179,16 @@ Check database connectivity before migrations or server startup with:
 npm run check:db
 ```
 
-The migration runner creates the configured database if needed and records applied files in `schema_migrations`.
+The migration runner creates the configured database if needed, takes a MySQL named lock, records a SHA-256 checksum and explicit `APPLYING/APPLIED/FAILED` status in `schema_migrations`, and stops on checksum drift or a partial DDL failure that requires operator review.
 
 Security and integrity notes:
 
 - The Node API uses Helmet and route-level rate limiting for sensitive auth/write/upload flows. Rate limits use Redis when available and fall back to process-local buckets for single-instance development. `REDIS_REQUIRED=true` turns Redis failure into a startup/readiness failure for scaled deployments; its local default is `false`.
 - API CORS is restricted to `FRONTEND_URL` and comma-separated `SOCKET_CORS_ORIGIN`, with localhost-style origins allowed only outside production.
-- Web refresh tokens use an `httpOnly`, `SameSite=Lax` cookie; the short-lived access token is kept in web memory and restored through token rotation after reload. Mobile/API clients may continue sending refresh tokens in the request body.
+- Web refresh tokens use an `httpOnly`, `SameSite=Lax` cookie; the short-lived access token is kept in web memory and restored through token rotation after reload. Rotation consumes a refresh token once inside a transaction, so concurrent replay has one winner. Mobile/API clients may continue sending refresh tokens in the request body.
+- Access tokens carry the user's `session_version`. HTTP middleware and Socket.IO re-check the active account and current version; password reset and Admin role/status changes increment the version and revoke refresh tokens.
+- Google OAuth authorization uses a one-time state value and PKCE S256. State/verifier data uses Redis when configured and a bounded TTL store for single-process development; the browser binding cookie is `HttpOnly`.
+- Registration and password-reset OTPs are consumed with a conditional one-time update so concurrent requests cannot reuse one valid code.
 - Password and LOST-post secret verification values are stored with bcrypt; default salt rounds are 12.
 - Password reset revokes all active refresh tokens for that user.
 - A user can submit only one claim per post, enforced by both service validation and a database unique key.
@@ -206,6 +217,18 @@ Post item image upload sends each Cloudinary `secure_url` through Google Vision 
 
 Post create/update/media changes enqueue a MySQL-backed matching job. A Node worker claims jobs in batches, retries failures with backoff, and writes materialized match results; suggestion polling only reads saved results. Candidate IDs are bounded by category/location/time before tag aggregation, so OCR/image tags are loaded only for the selected candidate set. The engine builds TF-IDF vectors from normalized title, description, Vision/image tags and OCR text, then combines text, category, location, time, image-tag and OCR/serial-like scores. Config keys define score tiers: weak candidate, user suggestion, notification, and high-confidence advisory. Explanation details include matched tokens, image/OCR terms, location reason, time difference and score caps/penalties. High scores notify users, but never approve ownership or return an item automatically. Automatic `MATCHED` status changes are disabled by default.
 
+### AI-assisted operational tools
+
+These tools are Node-owned extensions of the modular monolith and share the same authorization, audit, configuration and MySQL boundaries. They are not separate production AI microservices.
+
+| Tool | Actual implementation | Guardrails and current limit |
+| --- | --- | --- |
+| Verification questions | Deterministic item/category/OCR-aware templates; FOUND owner or Staff creates/approves a question; bcrypt stores the expected answer; a versioned assignment pins it to each claim | Advisory reviewer confidence only; no claimant correctness oracle; five attempts; acceptance is blocked while a required assigned answer is missing; answer writes lock and recheck the claim state in one transaction |
+| Campus Lost Event Radar | Statistical 60-minute sliding windows with a 15-minute step, 28-day area/category baseline, Admin-editable bounded thresholds, dedupe and cooldown; alert scope can return public LOST summaries | LOST aggregates only; Admin events require a declared source; no automatic weather/event causation; no contact, evidence or personal OCR enters clustering/results |
+| Visual Hunt | Explicit camera/image/video-frame/batch capture sent to a rate-limited Node endpoint; Google Vision labels, objects, OCR, color and saved post metadata rank LOST candidates above a bounded Admin-editable threshold | No continuous video upload, no face recognition, no raw scan persistence, no exact-instance claim, no automatic post/claim state transition |
+
+Each tool has an independent public config flag: `ai.verification_questions_enabled`, `ai.campus_radar_enabled`, and `ai.visual_hunt_enabled`. Backend middleware enforces the flag even if a client calls the endpoint directly. Radar and Visual Hunt numeric thresholds are bounded consistently during Admin update and rollback, while runtime clamping remains defense in depth. Radar alerts and Visual Hunt feedback expose aggregate operational metrics; provider/runtime metrics remain meaningful only in an environment with a configured `GOOGLE_VISION_API_KEY`.
+
 Warehouse retention now uses policy defaults from config: general items 60 days, electronics/high-value items 90 days, documents/cards 120 days, and perishable/hygiene/unsafe items 1-7 days depending on configuration. Disposal/donation/transfer is blocked while related claims or return appointments are pending/accepted, and document/card items must be transferred rather than donated or disposed.
 
 ## Java Admin Service Foundation
@@ -220,8 +243,9 @@ Because Node currently also implements several demo-critical APIs, including adm
 | --- | --- |
 | Identity | User, Role, Session, OTP, ActivityLog |
 | Posts | LostFoundPost, Category, CampusLocation, PostMedia, SecretVerification |
-| Matching | MatchResult, MatchScoreBreakdown, AiTag, OcrText |
-| Claims | Claim, ClaimEvidence, ClaimDecision, ClaimStateLog |
+| Matching | MatchResult, MatchScoreBreakdown, AiTag, OcrText, MatchingJob |
+| AI Operations | VerificationQuestion, ClaimVerificationAssignment, RadarEvent, RadarAlert, VisualHuntFeedback |
+| Claims | Claim, ClaimEvidence, ClaimDecision, ClaimStateLog, VerificationAnswer |
 | Handover | HandoverPoint, WarehouseItem, WarehouseCapacity, ExpiredItemDisposition, StorageLog, ItemCustodyStatus |
 | Appointment | ReturnAppointment, AppointmentProof, AppointmentParticipant, Reminder |
 | Communication | ChatRoom, ChatMessage, Notification |
@@ -241,7 +265,7 @@ Because Node currently also implements several demo-critical APIs, including adm
 
 ## Integration Flow
 
-1. User creates LOST or FOUND post from web/mobile.
+1. User creates LOST or FOUND post from the core web client; Expo remains an optional prototype client.
 2. Node API validates input, stores post/media and enqueues matching for the affected post.
 3. The matching worker prefilters a bounded opposite-post candidate set, analyzes saved text/OCR/tag metadata, and materializes match results; user suggestion reads are batch-loaded.
 4. In-app notifications are persisted for likely owners/finders when score passes the notification threshold.

@@ -10,6 +10,7 @@ import {
   Key,
   MapPin,
   MoreVertical,
+  Radar,
   Search,
   ShieldCheck,
   Upload,
@@ -35,6 +36,10 @@ import {
   type BoardPost,
   type PostStatus,
   type PostType,
+  type RadarAlert,
+  type RadarEvent,
+  type RadarEventType,
+  type RadarSourceType,
   type ReturnFeedback
 } from "../../services/api";
 import { statusLabels, warehouseStatuses } from "../../app/constants";
@@ -57,6 +62,15 @@ import {
   Metric,
   primaryAdminRole
 } from "../../app/AdminWidgets";
+import {
+  CampusEventRadarPanel,
+  VisualHuntPage,
+  type CampusRadarAlert,
+  type CampusRadarFilters,
+  type CampusRadarZone,
+  type VisualHuntAnalysisInput,
+  type VisualHuntResult
+} from "../ai-tools";
 
 export function AdminDashboardView(props: {
   activeTab: AdminTab;
@@ -188,6 +202,18 @@ export function AdminDashboardView(props: {
           onSelectPost={props.onSelectPost}
         />
       )}
+      {props.activeTab === "visual-hunt" && (
+        <VisualHuntOperationsPanel onSelectPost={props.onSelectPost} />
+      )}
+      {props.activeTab === "radar" && (
+        <RadarOperationsPanel
+          areas={props.areas}
+          buildings={props.buildings}
+          categories={props.categories}
+          isAdmin={props.isAdmin}
+          onSelectPost={props.onSelectPost}
+        />
+      )}
       {props.activeTab === "users" && props.isAdmin && (
         <AdminUsersPanel users={props.users} pending={adminMutation.isPending} onRun={runAdminAction} />
       )}
@@ -214,12 +240,284 @@ export function AdminDashboardView(props: {
   );
 }
 
+function VisualHuntOperationsPanel(props: { onSelectPost: (postId: string) => void }) {
+  async function analyze(input: VisualHuntAnalysisInput): Promise<readonly VisualHuntResult[]> {
+    const responses = [];
+    for (const image of input.images) {
+      responses.push(await api.adminVisualHunt(image, { targetType: "LOST", maxResults: 12 }));
+    }
+
+    const merged = new Map<string, VisualHuntResult>();
+    responses.flatMap((response) => response.results).forEach((result) => {
+      const reasons = [
+        result.signals.visual !== null ? `Hình ảnh ${Math.round(result.signals.visual * 100)}%` : null,
+        result.signals.ocr !== null ? `OCR ${Math.round(result.signals.ocr * 100)}%` : null,
+        result.matchMode === "FILTER_ONLY" ? "Kết quả lọc dự phòng" : null
+      ].filter((reason): reason is string => Boolean(reason));
+      const mapped: VisualHuntResult = {
+        id: result.postId,
+        title: result.title,
+        type: result.type,
+        confidence: result.similarityScore ?? 0,
+        location: result.building?.name ?? result.area?.name ?? null,
+        reasons
+      };
+      const current = merged.get(result.postId);
+      if (!current || mapped.confidence > current.confidence) merged.set(result.postId, mapped);
+    });
+
+    return [...merged.values()]
+      .sort((left, right) => right.confidence - left.confidence)
+      .slice(0, 20);
+  }
+
+  return (
+    <VisualHuntPage
+      advisoryText="Kết quả được xếp hạng từ metadata Google Vision/OCR và chỉ hỗ trợ nhân viên tìm kiếm. Luôn kiểm tra bằng chứng trước khi bàn giao."
+      onAnalyze={analyze}
+      onCandidateDecision={async (result, decision, source) => {
+        await api.adminVisualHuntFeedback({
+          postId: result.id,
+          decision,
+          similarityScore: result.confidence,
+          source
+        });
+      }}
+      onOpenResult={(result) => props.onSelectPost(result.id)}
+    />
+  );
+}
+
+const radarPositions = [
+  { x: 76, y: 43 },
+  { x: 54, y: 64 },
+  { x: 73, y: 75 },
+  { x: 36, y: 35 },
+  { x: 31, y: 59 },
+  { x: 45, y: 25 },
+  { x: 43, y: 78 },
+  { x: 22, y: 26 }
+];
+
+function radarDateTimeDefault(hoursOffset: number) {
+  const date = new Date(Date.now() + hoursOffset * 60 * 60 * 1000);
+  date.setMinutes(Math.floor(date.getMinutes() / 15) * 15, 0, 0);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+function RadarOperationsPanel(props: {
+  areas: AdminArea[];
+  buildings: AdminBuilding[];
+  categories: AdminCategory[];
+  isAdmin: boolean;
+  onSelectPost: (postId: string) => void;
+}) {
+  const queryClient = useQueryClient();
+  const [filters, setFilters] = useState<CampusRadarFilters>({ type: "LOST", period: "7D" });
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+  const [eventAreaId, setEventAreaId] = useState("");
+  const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
+  const eventsQuery = useQuery({ queryKey: ["admin-radar-events"], queryFn: () => api.adminRadarEvents() });
+  const alertsQuery = useQuery({ queryKey: ["admin-radar-alerts"], queryFn: () => api.adminRadarAlerts({ limit: 100 }) });
+  const relatedPostsQuery = useQuery({
+    queryKey: ["admin-radar-related-posts", selectedAlertId],
+    queryFn: () => api.adminRadarRelatedPosts(selectedAlertId!, 50),
+    enabled: Boolean(selectedAlertId)
+  });
+  const mutation = useMutation({
+    mutationFn: (task: () => Promise<unknown>) => task(),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["admin-radar-events"] }),
+        queryClient.invalidateQueries({ queryKey: ["admin-radar-alerts"] })
+      ]);
+    }
+  });
+
+  const periodMs = filters.period === "24H" ? 24 * 60 * 60 * 1000 : filters.period === "7D" ? 7 * 24 * 60 * 60 * 1000 : 30 * 24 * 60 * 60 * 1000;
+  const events = eventsQuery.data?.events ?? [];
+  const eventById = new Map(events.map((event) => [event.id, event]));
+  const filteredAlerts = (alertsQuery.data?.alerts ?? []).filter((alert) => {
+    if (alert.status === "DISMISSED") return false;
+    if (Date.now() - new Date(alert.lastDetectedAt).getTime() > periodMs) return false;
+    if (filters.categoryId && alert.category?.id !== filters.categoryId) return false;
+    const event = eventById.get(alert.eventId);
+    const zoneId = event?.building?.id ?? event?.area?.id ?? "campus";
+    return !filters.zoneId || filters.zoneId === zoneId;
+  });
+  const zoneBuckets = new Map<string, CampusRadarZone>();
+  const allCategoryZoneIds = new Set(
+    filteredAlerts
+      .filter((alert) => alert.scope === "ALL_CATEGORIES")
+      .map((alert) => {
+        const event = eventById.get(alert.eventId);
+        return event?.building?.id ?? event?.area?.id ?? "campus";
+      })
+  );
+  filteredAlerts.forEach((alert) => {
+    const event = eventById.get(alert.eventId);
+    const id = event?.building?.id ?? event?.area?.id ?? "campus";
+    const index = zoneBuckets.size % radarPositions.length;
+    const existing = zoneBuckets.get(id) ?? {
+      id,
+      name: event?.building?.name ?? event?.area?.name ?? "Toàn campus",
+      mapPosition: radarPositions[index],
+      lostCount: 0,
+      foundCount: 0,
+      latestEventAt: alert.lastDetectedAt,
+      summary: "Cụm LOST bất thường cần nhân viên xem xét"
+    };
+    if (filters.categoryId || alert.scope === "ALL_CATEGORIES") {
+      existing.lostCount += alert.observedCount;
+    } else if (!allCategoryZoneIds.has(id)) {
+      existing.lostCount = Math.max(existing.lostCount, alert.observedCount);
+    }
+    if (new Date(alert.lastDetectedAt) > new Date(existing.latestEventAt ?? 0)) existing.latestEventAt = alert.lastDetectedAt;
+    zoneBuckets.set(id, existing);
+  });
+  const zones = [...zoneBuckets.values()];
+  const alerts: CampusRadarAlert[] = filteredAlerts.map((alert) => {
+    const event = eventById.get(alert.eventId);
+    return {
+      id: alert.id,
+      title: `${alert.observedCount} báo mất quanh ${event?.building?.name ?? event?.area?.name ?? "campus"}`,
+      description: `${alert.category?.name ?? "Tất cả danh mục"}: cao hơn mức nền ${alert.observedRatio.toFixed(1)} lần. Đây là cảnh báo thống kê cần người phụ trách kiểm tra.`,
+      severity: alert.severity === "CRITICAL" ? "URGENT" : alert.severity === "WARNING" ? "ATTENTION" : "INFO",
+      createdAt: alert.lastDetectedAt,
+      zoneId: event?.building?.id ?? event?.area?.id ?? "campus",
+      acknowledged: alert.status !== "OPEN"
+    };
+  });
+
+  function submitEvent(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    mutation.mutate(() => api.adminCreateRadarEvent({
+      eventType: formText(data, "eventType") as RadarEventType,
+      sourceType: formText(data, "sourceType") as RadarSourceType,
+      sourceReference: formText(data, "sourceReference"),
+      areaId: formNullable(data, "areaId"),
+      buildingId: formNullable(data, "buildingId"),
+      startsAt: new Date(formText(data, "startsAt")).toISOString(),
+      endsAt: new Date(formText(data, "endsAt")).toISOString()
+    }));
+  }
+
+  const error = eventsQuery.error instanceof Error
+    ? eventsQuery.error.message
+    : alertsQuery.error instanceof Error
+      ? alertsQuery.error.message
+      : mutation.error instanceof Error ? mutation.error.message : null;
+
+  return (
+    <section className="admin-grid radar-operations">
+      <div className="wide-panel">
+        <CampusEventRadarPanel
+          alerts={alerts}
+          campusMapImageUrl="/fpt-campus-map.jpg"
+          categories={props.categories}
+          error={error}
+          filters={filters}
+          loading={eventsQuery.isLoading || alertsQuery.isLoading}
+          selectedZoneId={selectedZoneId}
+          zones={zones}
+          onAcknowledgeAlert={(alert) => mutation.mutate(() => api.adminUpdateRadarAlert(alert.id, "ACKNOWLEDGED", "MONITORING"))}
+          onOpenAlert={(alert) => setSelectedAlertId(alert.id)}
+          onDismissAlert={(alert) => mutation.mutate(() => api.adminUpdateRadarAlert(alert.id, "DISMISSED", "FALSE_POSITIVE"))}
+          onFiltersChange={setFilters}
+          onRetry={() => {
+            void eventsQuery.refetch();
+            void alertsQuery.refetch();
+          }}
+          onSelectZone={(zone) => {
+            setSelectedZoneId(zone.id);
+            setFilters((current) => ({ ...current, zoneId: zone.id }));
+          }}
+        />
+        {selectedAlertId && (
+          <section className="radar-related-posts" aria-labelledby="radar-related-posts-title">
+            <div className="panel-heading">
+              <div><span className="eyebrow">Phạm vi cảnh báo</span><h3 id="radar-related-posts-title">Bài LOST liên quan</h3></div>
+              <button className="secondary-button" type="button" onClick={() => setSelectedAlertId(null)}>Đóng</button>
+            </div>
+            {relatedPostsQuery.isLoading && <div className="notice">Đang tải bài liên quan...</div>}
+            {relatedPostsQuery.error instanceof Error && <div className="notice error">{relatedPostsQuery.error.message}</div>}
+            <div className="admin-list">
+              {(relatedPostsQuery.data?.posts ?? []).map((post) => (
+                <button className="admin-list-row" key={post.id} type="button" onClick={() => props.onSelectPost(post.id)}>
+                  <div><strong>{post.title}</strong><span>{post.category?.name ?? "Chưa phân loại"}</span><small>{post.building?.name ?? post.area?.name ?? "Toàn campus"} · {formatDate(post.lostFoundAt)}</small></div>
+                </button>
+              ))}
+              {!relatedPostsQuery.isLoading && (relatedPostsQuery.data?.posts.length ?? 0) === 0 && <div className="notice">Không còn bài công khai trong phạm vi cảnh báo này.</div>}
+            </div>
+          </section>
+        )}
+      </div>
+
+      {props.isAdmin && (
+        <form className="admin-panel admin-form" onSubmit={submitEvent}>
+          <div className="panel-heading">
+            <div><span className="eyebrow">Nguồn sự kiện</span><h2>Tạo mốc phân tích</h2></div>
+            <Radar size={18} />
+          </div>
+          <label>Loại sự kiện
+            <select name="eventType" defaultValue="ACADEMIC">
+              <option value="ACADEMIC">Học tập/thi cử</option><option value="SPORTS">Thể thao</option>
+              <option value="CULTURAL">Văn hóa/sự kiện</option><option value="CAMPUS_OPERATIONS">Vận hành campus</option>
+              <option value="WEATHER">Thời tiết</option><option value="OTHER">Khác</option>
+            </select>
+          </label>
+          <label>Nguồn xác thực
+            <select name="sourceType" defaultValue="OFFICIAL_CALENDAR">
+              <option value="OFFICIAL_CALENDAR">Lịch chính thức</option><option value="CAMPUS_NOTICE">Thông báo campus</option>
+              <option value="SECURITY_LOG">Nhật ký an ninh</option><option value="WEATHER_BULLETIN">Bản tin thời tiết</option>
+            </select>
+          </label>
+          <label>Mã/URL nguồn<input name="sourceReference" required minLength={3} maxLength={255} placeholder="calendar-final-exam-2026" /></label>
+          <label>Khu vực
+            <select name="areaId" value={eventAreaId} onChange={(event) => setEventAreaId(event.target.value)}><option value="">Toàn campus</option>{props.areas.filter((area) => area.isActive).map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}</select>
+          </label>
+          <label>Địa điểm cụ thể
+            <select name="buildingId" defaultValue="" disabled={!eventAreaId}><option value="">Không giới hạn</option>{props.buildings.filter((building) => building.isActive && building.areaId === eventAreaId).map((building) => <option key={building.id} value={building.id}>{building.name}</option>)}</select>
+          </label>
+          <div className="form-grid">
+            <label>Bắt đầu<input name="startsAt" type="datetime-local" step={900} required defaultValue={radarDateTimeDefault(-2)} /></label>
+            <label>Kết thúc<input name="endsAt" type="datetime-local" step={900} required defaultValue={radarDateTimeDefault(0)} /></label>
+          </div>
+          <button className="primary-button" disabled={mutation.isPending} type="submit">Tạo mốc radar</button>
+        </form>
+      )}
+
+      <article className="admin-panel">
+        <div className="panel-heading"><div><span className="eyebrow">Phân tích thủ công</span><h2>Mốc sự kiện gần đây</h2></div><span>{events.length}</span></div>
+        <div className="admin-list">
+          {events.slice(0, 12).map((event: RadarEvent) => (
+            <div key={event.id} className="admin-list-row">
+              <div><strong>{event.eventType}</strong><span>{event.building?.name ?? event.area?.name ?? "Toàn campus"}</span><small>{formatDate(event.startsAt)} - {event.source.type}</small></div>
+              {props.isAdmin && event.status === "ACTIVE" && <button className="secondary-button" disabled={mutation.isPending} type="button" onClick={() => mutation.mutate(() => api.adminAnalyzeRadarEvent(event.id))}>Phân tích</button>}
+            </div>
+          ))}
+          {!eventsQuery.isLoading && events.length === 0 && <div className="notice">Chưa có mốc sự kiện chính thức để phân tích.</div>}
+        </div>
+      </article>
+      <div className="notice wide-panel">Radar chỉ phân tích số lượng LOST đã tổng hợp theo khu vực và thời gian. Hệ thống không theo dõi thiết bị, không suy luận cá nhân và không tự kết luận nguyên nhân.</div>
+    </section>
+  );
+}
+
 function AdminConfigPanel(props: {
   entries: AdminConfigEntry[];
   history: AdminConfigHistoryEntry[];
   pending: boolean;
   onRun: AdminActionRunner;
 }) {
+  const numericBounds: Record<string, { min: number; max: number; step: number }> = {
+    "ai.radar.minimum_observed_count": { min: 3, max: 50, step: 1 },
+    "ai.radar.minimum_z_score": { min: 1, max: 10, step: 0.1 },
+    "ai.radar.minimum_observed_ratio": { min: 1.1, max: 10, step: 0.1 },
+    "ai.visual_hunt.candidate_threshold": { min: 0, max: 1, step: 0.01 }
+  };
   const importantKeys = new Set([
     "post.expiration_days",
     "post.max_images",
@@ -231,6 +529,13 @@ function AdminConfigPanel(props: {
     "matching.weight_category",
     "matching.weight_location",
     "matching.weight_time",
+    "ai.verification_questions_enabled",
+    "ai.campus_radar_enabled",
+    "ai.visual_hunt_enabled",
+    "ai.radar.minimum_observed_count",
+    "ai.radar.minimum_z_score",
+    "ai.radar.minimum_observed_ratio",
+    "ai.visual_hunt.candidate_threshold",
     "warehouse.capacity_total",
     "warehouse.capacity_warning_ratio",
     "email.policy"
@@ -268,7 +573,9 @@ function AdminConfigPanel(props: {
           <Key size={18} />
         </div>
         <div className="admin-config-list">
-          {sortedEntries.map((entry) => (
+          {sortedEntries.map((entry) => {
+            const bounds = numericBounds[entry.key];
+            return (
             <form
               className="admin-config-row"
               key={entry.key}
@@ -292,7 +599,9 @@ function AdminConfigPanel(props: {
                 <input
                   name="value"
                   type={entry.valueType === "INTEGER" || entry.valueType === "FLOAT" ? "number" : "text"}
-                  step={entry.valueType === "FLOAT" ? "0.01" : "1"}
+                  min={bounds?.min}
+                  max={bounds?.max}
+                  step={bounds?.step ?? (entry.valueType === "FLOAT" ? "0.01" : "1")}
                   defaultValue={entry.rawValue}
                 />
               )}
@@ -300,7 +609,8 @@ function AdminConfigPanel(props: {
                 Lưu
               </button>
             </form>
-          ))}
+            );
+          })}
         {sortedEntries.length === 0 && <div className="notice">Chưa có cấu hình hệ thống.</div>}
         </div>
       </article>

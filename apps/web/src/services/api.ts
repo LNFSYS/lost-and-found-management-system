@@ -239,6 +239,78 @@ export interface AdminConfigHistoryEntry {
   changedAt: string;
 }
 
+export type RadarEventType = "ACADEMIC" | "SPORTS" | "CULTURAL" | "CAMPUS_OPERATIONS" | "WEATHER" | "OTHER";
+export type RadarSourceType = "OFFICIAL_CALENDAR" | "CAMPUS_NOTICE" | "SECURITY_LOG" | "WEATHER_BULLETIN";
+export type RadarAlertStatus = "OPEN" | "ACKNOWLEDGED" | "RESOLVED" | "DISMISSED";
+export type RadarAlertSeverity = "WATCH" | "WARNING" | "CRITICAL";
+
+export interface RadarEvent {
+  id: string;
+  eventType: RadarEventType;
+  source: { type: RadarSourceType; reference: string };
+  area: { id: string; name: string | null } | null;
+  building: { id: string; name: string | null } | null;
+  startsAt: string;
+  endsAt: string;
+  status: "ACTIVE" | "CANCELLED";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RadarAlert {
+  id: string;
+  eventId: string;
+  category: { id: string; name: string | null } | null;
+  scope: "CATEGORY" | "ALL_CATEGORIES";
+  window: { startsAt: string; endsAt: string; minutes: number; stepMinutes: number };
+  baseline: { startsAt: string; endsAt: string; windowCount: number; expectedMean: number; standardDeviation: number };
+  observedCount: number;
+  zScore: number;
+  observedRatio: number;
+  severity: RadarAlertSeverity;
+  status: RadarAlertStatus;
+  occurrenceCount: number;
+  emissionCount: number;
+  lastDetectedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RadarRelatedPost {
+  id: string;
+  type: "LOST";
+  status: PostStatus;
+  title: string;
+  lostFoundAt: string;
+  createdAt: string;
+  category: { id: string; name: string | null } | null;
+  area: { id: string; name: string | null } | null;
+  building: { id: string; name: string | null } | null;
+}
+
+export interface VisualHuntApiResult {
+  postId: string;
+  type: PostType;
+  status: "OPEN" | "MATCHED";
+  title: string;
+  category: { id: string; name: string | null } | null;
+  area: { id: string; name: string | null } | null;
+  building: { id: string; name: string | null } | null;
+  lostFoundAt: string | null;
+  createdAt: string;
+  similarityScore: number | null;
+  signals: { visual: number | null; ocr: number | null };
+  matchMode: "VISUAL_METADATA" | "FILTER_ONLY";
+}
+
+export interface VisualHuntApiResponse {
+  providerAvailable: boolean;
+  fallback: { used: boolean; mode: "NONE" | "FILTER_ONLY"; reason: string | null };
+  safetyStatus: "CLEAR" | "BLOCKED" | "NOT_CHECKED";
+  resultCount: number;
+  results: VisualHuntApiResult[];
+}
+
 export interface BoardPost {
   id: string;
   userId: string;
@@ -306,10 +378,11 @@ export interface PostDetail {
   post: BoardPost;
   media: Array<{
     id: string;
-    secureUrl: string;
+    secureUrl?: string;
     thumbnailUrl?: string | null;
     optimizedUrl?: string | null;
-    publicId: string;
+    publicId?: string;
+    imagePath?: string;
     mediaKind?: "ITEM" | "EVIDENCE";
     createdAt: string;
   }>;
@@ -347,6 +420,8 @@ export interface ClaimVerification {
     evidenceScore: number;
     privateSignalScore?: number;
     consistencyScore?: number;
+    privateQuestionScore?: number | null;
+    privateQuestionCompleteness?: number;
   };
   signals: {
     hasClaimantMatchedLostPost: boolean;
@@ -355,7 +430,34 @@ export interface ClaimVerification {
     hasPrivateSignal?: boolean;
     hasApproximateLostTime: boolean;
     hasApproximateLocation: boolean;
+    hasVerificationQuestions?: boolean;
   };
+}
+
+export type VerificationQuestionType = "TEXT" | "MASKED_SERIAL" | "MULTIPLE_CHOICE" | "VISUAL_DETAIL";
+
+export interface VerificationQuestionSuggestion {
+  prompt: string;
+  questionType: VerificationQuestionType;
+  sourceSignal: string;
+  privacyLevel: "PRIVATE" | "HIGHLY_PRIVATE";
+  reason: string;
+}
+
+export interface VerificationQuestion {
+  id: string;
+  postId: string;
+  prompt: string;
+  questionType: VerificationQuestionType;
+  options?: string[] | null;
+  sourceSignal: string;
+  weight: number;
+  privacyLevel: "PRIVATE" | "HIGHLY_PRIVATE";
+  status: "DRAFT" | "APPROVED" | "DISABLED";
+  answered: boolean;
+  answerMatches?: boolean | null;
+  approvedAt: string | null;
+  createdAt: string;
 }
 
 export interface PostClaimSummary {
@@ -446,7 +548,7 @@ export function clearTokens() {
   localStorage.removeItem(LEGACY_REFRESH_TOKEN_KEY);
 }
 
-function buildQuery(params: ListPostsParams) {
+function buildQuery(params: object) {
   const searchParams = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (Array.isArray(value)) {
@@ -587,6 +689,35 @@ export const api = {
   postClaims(id: string) {
     return request<{ claims: PostClaimSummary[] }>(`/posts/${id}/claims`);
   },
+  suggestVerificationQuestions(postId: string) {
+    return request<{ suggestions: VerificationQuestionSuggestion[] }>(`/posts/${postId}/verification-questions/suggest`, {
+      method: "POST"
+    });
+  },
+  postVerificationQuestions(postId: string) {
+    return request<{ questions: VerificationQuestion[] }>(`/posts/${postId}/verification-questions`);
+  },
+  createVerificationQuestion(postId: string, input: {
+    prompt: string;
+    questionType: VerificationQuestionType;
+    sourceSignal: string;
+    expectedAnswer: string;
+    options?: string[];
+    weight: number;
+    privacyLevel: "PRIVATE" | "HIGHLY_PRIVATE";
+    approved: boolean;
+  }) {
+    return request<{ question: VerificationQuestion }>(`/posts/${postId}/verification-questions`, {
+      method: "POST",
+      body: JSON.stringify(input)
+    });
+  },
+  updateVerificationQuestionStatus(postId: string, questionId: string, status: "APPROVED" | "DISABLED") {
+    return request<{ question: VerificationQuestion }>(`/posts/${postId}/verification-questions/${questionId}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status })
+    });
+  },
   createPost(input: Record<string, unknown>) {
     return request<{ post: BoardPost; matchSuggestions: PostMatchSuggestion[] }>("/posts", {
       method: "POST",
@@ -646,6 +777,9 @@ export const api = {
   claimEvidenceImage(claimId: string, evidenceId: string) {
     return fetchAuthorizedBlobUrl(`/claims/${claimId}/evidence/${evidenceId}/image`);
   },
+  postEvidenceImage(postId: string, mediaId: string) {
+    return fetchAuthorizedBlobUrl(`/posts/${postId}/media/${mediaId}/image`);
+  },
   uploadClaimChatImage(id: string, file: File) {
     const data = new FormData();
     data.append("image", file);
@@ -659,6 +793,15 @@ export const api = {
   },
   claimVerification(id: string) {
     return request<{ verification: ClaimVerification }>(`/claims/${id}/verification`);
+  },
+  claimVerificationQuestions(id: string) {
+    return request<{ questions: VerificationQuestion[] }>(`/claims/${id}/verification-questions`);
+  },
+  answerClaimVerificationQuestion(claimId: string, questionId: string, answer: string) {
+    return request<{ submitted: boolean }>(`/claims/${claimId}/verification-questions/${questionId}/answer`, {
+      method: "POST",
+      body: JSON.stringify({ answer })
+    });
   },
   requestClaimMoreInfo(id: string, message: string) {
     return request<ClaimDetail>(`/claims/${id}/more-info`, {
@@ -1051,6 +1194,54 @@ export const api = {
   adminAlertWarehouseCapacity() {
     return request<{ alerted: boolean }>("/admin/warehouse/alert-capacity", {
       method: "POST"
+    });
+  },
+  adminRadarEvents(status?: "ACTIVE" | "CANCELLED") {
+    return request<{ events: RadarEvent[] }>(`/admin/radar/events${status ? `?status=${status}` : ""}`);
+  },
+  adminRadarAlerts(input: { status?: RadarAlertStatus; severity?: RadarAlertSeverity; limit?: number } = {}) {
+    return request<{ alerts: RadarAlert[]; advisory: string }>(`/admin/radar/alerts${buildQuery(input)}`);
+  },
+  adminRadarRelatedPosts(alertId: string, limit = 50) {
+    return request<{ posts: RadarRelatedPost[]; advisory: string }>(`/admin/radar/alerts/${alertId}/posts?limit=${limit}`);
+  },
+  adminCreateRadarEvent(input: {
+    eventType: RadarEventType;
+    sourceType: RadarSourceType;
+    sourceReference: string;
+    areaId?: string | null;
+    buildingId?: string | null;
+    startsAt: string;
+    endsAt: string;
+  }) {
+    return request<{ event: RadarEvent }>("/admin/radar/events", {
+      method: "POST",
+      body: JSON.stringify(input)
+    });
+  },
+  adminAnalyzeRadarEvent(id: string) {
+    return request<{ eventId: string; detectedAlerts: number; emittedAlerts: number; advisory: string }>(`/admin/radar/events/${id}/analyze`, {
+      method: "POST"
+    });
+  },
+  adminUpdateRadarAlert(id: string, status: Exclude<RadarAlertStatus, "OPEN">, reason: "REVIEWED_NO_ACTION" | "MONITORING" | "OPERATIONAL_FOLLOW_UP" | "FALSE_POSITIVE") {
+    return request<{ alert: RadarAlert | null; updated: boolean }>(`/admin/radar/alerts/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status, reason })
+    });
+  },
+  adminVisualHunt(image: File, input: { targetType?: PostType; categoryId?: string; areaId?: string; maxResults?: number } = {}) {
+    const data = new FormData();
+    data.append("image", image);
+    Object.entries(input).forEach(([key, value]) => {
+      if (value !== undefined && value !== "") data.append(key, String(value));
+    });
+    return request<VisualHuntApiResponse>("/admin/visual-hunt", { method: "POST", body: data });
+  },
+  adminVisualHuntFeedback(input: { postId: string; decision: "CANDIDATE" | "NOT_RELEVANT"; similarityScore: number | null; source: "CAMERA" | "IMAGE" | "VIDEO_FRAMES" | "BATCH_IMAGES" }) {
+    return request<{ feedback: { id: string } }>("/admin/visual-hunt/feedback", {
+      method: "POST",
+      body: JSON.stringify(input)
     });
   },
   adminReports() {

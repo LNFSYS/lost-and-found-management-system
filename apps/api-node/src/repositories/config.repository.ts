@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { RowDataPacket } from "mysql2/promise";
 import { dbPool } from "../config/db.js";
+import { assertConfigValueBounds } from "../utils/config-bounds.js";
 import { HttpError } from "../utils/http-error.js";
 
 type ConfigValueType = "STRING" | "INTEGER" | "FLOAT" | "BOOLEAN" | "JSON";
@@ -101,6 +102,30 @@ function mapHistory(row: ConfigHistoryRow) {
 }
 
 export const configRepository = {
+  async numberValue(key: string, fallback: number) {
+    const [rows] = await dbPool.query<ConfigEntryRow[]>(
+      `SELECT config_value, value_type FROM config_entries WHERE config_key = ? LIMIT 1`,
+      [key]
+    );
+    const row = rows[0];
+    if (!row || (row.value_type !== "INTEGER" && row.value_type !== "FLOAT")) return fallback;
+    const value = Number(parseConfigValue(row.config_value, row.value_type));
+    return Number.isFinite(value) ? value : fallback;
+  },
+
+  async booleanValue(key: string) {
+    const [rows] = await dbPool.query<ConfigEntryRow[]>(
+      `SELECT config_value, value_type FROM config_entries WHERE config_key = ? LIMIT 1`,
+      [key]
+    );
+    const row = rows[0];
+    if (!row) return false;
+    if (row.value_type !== "BOOLEAN") {
+      throw new Error(`Config ${key} must be BOOLEAN`);
+    }
+    return Boolean(parseConfigValue(row.config_value, row.value_type));
+  },
+
   async listPublicConfig() {
     const [rows] = await dbPool.query<ConfigEntryRow[]>(
       `
@@ -146,6 +171,7 @@ export const configRepository = {
     }
 
     const serialized = serializeConfigValue(value, current.value_type);
+    assertConfigValueBounds(key, serialized);
     await dbPool.execute(
       `
         UPDATE config_entries
@@ -199,6 +225,7 @@ export const configRepository = {
     if (!current) {
       throw new HttpError(404, "Config entry not found");
     }
+    assertConfigValueBounds(history.config_key, history.old_value);
 
     await dbPool.execute(
       `

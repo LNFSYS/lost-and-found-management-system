@@ -121,6 +121,11 @@ interface MediaOwnerRow extends RowDataPacket {
   public_id: string;
 }
 
+interface MediaAccessRow extends MediaOwnerRow {
+  secure_url: string;
+  media_kind: "ITEM" | "EVIDENCE";
+}
+
 interface ConfigNumberRow extends RowDataPacket {
   config_value: string;
 }
@@ -978,6 +983,21 @@ export const postRepository = {
         LIMIT 1
       `,
       values
+    );
+
+    return rows[0] ?? null;
+  },
+
+  async findMediaAccess(postId: string, mediaId: string) {
+    const [rows] = await dbPool.query<MediaAccessRow[]>(
+      `
+        SELECT pm.id, pm.post_id, p.user_id, pm.public_id, pm.secure_url, pm.media_kind
+        FROM post_media pm
+        INNER JOIN posts p ON p.id = pm.post_id
+        WHERE pm.id = ? AND pm.post_id = ? AND p.deleted_at IS NULL
+        LIMIT 1
+      `,
+      [mediaId, postId]
     );
 
     return rows[0] ?? null;

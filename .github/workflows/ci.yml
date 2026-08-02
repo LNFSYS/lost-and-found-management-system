@@ -154,6 +154,7 @@ jobs:
           }
 
           npm run build:api
+          run_ci_check auth-db-integration env AUTH_DB_INTEGRATION=1 npm run test:api
           npm --workspace apps/api-node run start > /tmp/lnfs-api.log 2>&1 &
           API_PID_1=$!
           API_PORT=3002 npm --workspace apps/api-node run start > /tmp/lnfs-api-2.log 2>&1 &
@@ -174,9 +175,11 @@ jobs:
           run_ci_check e2e-roles npm run e2e:roles
           run_ci_check e2e-warehouse npm run e2e:warehouse
           run_ci_check e2e-claim-race npm run e2e:claim-race
+          run_ci_check e2e-appointment-race npm run e2e:appointment-race
           run_ci_check e2e-media-privacy npm run e2e:media-privacy
           run_ci_check e2e-chat-gating npm run e2e:chat-gating
           run_ci_check e2e-claim-evidence-policy npm run e2e:claim-evidence-policy
+          run_ci_check e2e-verification-questions npm run e2e:verification-questions
           run_ci_check e2e-admin-crud npm run e2e:admin-crud
           run_ci_check e2e-web npm run e2e:web
           PERF_OUTPUT_PATH=/tmp/lnfs-performance.json PERF_REQUESTS=120 PERF_CONCURRENCY=10 PERF_P95_LIMIT_MS=1000 run_ci_check performance-smoke npm run perf:smoke

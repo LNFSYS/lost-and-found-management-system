@@ -49,6 +49,16 @@ export const mediaController = {
     response.json(ok(result, "Post media deleted"));
   },
 
+  async postEvidenceImage(request: Request, response: Response) {
+    const postId = requireStringParam(request.params.id, "id");
+    const mediaId = requireStringParam(request.params.mediaId, "mediaId");
+    const { imageUrl } = await mediaService.getPostEvidenceImageUrl(request.auth!, postId, mediaId);
+    const { bytes, contentType } = await cloudinaryService.downloadTrustedImage(imageUrl);
+    response.setHeader("Content-Type", contentType);
+    response.setHeader("Cache-Control", "private, no-store");
+    response.send(bytes);
+  },
+
   async claimEvidence(request: Request, response: Response) {
     const claimId = requireStringParam(request.params.id, "id");
     const body = claimEvidenceBodySchema.parse(request.body);

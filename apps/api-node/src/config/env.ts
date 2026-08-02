@@ -105,8 +105,7 @@ export const env = {
     clientId: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     callbackUrl: process.env.GOOGLE_CALLBACK_URL ?? "http://localhost:3001/api/auth/google/callback",
-    visionApiKey: process.env.GOOGLE_VISION_API_KEY,
-    applicationCredentials: process.env.GOOGLE_APPLICATION_CREDENTIALS
+    visionApiKey: process.env.GOOGLE_VISION_API_KEY
   },
   socketCorsOrigin: process.env.SOCKET_CORS_ORIGIN ?? process.env.FRONTEND_URL ?? "http://localhost:5173"
 };

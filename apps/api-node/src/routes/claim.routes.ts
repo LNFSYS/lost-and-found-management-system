@@ -1,13 +1,16 @@
 import { Router } from "express";
 import { claimController } from "../controllers/claim.controller.js";
 import { mediaController } from "../controllers/media.controller.js";
+import { verificationQuestionController } from "../controllers/verification-question.controller.js";
 import { requireAuth } from "../middlewares/auth.middleware.js";
 import { rateLimit } from "../middlewares/rate-limit.middleware.js";
 import { memoryUpload } from "../middlewares/upload.middleware.js";
+import { requireFeatureFlag } from "../middlewares/feature-flag.middleware.js";
 
 export const claimRoutes = Router();
 const claimWriteLimit = rateLimit({ keyPrefix: "claim-write", windowMs: 10 * 60 * 1000, max: 30 });
 const claimUploadLimit = rateLimit({ keyPrefix: "claim-upload", windowMs: 10 * 60 * 1000, max: 15 });
+const verificationQuestionsEnabled = requireFeatureFlag("ai.verification_questions_enabled");
 
 claimRoutes.post("/", requireAuth, claimWriteLimit, (request, response, next) => {
   claimController.create(request, response).catch(next);
@@ -19,6 +22,14 @@ claimRoutes.get("/:id", requireAuth, (request, response, next) => {
 
 claimRoutes.get("/:id/verification", requireAuth, (request, response, next) => {
   claimController.verification(request, response).catch(next);
+});
+
+claimRoutes.get("/:id/verification-questions", requireAuth, verificationQuestionsEnabled, (request, response, next) => {
+  verificationQuestionController.listForClaim(request, response).catch(next);
+});
+
+claimRoutes.post("/:id/verification-questions/:questionId/answer", requireAuth, claimWriteLimit, verificationQuestionsEnabled, (request, response, next) => {
+  verificationQuestionController.answer(request, response).catch(next);
 });
 
 claimRoutes.patch("/:id/more-info", requireAuth, claimWriteLimit, (request, response, next) => {

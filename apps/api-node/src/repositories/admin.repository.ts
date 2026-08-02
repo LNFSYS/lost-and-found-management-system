@@ -1,4 +1,4 @@
-import type { ResultSetHeader, RowDataPacket } from "mysql2/promise";
+import type { PoolConnection, ResultSetHeader, RowDataPacket } from "mysql2/promise";
 import { randomUUID } from "node:crypto";
 import { dbPool } from "../config/db.js";
 import type { UserRole } from "../models/user.model.js";
@@ -153,6 +153,10 @@ interface WarehousePolicyRow extends RowDataPacket {
   retention_deadline: string | null;
 }
 
+interface NamedLockRow extends RowDataPacket {
+  acquired: number | null;
+}
+
 interface WarehouseInput {
   postId?: string | null;
   handoverPointId?: string | null;
@@ -276,6 +280,12 @@ function isTerminalWarehouseStatus(status: WarehouseStatus) {
   return ["RETURNED", "DISPOSED", "DONATED", "TRANSFERRED"].includes(status);
 }
 
+function isProcessOnlyWarehouseStatus(
+  status: WarehouseStatus
+): status is Extract<WarehouseStatus, "DISPOSED" | "DONATED" | "TRANSFERRED"> {
+  return ["DISPOSED", "DONATED", "TRANSFERRED"].includes(status);
+}
+
 function isActiveWarehouseStatus(status: WarehouseStatus) {
   return !isTerminalWarehouseStatus(status) && status !== "EXPIRED";
 }
@@ -291,14 +301,6 @@ const allowedWarehouseTransitions: Record<WarehouseStatus, WarehouseStatus[]> = 
   DONATED: [],
   TRANSFERRED: []
 };
-
-async function currentWarehouseStatus(id: string) {
-  const [rows] = await dbPool.query<Array<RowDataPacket & { status: WarehouseStatus }>>(
-    "SELECT status FROM warehouse_items WHERE id = ? AND deleted_at IS NULL LIMIT 1",
-    [id]
-  );
-  return rows[0]?.status ?? null;
-}
 
 function assertWarehouseTransition(from: WarehouseStatus, to: WarehouseStatus) {
   if (from === to) {
@@ -343,14 +345,90 @@ async function warehouseCapacitySnapshot(excludeId?: string) {
   };
 }
 
-async function assertWarehouseCapacityAllows(status: WarehouseStatus, excludeId?: string) {
+async function acquireWarehouseMutationLock(connection: PoolConnection) {
+  const [rows] = await connection.query<NamedLockRow[]>(
+    "SELECT GET_LOCK('lnfs:warehouse-mutation:v1', 5) AS acquired"
+  );
+  if (Number(rows[0]?.acquired ?? 0) !== 1) {
+    throw new HttpError(409, "Warehouse is busy processing another update. Please retry.");
+  }
+}
+
+async function releaseWarehouseMutationLock(connection: PoolConnection) {
+  await connection.query("SELECT RELEASE_LOCK('lnfs:warehouse-mutation:v1')");
+}
+
+async function releaseWarehouseMutationConnection(connection: PoolConnection, lockAcquired: boolean) {
+  try {
+    if (lockAcquired) {
+      await releaseWarehouseMutationLock(connection);
+    }
+    connection.release();
+  } catch {
+    connection.destroy();
+  }
+}
+
+async function configNumber(
+  connection: PoolConnection,
+  key: string,
+  fallback: number,
+  lockForUpdate = false
+) {
+  const [rows] = await connection.query<Array<RowDataPacket & { config_value: string }>>(
+    `SELECT config_value FROM config_entries WHERE config_key = ? LIMIT 1${lockForUpdate ? " FOR UPDATE" : ""}`,
+    [key]
+  );
+  const parsed = Number(rows[0]?.config_value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+async function assertWarehouseCapacityAllowsInTransaction(
+  connection: PoolConnection,
+  status: WarehouseStatus,
+  excludeId?: string
+) {
   if (!isActiveWarehouseStatus(status)) {
     return;
   }
-  const snapshot = await warehouseCapacitySnapshot(excludeId);
-  if (snapshot.isFull) {
+  const capacity = await configNumber(connection, "warehouse.capacity_total", 200, true);
+  const [rows] = await connection.query<CountRow[]>(
+    `
+      SELECT COUNT(*) AS total
+      FROM warehouse_items
+      WHERE deleted_at IS NULL
+        AND status IN ('PENDING_APPROVAL', 'RECEIVED', 'STORED', 'CLAIMED')
+        ${excludeId ? "AND id <> ?" : ""}
+    `,
+    excludeId ? [excludeId] : []
+  );
+  if (capacity > 0 && Number(rows[0]?.total ?? 0) >= capacity) {
     throw new HttpError(409, "Warehouse capacity is full. Process or transfer existing items before adding more.");
   }
+}
+
+async function createWarehouseActivityLog(
+  connection: PoolConnection,
+  input: {
+    userId: string;
+    action: string;
+    entityId: string;
+    metadata?: Record<string, unknown>;
+  }
+) {
+  await connection.execute(
+    `
+      INSERT INTO user_activity_logs (id, user_id, action, entity_type, entity_id, metadata)
+      VALUES (?, ?, ?, 'WAREHOUSE_ITEM', ?, ?)
+    `,
+    [
+      randomUUID(),
+      input.userId,
+      input.action,
+      input.entityId,
+      input.metadata ? JSON.stringify(input.metadata) : null
+    ]
+  );
 }
 
 function addDays(date: Date, days: number) {
@@ -394,8 +472,8 @@ async function retentionDaysForWarehouseItem(input: Pick<WarehouseInput, "itemNa
   return Math.max(1, Math.round(days));
 }
 
-async function findWarehousePolicyRow(id: string) {
-  const [rows] = await dbPool.query<WarehousePolicyRow[]>(
+async function findWarehousePolicyRowForUpdate(connection: PoolConnection, id: string) {
+  const [rows] = await connection.query<WarehousePolicyRow[]>(
     `
       SELECT wi.id, wi.post_id, wi.item_name, wi.description, wi.category_id, c.name AS category_name,
              wi.status, wi.received_at, wi.returned_at, wi.retention_deadline
@@ -403,6 +481,7 @@ async function findWarehousePolicyRow(id: string) {
       LEFT JOIN item_categories c ON c.id = wi.category_id
       WHERE wi.id = ? AND wi.deleted_at IS NULL
       LIMIT 1
+      FOR UPDATE
     `,
     [id]
   );
@@ -410,6 +489,7 @@ async function findWarehousePolicyRow(id: string) {
 }
 
 async function assertWarehouseItemCanBeDisposed(
+  connection: PoolConnection,
   item: WarehousePolicyRow,
   nextStatus: Extract<WarehouseStatus, "DISPOSED" | "DONATED" | "TRANSFERRED">
 ) {
@@ -418,7 +498,10 @@ async function assertWarehouseItemCanBeDisposed(
     throw new HttpError(409, "Documents/cards must be transferred to Student Services or Security, not disposed or donated.");
   }
 
-  const graceDays = Math.max(0, Math.round(await postRepository.getConfigNumber("warehouse.disposition_grace_days", 7)));
+  const graceDays = Math.max(
+    0,
+    Math.round(await configNumber(connection, "warehouse.disposition_grace_days", 7))
+  );
   if (item.retention_deadline) {
     const retentionTime = new Date(item.retention_deadline).getTime();
     if (!Number.isNaN(retentionTime) && Date.now() < addDays(new Date(retentionTime), graceDays).getTime()) {
@@ -430,30 +513,32 @@ async function assertWarehouseItemCanBeDisposed(
     return;
   }
 
-  const [claimRows] = await dbPool.query<CountRow[]>(
+  const [claimRows] = await connection.query<Array<RowDataPacket & { id: string }>>(
     `
-      SELECT COUNT(*) AS total
+      SELECT id
       FROM claims
       WHERE post_id = ?
         AND status IN ('PENDING', 'NEED_MORE_INFO', 'ACCEPTED')
+      FOR UPDATE
     `,
     [item.post_id]
   );
-  if ((claimRows[0]?.total ?? 0) > 0) {
+  if (claimRows.length > 0) {
     throw new HttpError(409, "Cannot process warehouse item while a claim is pending or accepted.");
   }
 
-  const [appointmentRows] = await dbPool.query<CountRow[]>(
+  const [appointmentRows] = await connection.query<Array<RowDataPacket & { id: string }>>(
     `
-      SELECT COUNT(*) AS total
+      SELECT id
       FROM return_appointments
       WHERE post_id = ?
-        AND status IN ('PENDING', 'ACCEPTED')
+        AND status IN ('PENDING', 'ACCEPTED', 'RESCHEDULED')
+      FOR UPDATE
     `,
     [item.post_id]
   );
-  if ((appointmentRows[0]?.total ?? 0) > 0) {
-    throw new HttpError(409, "Cannot process warehouse item while a return appointment is pending or accepted.");
+  if (appointmentRows.length > 0) {
+    throw new HttpError(409, "Cannot process warehouse item while a return appointment is active.");
   }
 }
 
@@ -584,22 +669,52 @@ export const adminRepository = {
   },
 
   async updateUserStatus(userId: string, status: "ACTIVE" | "LOCKED" | "DISABLED", actorId: string) {
-    const [rows] = await dbPool.query<Array<RowDataPacket & { status: string }>>(
-      "SELECT status FROM users WHERE id = ? AND deleted_at IS NULL LIMIT 1",
-      [userId]
-    );
-    const previousStatus = rows[0]?.status ?? null;
-    if (!previousStatus) {
-      throw new HttpError(404, "User not found");
+    const connection = await dbPool.getConnection();
+    try {
+      await connection.beginTransaction();
+      const [rows] = await connection.query<Array<RowDataPacket & { status: string }>>(
+        "SELECT status FROM users WHERE id = ? AND deleted_at IS NULL LIMIT 1 FOR UPDATE",
+        [userId]
+      );
+      const previousStatus = rows[0]?.status ?? null;
+      if (!previousStatus) {
+        throw new HttpError(404, "User not found");
+      }
+      await connection.execute(
+        `
+          UPDATE users
+          SET status = ?, session_version = session_version + 1, updated_at = UTC_TIMESTAMP()
+          WHERE id = ?
+        `,
+        [status, userId]
+      );
+      await connection.execute(
+        `
+          UPDATE refresh_tokens
+          SET revoked_at = UTC_TIMESTAMP(), revoked_reason = 'ADMIN_LOCK'
+          WHERE user_id = ? AND revoked_at IS NULL
+        `,
+        [userId]
+      );
+      await connection.execute(
+        `
+          INSERT INTO user_activity_logs (id, user_id, action, entity_type, entity_id, metadata)
+          VALUES (?, ?, 'ADMIN_USER_STATUS_CHANGED', 'USER', ?, ?)
+        `,
+        [
+          randomUUID(),
+          userId,
+          userId,
+          JSON.stringify({ actorId, previousStatus, nextStatus: status })
+        ]
+      );
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
     }
-    await dbPool.execute("UPDATE users SET status = ?, updated_at = UTC_TIMESTAMP() WHERE id = ?", [status, userId]);
-    await userRepository.createActivityLog({
-      userId,
-      action: "ADMIN_USER_STATUS_CHANGED",
-      entityType: "USER",
-      entityId: userId,
-      metadata: { actorId, previousStatus, nextStatus: status }
-    });
     return { updated: true };
   },
 
@@ -688,14 +803,31 @@ export const adminRepository = {
           [userId, role]
         );
       }
+      await connection.execute(
+        "UPDATE users SET session_version = session_version + 1, updated_at = UTC_TIMESTAMP() WHERE id = ?",
+        [userId]
+      );
+      await connection.execute(
+        `
+          UPDATE refresh_tokens
+          SET revoked_at = UTC_TIMESTAMP(), revoked_reason = 'SECURITY_RISK'
+          WHERE user_id = ? AND revoked_at IS NULL
+        `,
+        [userId]
+      );
+      await connection.execute(
+        `
+          INSERT INTO user_activity_logs (id, user_id, action, entity_type, entity_id, metadata)
+          VALUES (?, ?, 'ADMIN_USER_ROLES_CHANGED', 'USER', ?, ?)
+        `,
+        [
+          randomUUID(),
+          userId,
+          userId,
+          JSON.stringify({ actorId, previousRoles, nextRoles: uniqueRoles(roles) })
+        ]
+      );
       await connection.commit();
-      await userRepository.createActivityLog({
-        userId,
-        action: "ADMIN_USER_ROLES_CHANGED",
-        entityType: "USER",
-        entityId: userId,
-        metadata: { actorId, previousRoles, nextRoles: uniqueRoles(roles) }
-      });
       return { updated: true };
     } catch (error) {
       await connection.rollback();
@@ -1169,152 +1301,216 @@ export const adminRepository = {
   },
 
   async createWarehouseItem(input: WarehouseInput, actorId: string) {
+    const status = input.status ?? "RECEIVED";
+    if (isProcessOnlyWarehouseStatus(status)) {
+      throw new HttpError(409, "Terminal warehouse statuses can only be set through the overdue processing endpoint");
+    }
     await validateWarehouseInput(input);
     const id = randomUUID();
-    const status = input.status ?? "RECEIVED";
-    await assertWarehouseCapacityAllows(status);
     const receivedAt = optionalDate(input.receivedAt) ?? new Date();
     const returnedAt = optionalDate(input.returnedAt);
     const retentionDays = await retentionDaysForWarehouseItem(input);
     const retentionDeadline = optionalDate(input.retentionDeadline) ?? addDays(receivedAt, retentionDays);
-    await dbPool.execute(
-      `
-        INSERT INTO warehouse_items (
-          id, post_id, handover_point_id, item_name, description,
-          category_id, area_id, building_id, room_text,
-          finder_user_id, finder_name, finder_contact,
-          status, condition_notes, storage_code, received_at, returned_at, retention_deadline, created_by
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        id,
-        input.postId ?? null,
-        input.handoverPointId ?? null,
-        input.itemName.trim(),
-        input.description ?? null,
-        input.categoryId ?? null,
-        input.areaId ?? null,
-        input.buildingId ?? null,
-        input.roomText?.trim() || null,
-        input.finderUserId ?? null,
-        input.finderName?.trim() || null,
-        input.finderContact?.trim() || null,
-        status,
-        input.conditionNotes ?? null,
-        input.storageCode?.trim() || null,
-        receivedAt,
-        isTerminalWarehouseStatus(status) ? returnedAt ?? new Date() : returnedAt,
-        retentionDeadline,
-        actorId
-      ]
-    );
-    await userRepository.createActivityLog({
-      userId: actorId,
-      action: "WAREHOUSE_ITEM_CREATED",
-      entityType: "WAREHOUSE_ITEM",
-      entityId: id,
-      metadata: { status, itemName: input.itemName.trim() }
-    });
+    const connection = await dbPool.getConnection();
+    let mutationLockAcquired = false;
+    let transactionStarted = false;
+    try {
+      await acquireWarehouseMutationLock(connection);
+      mutationLockAcquired = true;
+      await connection.beginTransaction();
+      transactionStarted = true;
+      await assertWarehouseCapacityAllowsInTransaction(connection, status);
+      await connection.execute(
+        `
+          INSERT INTO warehouse_items (
+            id, post_id, handover_point_id, item_name, description,
+            category_id, area_id, building_id, room_text,
+            finder_user_id, finder_name, finder_contact,
+            status, condition_notes, storage_code, received_at, returned_at, retention_deadline, created_by
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          id,
+          input.postId ?? null,
+          input.handoverPointId ?? null,
+          input.itemName.trim(),
+          input.description ?? null,
+          input.categoryId ?? null,
+          input.areaId ?? null,
+          input.buildingId ?? null,
+          input.roomText?.trim() || null,
+          input.finderUserId ?? null,
+          input.finderName?.trim() || null,
+          input.finderContact?.trim() || null,
+          status,
+          input.conditionNotes ?? null,
+          input.storageCode?.trim() || null,
+          receivedAt,
+          returnedAt,
+          retentionDeadline,
+          actorId
+        ]
+      );
+      await createWarehouseActivityLog(connection, {
+        userId: actorId,
+        action: "WAREHOUSE_ITEM_CREATED",
+        entityId: id,
+        metadata: { status, itemName: input.itemName.trim() }
+      });
+      await connection.commit();
+      transactionStarted = false;
+    } catch (error) {
+      if (transactionStarted) {
+        await connection.rollback();
+      }
+      throw error;
+    } finally {
+      await releaseWarehouseMutationConnection(connection, mutationLockAcquired);
+    }
     return { id };
   },
 
   async updateWarehouseItem(id: string, input: WarehouseInput, actorId: string) {
+    if (input.status && isProcessOnlyWarehouseStatus(input.status)) {
+      throw new HttpError(409, "Terminal warehouse statuses can only be set through the overdue processing endpoint");
+    }
     await validateWarehouseInput(input);
-    const previousStatus = await currentWarehouseStatus(id);
-    if (!previousStatus) {
-      throw new HttpError(404, "Warehouse item not found");
-    }
-    const currentItem = await findWarehousePolicyRow(id);
-    if (!currentItem) {
-      throw new HttpError(404, "Warehouse item not found");
-    }
-    const status = input.status ?? previousStatus;
-    assertWarehouseTransition(previousStatus, status);
-    await assertWarehouseCapacityAllows(status, id);
-    const receivedAt = optionalDate(input.receivedAt) ?? new Date(currentItem.received_at);
-    const returnedAt = optionalDate(input.returnedAt) ?? optionalDate(currentItem.returned_at);
     const retentionDays = await retentionDaysForWarehouseItem(input);
-    const retentionDeadline = optionalDate(input.retentionDeadline) ?? optionalDate(currentItem.retention_deadline) ?? addDays(receivedAt, retentionDays);
-    await dbPool.execute(
-      `
-        UPDATE warehouse_items
-        SET post_id = ?,
-            handover_point_id = ?,
-            item_name = ?,
-            description = ?,
-            category_id = ?,
-            area_id = ?,
-            building_id = ?,
-            room_text = ?,
-            finder_user_id = ?,
-            finder_name = ?,
-            finder_contact = ?,
-            status = ?,
-            condition_notes = ?,
-            storage_code = ?,
-            received_at = ?,
-            returned_at = ?,
-            retention_deadline = ?
-        WHERE id = ? AND deleted_at IS NULL
-      `,
-      [
-        input.postId ?? null,
-        input.handoverPointId ?? null,
-        input.itemName.trim(),
-        input.description ?? null,
-        input.categoryId ?? null,
-        input.areaId ?? null,
-        input.buildingId ?? null,
-        input.roomText?.trim() || null,
-        input.finderUserId ?? null,
-        input.finderName?.trim() || null,
-        input.finderContact?.trim() || null,
-        status,
-        input.conditionNotes ?? null,
-        input.storageCode?.trim() || null,
-        receivedAt,
-        isTerminalWarehouseStatus(status) ? returnedAt ?? new Date() : returnedAt,
-        retentionDeadline,
-        id
-      ]
-    );
-    await userRepository.createActivityLog({
-      userId: actorId,
-      action: "WAREHOUSE_ITEM_UPDATED",
-      entityType: "WAREHOUSE_ITEM",
-      entityId: id,
-      metadata: { previousStatus, nextStatus: status }
-    });
+    const connection = await dbPool.getConnection();
+    let mutationLockAcquired = false;
+    let transactionStarted = false;
+    try {
+      await acquireWarehouseMutationLock(connection);
+      mutationLockAcquired = true;
+      await connection.beginTransaction();
+      transactionStarted = true;
+      const currentItem = await findWarehousePolicyRowForUpdate(connection, id);
+      if (!currentItem) {
+        throw new HttpError(404, "Warehouse item not found");
+      }
+      const previousStatus = currentItem.status;
+      const status = input.status ?? previousStatus;
+      assertWarehouseTransition(previousStatus, status);
+      if (isActiveWarehouseStatus(status) && !isActiveWarehouseStatus(previousStatus)) {
+        await assertWarehouseCapacityAllowsInTransaction(connection, status, id);
+      }
+      const receivedAt = optionalDate(input.receivedAt) ?? new Date(currentItem.received_at);
+      const returnedAt = optionalDate(input.returnedAt) ?? optionalDate(currentItem.returned_at);
+      const retentionDeadline =
+        optionalDate(input.retentionDeadline) ??
+        optionalDate(currentItem.retention_deadline) ??
+        addDays(receivedAt, retentionDays);
+      await connection.execute(
+        `
+          UPDATE warehouse_items
+          SET post_id = ?,
+              handover_point_id = ?,
+              item_name = ?,
+              description = ?,
+              category_id = ?,
+              area_id = ?,
+              building_id = ?,
+              room_text = ?,
+              finder_user_id = ?,
+              finder_name = ?,
+              finder_contact = ?,
+              status = ?,
+              condition_notes = ?,
+              storage_code = ?,
+              received_at = ?,
+              returned_at = ?,
+              retention_deadline = ?
+          WHERE id = ? AND deleted_at IS NULL AND status = ?
+        `,
+        [
+          input.postId ?? null,
+          input.handoverPointId ?? null,
+          input.itemName.trim(),
+          input.description ?? null,
+          input.categoryId ?? null,
+          input.areaId ?? null,
+          input.buildingId ?? null,
+          input.roomText?.trim() || null,
+          input.finderUserId ?? null,
+          input.finderName?.trim() || null,
+          input.finderContact?.trim() || null,
+          status,
+          input.conditionNotes ?? null,
+          input.storageCode?.trim() || null,
+          receivedAt,
+          returnedAt,
+          retentionDeadline,
+          id,
+          previousStatus
+        ]
+      );
+      await createWarehouseActivityLog(connection, {
+        userId: actorId,
+        action: "WAREHOUSE_ITEM_UPDATED",
+        entityId: id,
+        metadata: { previousStatus, nextStatus: status }
+      });
+      await connection.commit();
+      transactionStarted = false;
+    } catch (error) {
+      if (transactionStarted) {
+        await connection.rollback();
+      }
+      throw error;
+    } finally {
+      await releaseWarehouseMutationConnection(connection, mutationLockAcquired);
+    }
     return { updated: true };
   },
 
   async updateWarehouseItemStatus(id: string, status: WarehouseStatus, actorId: string) {
-    if (["DISPOSED", "DONATED", "TRANSFERRED"].includes(status)) {
+    if (isProcessOnlyWarehouseStatus(status)) {
       throw new HttpError(409, "Use the overdue processing endpoint for disposal, donation, or transfer");
     }
-    const previousStatus = await currentWarehouseStatus(id);
-    if (!previousStatus) {
-      throw new HttpError(404, "Warehouse item not found");
+    const connection = await dbPool.getConnection();
+    let mutationLockAcquired = false;
+    let transactionStarted = false;
+    try {
+      await acquireWarehouseMutationLock(connection);
+      mutationLockAcquired = true;
+      await connection.beginTransaction();
+      transactionStarted = true;
+      const currentItem = await findWarehousePolicyRowForUpdate(connection, id);
+      if (!currentItem) {
+        throw new HttpError(404, "Warehouse item not found");
+      }
+      const previousStatus = currentItem.status;
+      assertWarehouseTransition(previousStatus, status);
+      if (isActiveWarehouseStatus(status) && !isActiveWarehouseStatus(previousStatus)) {
+        await assertWarehouseCapacityAllowsInTransaction(connection, status, id);
+      }
+      await connection.execute(
+        `
+          UPDATE warehouse_items
+          SET status = ?,
+              returned_at = CASE WHEN ? = 'RETURNED' THEN COALESCE(returned_at, UTC_TIMESTAMP()) ELSE returned_at END,
+              updated_at = UTC_TIMESTAMP()
+          WHERE id = ? AND deleted_at IS NULL AND status = ?
+        `,
+        [status, status, id, previousStatus]
+      );
+      await createWarehouseActivityLog(connection, {
+        userId: actorId,
+        action: "WAREHOUSE_ITEM_STATUS_CHANGED",
+        entityId: id,
+        metadata: { previousStatus, nextStatus: status }
+      });
+      await connection.commit();
+      transactionStarted = false;
+    } catch (error) {
+      if (transactionStarted) {
+        await connection.rollback();
+      }
+      throw error;
+    } finally {
+      await releaseWarehouseMutationConnection(connection, mutationLockAcquired);
     }
-    assertWarehouseTransition(previousStatus, status);
-    await assertWarehouseCapacityAllows(status, id);
-    await dbPool.execute(
-      `
-        UPDATE warehouse_items
-        SET status = ?,
-            returned_at = CASE WHEN ? IN ('RETURNED', 'DISPOSED', 'DONATED', 'TRANSFERRED') THEN COALESCE(returned_at, UTC_TIMESTAMP()) ELSE returned_at END
-        WHERE id = ? AND deleted_at IS NULL
-      `,
-      [status, status, id]
-    );
-    await userRepository.createActivityLog({
-      userId: actorId,
-      action: "WAREHOUSE_ITEM_STATUS_CHANGED",
-      entityType: "WAREHOUSE_ITEM",
-      entityId: id,
-      metadata: { previousStatus, nextStatus: status }
-    });
     return { updated: true };
   },
 
@@ -1365,38 +1561,52 @@ export const adminRepository = {
     note: string,
     actorId: string
   ) {
-    const item = await findWarehousePolicyRow(id);
-    if (!item) {
-      throw new HttpError(404, "Warehouse item not found");
-    }
-    if (item.status !== "EXPIRED") {
-      throw new HttpError(409, "Only expired warehouse items can be processed");
-    }
-    await assertWarehouseItemCanBeDisposed(item, status);
+    const connection = await dbPool.getConnection();
+    let transactionStarted = false;
+    try {
+      await connection.beginTransaction();
+      transactionStarted = true;
+      const item = await findWarehousePolicyRowForUpdate(connection, id);
+      if (!item) {
+        throw new HttpError(404, "Warehouse item not found");
+      }
+      if (item.status !== "EXPIRED") {
+        throw new HttpError(409, "Only expired warehouse items can be processed");
+      }
+      await assertWarehouseItemCanBeDisposed(connection, item, status);
 
-    const [result] = await dbPool.execute<ResultSetHeader>(
-      `
-        UPDATE warehouse_items
-        SET status = ?,
-            returned_at = COALESCE(returned_at, UTC_TIMESTAMP()),
-            condition_notes = CONCAT(COALESCE(condition_notes, ''), CASE WHEN condition_notes IS NULL OR condition_notes = '' THEN '' ELSE '\n' END, ?),
-            updated_at = UTC_TIMESTAMP()
-        WHERE id = ?
-          AND deleted_at IS NULL
-          AND status = 'EXPIRED'
-      `,
-      [status, note.trim(), id]
-    );
-    if (result.affectedRows === 0) {
-      throw new HttpError(409, "Only expired warehouse items can be processed");
+      const [result] = await connection.execute<ResultSetHeader>(
+        `
+          UPDATE warehouse_items
+          SET status = ?,
+              returned_at = COALESCE(returned_at, UTC_TIMESTAMP()),
+              condition_notes = CONCAT(COALESCE(condition_notes, ''), CASE WHEN condition_notes IS NULL OR condition_notes = '' THEN '' ELSE '\n' END, ?),
+              updated_at = UTC_TIMESTAMP()
+          WHERE id = ?
+            AND deleted_at IS NULL
+            AND status = 'EXPIRED'
+        `,
+        [status, note.trim(), id]
+      );
+      if (result.affectedRows === 0) {
+        throw new HttpError(409, "Warehouse item changed concurrently or is no longer expired");
+      }
+      await createWarehouseActivityLog(connection, {
+        userId: actorId,
+        action: "WAREHOUSE_OVERDUE_ITEM_PROCESSED",
+        entityId: id,
+        metadata: { previousStatus: "EXPIRED", nextStatus: status, note: note.trim() }
+      });
+      await connection.commit();
+      transactionStarted = false;
+    } catch (error) {
+      if (transactionStarted) {
+        await connection.rollback();
+      }
+      throw error;
+    } finally {
+      connection.release();
     }
-    await userRepository.createActivityLog({
-      userId: actorId,
-      action: "WAREHOUSE_OVERDUE_ITEM_PROCESSED",
-      entityType: "WAREHOUSE_ITEM",
-      entityId: id,
-      metadata: { previousStatus: "EXPIRED", nextStatus: status, note: note.trim() }
-    });
     return { updated: true, status };
   },
 
@@ -1537,10 +1747,32 @@ export const adminRepository = {
           }
         }
         if (input.actionType === "BAN_USER") {
-          await connection.execute("UPDATE users SET status = 'LOCKED', updated_at = UTC_TIMESTAMP() WHERE id = ?", [targetId]);
+          await connection.execute(
+            `
+              UPDATE users
+              SET status = 'LOCKED', session_version = session_version + 1, updated_at = UTC_TIMESTAMP()
+              WHERE id = ?
+            `,
+            [targetId]
+          );
+          await connection.execute(
+            `
+              UPDATE refresh_tokens
+              SET revoked_at = UTC_TIMESTAMP(), revoked_reason = 'ADMIN_LOCK'
+              WHERE user_id = ? AND revoked_at IS NULL
+            `,
+            [targetId]
+          );
         }
         if (input.actionType === "UNBAN_USER") {
-          await connection.execute("UPDATE users SET status = 'ACTIVE', updated_at = UTC_TIMESTAMP() WHERE id = ?", [targetId]);
+          await connection.execute(
+            `
+              UPDATE users
+              SET status = 'ACTIVE', session_version = session_version + 1, updated_at = UTC_TIMESTAMP()
+              WHERE id = ?
+            `,
+            [targetId]
+          );
         }
       }
 

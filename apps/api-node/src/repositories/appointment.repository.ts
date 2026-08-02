@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { RowDataPacket } from "mysql2";
+import type { ResultSetHeader, RowDataPacket } from "mysql2";
+import type { PoolConnection } from "mysql2/promise";
 import { dbPool } from "../config/db.js";
 
 export interface AppointmentInput {
@@ -49,9 +50,17 @@ interface AppointmentForActionRow extends RowDataPacket {
   status: "PENDING" | "ACCEPTED" | "REJECTED" | "CANCELLED" | "COMPLETED" | "RESCHEDULED";
   post_owner_id: string;
   claimant_id: string;
+  proposed_at: string;
+  handover_point_id: string | null;
+  custom_location: string | null;
   proof_image_url: string | null;
   proof_public_id: string | null;
 }
+
+type AppointmentTransitionSnapshot = Pick<
+  AppointmentForActionRow,
+  "status" | "proposed_at" | "handover_point_id" | "custom_location"
+>;
 
 interface ReminderAppointmentRow extends RowDataPacket {
   id: string;
@@ -89,6 +98,55 @@ function mapAppointment(row: AppointmentRow) {
 
 function isDuplicateEntry(error: unknown) {
   return typeof error === "object" && error !== null && "errno" in error && error.errno === 1062;
+}
+
+const scheduleLockTimeoutSeconds = 5;
+
+function scheduleLockName(handoverPointId: string) {
+  return `lnfs:appointment:${handoverPointId}`;
+}
+
+async function acquireScheduleLock(connection: PoolConnection, handoverPointId: string) {
+  const lockName = scheduleLockName(handoverPointId);
+  const [rows] = await connection.query<Array<RowDataPacket & { acquired: number | null }>>(
+    "SELECT GET_LOCK(?, ?) AS acquired",
+    [lockName, scheduleLockTimeoutSeconds]
+  );
+  return rows[0]?.acquired === 1 ? lockName : null;
+}
+
+async function releaseScheduleLock(connection: PoolConnection, lockName: string | null) {
+  if (lockName) {
+    await connection.query("SELECT RELEASE_LOCK(?)", [lockName]);
+  }
+}
+
+async function releaseScheduleConnection(connection: PoolConnection, lockName: string | null) {
+  try {
+    await releaseScheduleLock(connection, lockName);
+    connection.release();
+  } catch {
+    connection.destroy();
+  }
+}
+
+async function hasScheduleConflictOnConnection(
+  connection: PoolConnection,
+  input: { appointmentId?: string; proposedAt: string; handoverPointId: string }
+) {
+  const proposedAt = new Date(input.proposedAt);
+  const [rows] = await connection.query<Array<RowDataPacket & { total: number }>>(
+    `
+      SELECT COUNT(*) AS total
+      FROM return_appointments
+      WHERE handover_point_id = ?
+        AND status IN ('PENDING', 'ACCEPTED', 'RESCHEDULED')
+        AND proposed_at BETWEEN DATE_SUB(?, INTERVAL 30 MINUTE) AND DATE_ADD(?, INTERVAL 30 MINUTE)
+        AND (? IS NULL OR id <> ?)
+    `,
+    [input.handoverPointId, proposedAt, proposedAt, input.appointmentId ?? null, input.appointmentId ?? null]
+  );
+  return Number(rows[0]?.total ?? 0) > 0;
 }
 
 const appointmentSelect = `
@@ -131,8 +189,19 @@ export const appointmentRepository = {
   async create(input: AppointmentInput, proposerId: string) {
     const connection = await dbPool.getConnection();
     const id = randomUUID();
+    let scheduleLock: string | null = null;
+    let transactionOpen = false;
     try {
       await connection.beginTransaction();
+      transactionOpen = true;
+      if (input.handoverPointId) {
+        scheduleLock = await acquireScheduleLock(connection, input.handoverPointId);
+        if (!scheduleLock) {
+          await connection.rollback();
+          transactionOpen = false;
+          return { status: "SCHEDULE_CONFLICT" as const };
+        }
+      }
       const [claimRows] = await connection.query<ClaimForAppointmentRow[]>(
         `
           SELECT c.id, c.post_id, p.user_id AS post_owner_id, c.claimant_id, c.status
@@ -147,10 +216,12 @@ export const appointmentRepository = {
       const claim = claimRows[0];
       if (!claim) {
         await connection.rollback();
+        transactionOpen = false;
         return { status: "CLAIM_NOT_FOUND" as const };
       }
       if (claim.status !== "ACCEPTED") {
         await connection.rollback();
+        transactionOpen = false;
         return { status: "CLAIM_NOT_ACCEPTED" as const };
       }
 
@@ -167,7 +238,20 @@ export const appointmentRepository = {
       );
       if (activeRows[0]) {
         await connection.rollback();
+        transactionOpen = false;
         return { status: "ACTIVE_APPOINTMENT_EXISTS" as const, appointmentId: activeRows[0].id };
+      }
+
+      if (
+        input.handoverPointId &&
+        (await hasScheduleConflictOnConnection(connection, {
+          proposedAt: input.proposedAt,
+          handoverPointId: input.handoverPointId
+        }))
+      ) {
+        await connection.rollback();
+        transactionOpen = false;
+        return { status: "SCHEDULE_CONFLICT" as const };
       }
 
       await connection.execute(
@@ -188,35 +272,19 @@ export const appointmentRepository = {
         ]
       );
       await connection.commit();
+      transactionOpen = false;
     } catch (error) {
-      await connection.rollback();
+      if (transactionOpen) {
+        await connection.rollback();
+      }
       if (isDuplicateEntry(error)) {
         return { status: "ACTIVE_APPOINTMENT_EXISTS" as const };
       }
       throw error;
     } finally {
-      connection.release();
+      await releaseScheduleConnection(connection, scheduleLock);
     }
     return { status: "CREATED" as const, appointment: await this.findById(id) };
-  },
-
-  async hasScheduleConflict(input: { appointmentId?: string; proposedAt: string; handoverPointId?: string | null }) {
-    if (!input.handoverPointId) {
-      return false;
-    }
-    const proposedAt = new Date(input.proposedAt);
-    const [rows] = await dbPool.query<Array<RowDataPacket & { total: number }>>(
-      `
-        SELECT COUNT(*) AS total
-        FROM return_appointments
-        WHERE handover_point_id = ?
-          AND status IN ('PENDING', 'ACCEPTED', 'RESCHEDULED')
-          AND proposed_at BETWEEN DATE_SUB(?, INTERVAL 30 MINUTE) AND DATE_ADD(?, INTERVAL 30 MINUTE)
-          AND (? IS NULL OR id <> ?)
-      `,
-      [input.handoverPointId, proposedAt, proposedAt, input.appointmentId ?? null, input.appointmentId ?? null]
-    );
-    return Number(rows[0]?.total ?? 0) > 0;
   },
 
   async findById(id: string) {
@@ -228,6 +296,7 @@ export const appointmentRepository = {
     const [rows] = await dbPool.query<AppointmentForActionRow[]>(
       `
         SELECT ra.id, ra.claim_id, ra.post_id, ra.status, p.user_id AS post_owner_id, c.claimant_id,
+               ra.proposed_at, ra.handover_point_id, ra.custom_location,
                ra.proof_image_url, ra.proof_public_id
         FROM return_appointments ra
         INNER JOIN claims c ON c.id = ra.claim_id
@@ -260,8 +329,8 @@ export const appointmentRepository = {
     return this.findById(id);
   },
 
-  async accept(id: string) {
-    await dbPool.execute(
+  async accept(id: string, expected: AppointmentTransitionSnapshot) {
+    const [result] = await dbPool.execute<ResultSetHeader>(
       `
         UPDATE return_appointments
         SET status = 'ACCEPTED',
@@ -270,57 +339,136 @@ export const appointmentRepository = {
             cancellation_reason = NULL,
             updated_at = UTC_TIMESTAMP()
         WHERE id = ?
+          AND status = ?
+          AND proposed_at = ?
+          AND handover_point_id <=> ?
+          AND custom_location <=> ?
       `,
-      [id]
+      [id, expected.status, expected.proposed_at, expected.handover_point_id, expected.custom_location]
     );
-    return this.findById(id);
+    if (result.affectedRows !== 1) {
+      return { status: "TRANSITION_CONFLICT" as const };
+    }
+    return { status: "ACCEPTED" as const, appointment: await this.findById(id) };
   },
 
-  async reject(id: string, reason: string) {
-    await dbPool.execute(
+  async reject(id: string, reason: string, expected: AppointmentTransitionSnapshot) {
+    const [result] = await dbPool.execute<ResultSetHeader>(
       `
         UPDATE return_appointments
         SET status = 'REJECTED',
             rejection_reason = ?,
             updated_at = UTC_TIMESTAMP()
         WHERE id = ?
+          AND status = ?
+          AND proposed_at = ?
+          AND handover_point_id <=> ?
+          AND custom_location <=> ?
       `,
-      [reason, id]
+      [reason, id, expected.status, expected.proposed_at, expected.handover_point_id, expected.custom_location]
     );
-    return this.findById(id);
+    if (result.affectedRows !== 1) {
+      return { status: "TRANSITION_CONFLICT" as const };
+    }
+    return { status: "REJECTED" as const, appointment: await this.findById(id) };
   },
 
-  async cancel(id: string, reason: string) {
-    await dbPool.execute(
+  async cancel(id: string, reason: string, expected: AppointmentTransitionSnapshot) {
+    const [result] = await dbPool.execute<ResultSetHeader>(
       `
         UPDATE return_appointments
         SET status = 'CANCELLED',
             cancellation_reason = ?,
             updated_at = UTC_TIMESTAMP()
         WHERE id = ?
+          AND status = ?
+          AND proposed_at = ?
+          AND handover_point_id <=> ?
+          AND custom_location <=> ?
       `,
-      [reason, id]
+      [reason, id, expected.status, expected.proposed_at, expected.handover_point_id, expected.custom_location]
     );
-    return this.findById(id);
+    if (result.affectedRows !== 1) {
+      return { status: "TRANSITION_CONFLICT" as const };
+    }
+    return { status: "CANCELLED" as const, appointment: await this.findById(id) };
   },
 
-  async reschedule(id: string, input: { proposedAt: string; handoverPointId?: string | null; customLocation?: string | null }) {
-    await dbPool.execute(
-      `
-        UPDATE return_appointments
-        SET status = 'RESCHEDULED',
-            proposed_at = ?,
-            handover_point_id = ?,
-            custom_location = ?,
-            accepted_at = NULL,
-            rejection_reason = NULL,
-            cancellation_reason = NULL,
-            updated_at = UTC_TIMESTAMP()
-        WHERE id = ?
-      `,
-      [new Date(input.proposedAt), input.handoverPointId ?? null, input.customLocation?.trim() || null, id]
-    );
-    return this.findById(id);
+  async reschedule(
+    id: string,
+    input: { proposedAt: string; handoverPointId?: string | null; customLocation?: string | null },
+    expected: AppointmentTransitionSnapshot
+  ) {
+    const connection = await dbPool.getConnection();
+    let scheduleLock: string | null = null;
+    let transactionOpen = false;
+    try {
+      await connection.beginTransaction();
+      transactionOpen = true;
+      if (input.handoverPointId) {
+        scheduleLock = await acquireScheduleLock(connection, input.handoverPointId);
+        if (!scheduleLock) {
+          await connection.rollback();
+          transactionOpen = false;
+          return { status: "SCHEDULE_CONFLICT" as const };
+        }
+        if (
+          await hasScheduleConflictOnConnection(connection, {
+            appointmentId: id,
+            proposedAt: input.proposedAt,
+            handoverPointId: input.handoverPointId
+          })
+        ) {
+          await connection.rollback();
+          transactionOpen = false;
+          return { status: "SCHEDULE_CONFLICT" as const };
+        }
+      }
+
+      const [result] = await connection.execute<ResultSetHeader>(
+        `
+          UPDATE return_appointments
+          SET status = 'RESCHEDULED',
+              proposed_at = ?,
+              handover_point_id = ?,
+              custom_location = ?,
+              accepted_at = NULL,
+              rejection_reason = NULL,
+              cancellation_reason = NULL,
+              updated_at = UTC_TIMESTAMP()
+          WHERE id = ?
+            AND status = ?
+            AND proposed_at = ?
+            AND handover_point_id <=> ?
+            AND custom_location <=> ?
+        `,
+        [
+          new Date(input.proposedAt),
+          input.handoverPointId ?? null,
+          input.customLocation?.trim() || null,
+          id,
+          expected.status,
+          expected.proposed_at,
+          expected.handover_point_id,
+          expected.custom_location
+        ]
+      );
+      if (result.affectedRows !== 1) {
+        await connection.rollback();
+        transactionOpen = false;
+        return { status: "TRANSITION_CONFLICT" as const };
+      }
+      await connection.commit();
+      transactionOpen = false;
+    } catch (error) {
+      if (transactionOpen) {
+        await connection.rollback();
+      }
+      throw error;
+    } finally {
+      await releaseScheduleConnection(connection, scheduleLock);
+    }
+    return { status: "RESCHEDULED" as const, appointment: await this.findById(id) };
   },
 
   async complete(id: string, actorId: string) {
@@ -335,16 +483,21 @@ export const appointmentRepository = {
         await connection.rollback();
         return { status: "NOT_ACCEPTED" as const };
       }
-      await connection.execute(
+      const [result] = await connection.execute<ResultSetHeader>(
         `
           UPDATE return_appointments
           SET status = 'COMPLETED',
               completed_at = COALESCE(completed_at, UTC_TIMESTAMP()),
               updated_at = UTC_TIMESTAMP()
           WHERE id = ?
+            AND status = 'ACCEPTED'
         `,
         [id]
       );
+      if (result.affectedRows !== 1) {
+        await connection.rollback();
+        return { status: "NOT_ACCEPTED" as const };
+      }
       await connection.execute(
         `
           UPDATE posts p

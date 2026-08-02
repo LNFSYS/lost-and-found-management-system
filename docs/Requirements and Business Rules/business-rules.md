@@ -1,6 +1,6 @@
 # Business Rules
 
-Last audit: 2026-07-10
+Last audit: 2026-08-01
 
 Business rules are grouped by major business area and trace back to the canonical 100-UC set in `docs/Checklist/master-dev-checklist.md`. Each UC has exactly one primary owner.
 
@@ -36,6 +36,10 @@ Business rules are grouped by major business area and trace back to the canonica
 | BR-28 | Expo mobile MVP must share auth, validation, privacy, handover, appointment, chat, and notification contracts with the web/backend; native push/offline hardening remains backlog. | UC-093, UC-094, UC-095, UC-096, UC-097, UC-098, UC-099, UC-100 | Partial |
 | BR-29 | Demo data must include accounts and data sufficient for core demo purposes but must not contain real sensitive information. | UC-031, UC-032, UC-040, UC-041, UC-059 | Implemented |
 | BR-30 | Testing/hardening must cover claim transitions, warehouse lifecycle, matching thresholds, accepted-claim chat gating, evidence privacy, release checks, and migration from a blank DB. CI must use an isolated MySQL service rather than the shared demo database. | UC-007, UC-015, UC-054, UC-071, UC-078, UC-089 | Implemented for core smoke; browser/load depth remains future work |
+| BR-31 | Verification questions must be based on private item attributes, reviewed by the FOUND owner or Staff, and pinned to the claim. Expected answers are bcrypt-hashed, claimants never receive correctness feedback, attempts are limited, and an unanswered required question blocks claim acceptance while the feature is enabled. Answer persistence must lock and recheck claimant and claim status in the same transaction. | UC-049, UC-052, UC-054, UC-089, UC-090, UC-092 | Implemented for MVP |
+| BR-32 | Campus Radar may analyze only non-personal LOST aggregates. An event or weather explanation requires a real, recorded source; alerts use baseline comparison, sliding windows, dedupe and cooldown and always require Staff/Admin acknowledgement or disposition. | UC-067, UC-073, UC-083, UC-084, UC-085 | Implemented for MVP |
+| BR-33 | Visual Hunt is a Staff/Admin decision-support tool. It analyzes an explicitly captured/uploaded frame or bounded image batch, returns candidates with matched signals, and must never auto-match, resolve, return or notify on low confidence. Raw input is not persisted and face recognition is prohibited. | UC-059, UC-070, UC-076, UC-084, UC-086, UC-091 | Implemented for MVP |
+| BR-34 | The three AI-assisted tools must have independent kill switches. Disabling verification questions removes their score contribution; disabling Radar or Visual Hunt blocks their backend endpoints as well as hiding their UI. Admin-editable Radar and Visual Hunt thresholds must be rejected outside their documented effective ranges, including rollback. | UC-062, UC-066, UC-070, UC-084, UC-085 | Implemented |
 
 ## Notes
 

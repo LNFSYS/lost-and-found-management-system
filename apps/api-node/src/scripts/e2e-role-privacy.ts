@@ -1,6 +1,7 @@
 const API_BASE_URL = process.env.E2E_API_URL ?? "http://localhost:3001/api";
 const adminEmail = process.env.E2E_ADMIN_EMAIL ?? "adminlnf@gmail.com";
 const staffEmail = process.env.E2E_STAFF_EMAIL ?? "stafflnf@gmail.com";
+const studentEmail = process.env.E2E_STUDENT_EMAIL ?? "studentlnf@gmail.com";
 const password = process.env.E2E_PASSWORD ?? "12345678";
 const claimId = process.env.E2E_PRIVATE_CLAIM_ID;
 
@@ -38,6 +39,7 @@ async function login(email: string) {
 async function main() {
   const adminToken = await login(adminEmail);
   const staffToken = await login(staffEmail);
+  const studentToken = await login(studentEmail);
 
   await request("/admin/users", {}, adminToken, 200);
   await request("/admin/users", {}, staffToken, 403);
@@ -51,6 +53,19 @@ async function main() {
   }, staffToken, 403);
   await request("/admin/return-feedback", {}, adminToken, 200);
   await request("/admin/dashboard/overview", {}, staffToken, 200);
+  await request("/admin/radar/events", {}, adminToken, 200);
+  await request("/admin/radar/events", {}, staffToken, 200);
+  await request("/admin/radar/events", {}, studentToken, 403);
+  await request("/admin/radar/alerts/11111111-1111-4111-8111-111111111111/posts", {}, studentToken, 403);
+  await request("/admin/radar/alerts/11111111-1111-4111-8111-111111111111/posts", {}, staffToken, 404);
+  await request("/admin/radar/events", {
+    method: "POST",
+    body: JSON.stringify({})
+  }, staffToken, 403);
+  await request("/admin/visual-hunt", { method: "POST", body: new FormData() }, studentToken, 403);
+  await request("/admin/visual-hunt", { method: "POST", body: new FormData() }, staffToken, 400);
+  await request("/admin/visual-hunt/feedback", { method: "POST", body: JSON.stringify({}) }, studentToken, 403);
+  await request("/admin/visual-hunt/feedback", { method: "POST", body: JSON.stringify({}) }, staffToken, 400);
 
   if (claimId) {
     await request(`/claims/${claimId}`, {}, staffToken, 200);

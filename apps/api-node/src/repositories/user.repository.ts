@@ -15,6 +15,7 @@ interface UserRow extends RowDataPacket {
   avatar_url: string | null;
   avatar_public_id: string | null;
   status: UserStatus;
+  session_version: number;
   email_verified_at: string | null;
   last_login_at: string | null;
   created_at: string;
@@ -52,6 +53,11 @@ interface RefreshTokenRow extends RowDataPacket {
   token_hash: string;
   expires_at: string;
   revoked_at: string | null;
+}
+
+interface RefreshTokenOwnerRow extends RowDataPacket {
+  id: string;
+  user_id: string;
 }
 
 interface ActivityLogRow extends RowDataPacket {
@@ -96,6 +102,7 @@ function mapUser(row: UserRow, roles: UserRole[]): User {
     avatarPublicId: toOptional(row.avatar_public_id),
     roles,
     status: row.status,
+    sessionVersion: Number(row.session_version),
     emailVerifiedAt: toOptional(row.email_verified_at),
     lastLoginAt: toOptional(row.last_login_at),
     createdAt: row.created_at,
@@ -315,7 +322,10 @@ export const userRepository = {
     await dbPool.execute(
       `
         UPDATE users
-        SET password_hash = ?, failed_login_count = 0, updated_at = UTC_TIMESTAMP()
+        SET password_hash = ?,
+            failed_login_count = 0,
+            session_version = session_version + 1,
+            updated_at = UTC_TIMESTAMP()
         WHERE id = ? AND deleted_at IS NULL
       `,
       [passwordHash, userId]
@@ -405,6 +415,21 @@ export const userRepository = {
     );
   },
 
+  async consumeOtp(otpId: string): Promise<boolean> {
+    const [result] = await dbPool.execute<ResultSetHeader>(
+      `
+        UPDATE email_verification_otps
+        SET status = 'VERIFIED', verified_at = UTC_TIMESTAMP()
+        WHERE id = ?
+          AND status = 'PENDING'
+          AND expires_at > UTC_TIMESTAMP()
+          AND attempt_count <= max_attempts
+      `,
+      [otpId]
+    );
+    return result.affectedRows === 1;
+  },
+
   async createRefreshToken(input: {
     id: string;
     userId: string;
@@ -472,17 +497,47 @@ export const userRepository = {
   },
 
   async rotateRefreshToken(input: {
-    oldTokenId: string;
+    oldTokenHash: string;
     newTokenId: string;
-    userId: string;
     tokenHash: string;
     userAgent?: string;
     ipAddress?: string;
     expiresAt: Date;
-  }): Promise<void> {
+  }): Promise<{ userId: string } | null> {
     const connection = await dbPool.getConnection();
     try {
       await connection.beginTransaction();
+      const [rows] = await connection.query<RefreshTokenOwnerRow[]>(
+        `
+          SELECT id, user_id
+          FROM refresh_tokens
+          WHERE token_hash = ?
+          LIMIT 1
+          FOR UPDATE
+        `,
+        [input.oldTokenHash]
+      );
+      const existingToken = rows[0];
+      if (!existingToken) {
+        await connection.rollback();
+        return null;
+      }
+
+      const [consumeResult] = await connection.execute<ResultSetHeader>(
+        `
+          UPDATE refresh_tokens
+          SET revoked_at = UTC_TIMESTAMP(), revoked_reason = 'ROTATED'
+          WHERE id = ?
+            AND revoked_at IS NULL
+            AND expires_at > UTC_TIMESTAMP()
+        `,
+        [existingToken.id]
+      );
+      if (consumeResult.affectedRows !== 1) {
+        await connection.rollback();
+        return null;
+      }
+
       await connection.execute(
         `
           INSERT INTO refresh_tokens (id, user_id, token_hash, user_agent, ip_address, expires_at)
@@ -490,7 +545,7 @@ export const userRepository = {
         `,
         [
           input.newTokenId,
-          input.userId,
+          existingToken.user_id,
           input.tokenHash,
           input.userAgent ?? null,
           input.ipAddress ?? null,
@@ -500,12 +555,20 @@ export const userRepository = {
       await connection.execute(
         `
           UPDATE refresh_tokens
-          SET revoked_at = UTC_TIMESTAMP(), revoked_reason = 'ROTATED', replaced_by_token_id = ?
-          WHERE id = ? AND revoked_at IS NULL
+          SET replaced_by_token_id = ?
+          WHERE id = ? AND revoked_reason = 'ROTATED'
         `,
-        [input.newTokenId, input.oldTokenId]
+        [input.newTokenId, existingToken.id]
+      );
+      await connection.execute(
+        `
+          INSERT INTO user_activity_logs (id, user_id, action, entity_type, entity_id)
+          VALUES (?, ?, 'REFRESH_TOKEN_ROTATED', 'USER', ?)
+        `,
+        [randomUUID(), existingToken.user_id, existingToken.user_id]
       );
       await connection.commit();
+      return { userId: existingToken.user_id };
     } catch (error) {
       await connection.rollback();
       throw error;

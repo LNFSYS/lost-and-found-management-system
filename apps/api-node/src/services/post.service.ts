@@ -249,7 +249,25 @@ export const postService = {
     return {
       ...detail,
       post: redactContactInfo(detail.post, auth),
-      media: detail.media.filter((media) => media.mediaKind !== "EVIDENCE" || canViewPrivateMedia)
+      tags: canViewPrivateMedia ? detail.tags : detail.tags.filter((tag) => tag.source !== "OCR"),
+      media: detail.media
+        .filter((media) => media.mediaKind !== "EVIDENCE" || canViewPrivateMedia)
+        .map((media) =>
+          media.mediaKind === "EVIDENCE"
+            ? {
+                id: media.id,
+                imagePath: `/api/posts/${postId}/media/${media.id}/image`,
+                resourceType: media.resourceType,
+                mediaKind: media.mediaKind,
+                format: media.format,
+                width: media.width,
+                height: media.height,
+                bytes: media.bytes,
+                sortOrder: media.sortOrder,
+                createdAt: media.createdAt
+              }
+            : media
+        )
     };
   },
 

@@ -11,6 +11,7 @@ import { durationToMs } from "../utils/duration.js";
 import { randomOtp, randomToken, sha256 } from "../utils/hash.js";
 import { HttpError } from "../utils/http-error.js";
 import { normalizeEmail } from "../utils/normalize-email.js";
+import { googleOAuthRequestStore } from "./google-oauth-request.js";
 import type {
   LoginInput,
   RefreshTokenInput,
@@ -74,7 +75,8 @@ function signAccessToken(user: User) {
     {
       sub: user.id,
       email: user.email,
-      roles: user.roles
+      roles: user.roles,
+      sessionVersion: user.sessionVersion
     },
     requireSecret(env.jwtAccessSecret, "JWT_ACCESS_SECRET"),
     options
@@ -177,6 +179,12 @@ async function validateOtp(normalizedEmail: string, purpose: OtpPurpose, otp: st
   return otpRow;
 }
 
+async function consumeValidatedOtp(otpId: string) {
+  if (!(await userRepository.consumeOtp(otpId))) {
+    throw new HttpError(409, "OTP has already been used or is no longer valid");
+  }
+}
+
 async function createTokenPair(user: User, meta: RequestMeta): Promise<TokenPair> {
   const refreshToken = randomToken();
   await userRepository.createRefreshToken({
@@ -197,18 +205,35 @@ async function createTokenPair(user: User, meta: RequestMeta): Promise<TokenPair
 }
 
 export const authService = {
-  googleAuthorizationUrl() {
+  async createGoogleAuthorizationRequest() {
     const google = requireGoogleOAuthConfig();
+    const request = await googleOAuthRequestStore.create();
     const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     url.searchParams.set("client_id", google.clientId);
     url.searchParams.set("redirect_uri", google.callbackUrl);
     url.searchParams.set("response_type", "code");
     url.searchParams.set("scope", "openid email profile");
     url.searchParams.set("prompt", "select_account");
-    return url.toString();
+    url.searchParams.set("state", request.state);
+    url.searchParams.set("code_challenge", request.codeChallenge);
+    url.searchParams.set("code_challenge_method", "S256");
+    return {
+      url: url.toString(),
+      state: request.state
+    };
   },
 
-  async loginWithGoogle(code: string, meta: RequestMeta): Promise<AuthResult> {
+  async loginWithGoogle(
+    code: string,
+    state: string | undefined,
+    boundState: string | undefined,
+    meta: RequestMeta
+  ): Promise<AuthResult> {
+    const codeVerifier = await googleOAuthRequestStore.consume(state, boundState);
+    if (!codeVerifier) {
+      throw new HttpError(401, "Invalid or expired Google OAuth request");
+    }
+
     const google = requireGoogleOAuthConfig();
     const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
@@ -218,7 +243,8 @@ export const authService = {
         client_id: google.clientId,
         client_secret: google.clientSecret,
         redirect_uri: google.callbackUrl,
-        grant_type: "authorization_code"
+        grant_type: "authorization_code",
+        code_verifier: codeVerifier
       })
     });
     const tokenPayload = (await tokenResponse.json().catch(() => ({}))) as GoogleTokenResponse;
@@ -256,6 +282,7 @@ export const authService = {
         avatarUrl: profile.picture,
         roles: [],
         status: "ACTIVE",
+        sessionVersion: 0,
         emailVerifiedAt: now,
         createdAt: now,
         updatedAt: now
@@ -312,6 +339,7 @@ export const authService = {
 
       const otpRow = await validateOtp(normalizedEmail, "REGISTER", input.otp);
       const passwordHash = await bcrypt.hash(input.password, env.bcryptSaltRounds);
+      await consumeValidatedOtp(otpRow.id);
       const user = await userRepository.updatePendingRegistration(existingUser.id, {
         email: input.email.trim(),
         normalizedEmail,
@@ -325,7 +353,6 @@ export const authService = {
         throw new HttpError(500, "Unable to update pending registration");
       }
 
-      await userRepository.markOtpStatus(otpRow.id, "VERIFIED");
       await userRepository.markEmailVerified(user.id);
       await userRepository.assignRole(user.id, "USER");
       await userRepository.assignRole(user.id, input.accountType);
@@ -360,12 +387,13 @@ export const authService = {
       phoneNumber: input.phoneNumber?.trim(),
       roles: [],
       status: "PENDING_EMAIL_VERIFICATION",
+      sessionVersion: 0,
       createdAt: now,
       updatedAt: now
     };
 
+    await consumeValidatedOtp(otpRow.id);
     await userRepository.create(user);
-    await userRepository.markOtpStatus(otpRow.id, "VERIFIED");
     await userRepository.markEmailVerified(user.id);
     await userRepository.assignRole(user.id, "USER");
     await userRepository.assignRole(user.id, input.accountType);
@@ -401,7 +429,7 @@ export const authService = {
       throw new HttpError(404, "User not found for OTP");
     }
 
-    await userRepository.markOtpStatus(otpRow.id, "VERIFIED");
+    await consumeValidatedOtp(otpRow.id);
     await userRepository.markEmailVerified(user.id);
     await userRepository.assignRole(user.id, "USER");
     await userRepository.assignRole(user.id, input.accountType);
@@ -523,8 +551,9 @@ export const authService = {
       throw new HttpError(404, "Active user not found");
     }
 
-    await userRepository.updatePassword(user.id, await bcrypt.hash(input.newPassword, env.bcryptSaltRounds));
-    await userRepository.markOtpStatus(otpRow.id, "VERIFIED");
+    const passwordHash = await bcrypt.hash(input.newPassword, env.bcryptSaltRounds);
+    await consumeValidatedOtp(otpRow.id);
+    await userRepository.updatePassword(user.id, passwordHash);
     await userRepository.revokeActiveRefreshTokensByUser(user.id);
     await userRepository.createActivityLog({
       userId: user.id,
@@ -537,34 +566,25 @@ export const authService = {
   },
 
   async refresh(input: RefreshTokenInput, meta: RequestMeta): Promise<AuthResult> {
-    const existingToken = await userRepository.findActiveRefreshToken(sha256(input.refreshToken));
-    if (!existingToken) {
-      throw new HttpError(401, "Invalid or expired refresh token");
-    }
-
-    const user = await userRepository.findById(existingToken.user_id);
-    if (!user || user.status !== "ACTIVE") {
-      throw new HttpError(401, "Invalid refresh token user");
-    }
-
     const newRefreshToken = randomToken();
     const newRefreshTokenId = randomUUID();
-    await userRepository.rotateRefreshToken({
-      oldTokenId: existingToken.id,
+    const rotation = await userRepository.rotateRefreshToken({
+      oldTokenHash: sha256(input.refreshToken),
       newTokenId: newRefreshTokenId,
-      userId: user.id,
       tokenHash: sha256(newRefreshToken),
       userAgent: meta.userAgent,
       ipAddress: meta.ipAddress,
       expiresAt: refreshExpiryDate()
     });
+    if (!rotation) {
+      throw new HttpError(401, "Invalid or expired refresh token");
+    }
 
-    await userRepository.createActivityLog({
-      userId: user.id,
-      action: "REFRESH_TOKEN_ROTATED",
-      entityType: "USER",
-      entityId: user.id
-    });
+    const user = await userRepository.findById(rotation.userId);
+    if (!user || user.status !== "ACTIVE") {
+      await userRepository.revokeRefreshToken(newRefreshTokenId, "SECURITY_RISK");
+      throw new HttpError(401, "Invalid refresh token user");
+    }
 
     return {
       user: toPublicUser(user),

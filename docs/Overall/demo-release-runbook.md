@@ -1,6 +1,6 @@
 # Demo And Release Runbook
 
-Last updated: 2026-07-10
+Last updated: 2026-08-02
 
 Tài liệu này dùng để chuẩn bị môi trường demo/release mà không làm bẩn database Aiven dùng chung.
 
@@ -44,6 +44,8 @@ npm run dev:web
 
 Socket.IO dùng chung HTTP server và `API_PORT`; không có `SOCKET_PORT` riêng. Redis là dependency tùy chọn cho local/MVP một instance: đặt `REDIS_REQUIRED=false` để API fallback sang in-memory limiter và Socket.IO single-process khi Redis không chạy. Với triển khai nhiều API instance, cấu hình `REDIS_URL`, đặt `REDIS_REQUIRED=true`, đồng thời cấu hình origin web bằng `FRONTEND_URL` và `SOCKET_CORS_ORIGIN`.
 
+Log `socket_adapter_ready` với `mode=single-process` và `reason=redis-unavailable` là trạng thái fallback dự kiến cho local một instance, không phải lỗi startup. Không dùng trạng thái này cho scale-out nhiều API instance.
+
 ## 5. Kiểm Tra Trước Demo
 
 ```powershell
@@ -64,7 +66,7 @@ Các lệnh e2e cần API đang chạy và phải trỏ vào database test. CI d
 ## 6. Fallback
 
 - Cloudinary lỗi: dùng ảnh seed, không demo upload live.
-- Google Vision lỗi: trình bày OCR/tag là assisted/fallback-dependent; matching text/category/location/time vẫn hoạt động.
+- Google Vision lỗi: kiểm tra `GOOGLE_VISION_API_KEY`, Cloud Vision API đã enable, billing đã liên kết đúng project và API-key restriction phù hợp với backend. `BILLING_DISABLED`, `SERVICE_DISABLED` và provider reason được log an toàn mà không in key. Nếu provider chưa sẵn sàng, trình bày OCR/tag là assisted/fallback-dependent; matching text/category/location/time vẫn hoạt động.
 - SMTP lỗi: dùng tài khoản seed thay vì đăng ký OTP live.
 - Java không chạy: demo core Node; trình bày Java là extension và dùng build evidence từ CI.
 - Aiven chậm: có database local/test backup và video ngắn của flow chính.

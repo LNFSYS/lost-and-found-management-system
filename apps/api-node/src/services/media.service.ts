@@ -18,6 +18,14 @@ function assertPostOwnerOrAdmin(auth: AccessTokenPayload, ownerId: string) {
   }
 }
 
+function canViewPostEvidence(auth: AccessTokenPayload, ownerId: string) {
+  return (
+    auth.sub === ownerId ||
+    auth.roles.includes("STAFF") ||
+    auth.roles.includes("ADMIN")
+  );
+}
+
 function canViewClaim(auth: AccessTokenPayload, claim: { claimant: { id: string }; postOwnerId: string }) {
   return (
     auth.sub === claim.claimant.id ||
@@ -148,7 +156,20 @@ export const mediaService = {
         bytes: uploaded.bytes,
         sortOrder: existingCount + index
       });
-      uploadedMedia.push({ id: mediaId, mediaKind: upload.mediaKind, ...uploaded });
+      uploadedMedia.push(
+        upload.mediaKind === "EVIDENCE"
+          ? {
+              id: mediaId,
+              mediaKind: upload.mediaKind,
+              imagePath: `/api/posts/${postId}/media/${mediaId}/image`,
+              resourceType: uploaded.resourceType,
+              format: uploaded.format,
+              width: uploaded.width,
+              height: uploaded.height,
+              bytes: uploaded.bytes
+            }
+          : { id: mediaId, mediaKind: upload.mediaKind, ...uploaded }
+      );
 
       if (upload.mediaKind === "ITEM") {
         const vision = await visionService.analyzeImageUrl(uploaded.secureUrl);
@@ -212,6 +233,18 @@ export const mediaService = {
     });
 
     return { deleted: true };
+  },
+
+  async getPostEvidenceImageUrl(auth: AccessTokenPayload, postId: string, mediaId: string) {
+    const media = await postRepository.findMediaAccess(postId, mediaId);
+    if (!media || media.media_kind !== "EVIDENCE") {
+      throw new HttpError(404, "Post evidence image not found");
+    }
+    if (!canViewPostEvidence(auth, media.user_id)) {
+      throw new HttpError(403, "You do not have permission to view this post evidence");
+    }
+
+    return { imageUrl: media.secure_url };
   },
 
   async uploadClaimEvidence(

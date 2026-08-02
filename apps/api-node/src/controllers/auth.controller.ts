@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { z } from "zod";
 import { authService } from "../services/auth.service.js";
 import { notificationRepository } from "../repositories/notification.repository.js";
 import { env } from "../config/env.js";
@@ -23,6 +24,9 @@ function requestMeta(request: Request) {
 }
 
 const REFRESH_COOKIE_NAME = "lnfs.refresh";
+const GOOGLE_OAUTH_COOKIE_NAME = "lnfs.google_oauth";
+const GOOGLE_OAUTH_COOKIE_MAX_AGE = 10 * 60 * 1000;
+const listLimitSchema = z.coerce.number().int().min(1).max(100).default(20);
 
 function readCookie(request: Request, name: string) {
   const header = request.header("cookie");
@@ -32,7 +36,11 @@ function readCookie(request: Request, name: string) {
   for (const part of header.split(";")) {
     const [key, ...valueParts] = part.trim().split("=");
     if (key === name) {
-      return decodeURIComponent(valueParts.join("="));
+      try {
+        return decodeURIComponent(valueParts.join("="));
+      } catch {
+        return undefined;
+      }
     }
   }
   return undefined;
@@ -73,6 +81,26 @@ function clearRefreshCookie(response: Response) {
   });
 }
 
+function googleOAuthCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: env.nodeEnv === "production",
+    sameSite: "lax" as const,
+    path: "/api/auth/google/callback"
+  };
+}
+
+function setGoogleOAuthCookie(response: Response, state: string) {
+  response.cookie(GOOGLE_OAUTH_COOKIE_NAME, state, {
+    ...googleOAuthCookieOptions(),
+    maxAge: GOOGLE_OAUTH_COOKIE_MAX_AGE
+  });
+}
+
+function clearGoogleOAuthCookie(response: Response) {
+  response.clearCookie(GOOGLE_OAUTH_COOKIE_NAME, googleOAuthCookieOptions());
+}
+
 function webSafeAuthResult<T extends { tokens: { refreshToken: string } }>(request: Request, response: Response, result: T) {
   setRefreshCookie(response, result.tokens.refreshToken);
   if (request.header("x-client-platform") !== "web") {
@@ -84,21 +112,24 @@ function webSafeAuthResult<T extends { tokens: { refreshToken: string } }>(reque
 
 export const authController = {
   async googleStart(_request: Request, response: Response) {
-    response.redirect(authService.googleAuthorizationUrl());
+    const authorizationRequest = await authService.createGoogleAuthorizationRequest();
+    setGoogleOAuthCookie(response, authorizationRequest.state);
+    response.redirect(authorizationRequest.url);
   },
 
   async googleCallback(request: Request, response: Response) {
     const redirectUrl = new URL(env.frontendUrl);
     redirectUrl.pathname = "/";
     const code = typeof request.query.code === "string" ? request.query.code : "";
-    if (!code) {
-      redirectUrl.hash = new URLSearchParams({ oauth: "google", error: "Missing Google authorization code" }).toString();
-      response.redirect(redirectUrl.toString());
-      return;
-    }
+    const state = typeof request.query.state === "string" ? request.query.state : undefined;
+    const boundState = readCookie(request, GOOGLE_OAUTH_COOKIE_NAME);
+    clearGoogleOAuthCookie(response);
 
     try {
-      const result = await authService.loginWithGoogle(code, requestMeta(request));
+      if (!code) {
+        throw new Error("Missing Google authorization code");
+      }
+      const result = await authService.loginWithGoogle(code, state, boundState, requestMeta(request));
       setRefreshCookie(response, result.tokens.refreshToken);
       redirectUrl.hash = new URLSearchParams({
         oauth: "google",
@@ -185,7 +216,7 @@ export const authController = {
 
   async activity(request: Request, response: Response) {
     const userId = request.auth!.sub;
-    const limit = Math.min(Number(request.query.limit ?? 20), 100);
+    const limit = listLimitSchema.parse(request.query.limit);
     const activity = await authService.getActivity(userId, limit);
     response.json(ok({ activity }));
   },
@@ -198,7 +229,7 @@ export const authController = {
 
   async notifications(request: Request, response: Response) {
     const userId = request.auth!.sub;
-    const limit = Math.min(Number(request.query.limit ?? 20), 100);
+    const limit = listLimitSchema.parse(request.query.limit);
     response.json(ok(await notificationRepository.listForUser(userId, limit)));
   },
 

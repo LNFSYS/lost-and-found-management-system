@@ -13,6 +13,7 @@ export interface User {
   avatarPublicId?: string;
   roles: UserRole[];
   status: UserStatus;
+  sessionVersion: number;
   emailVerifiedAt?: string;
   lastLoginAt?: string;
   createdAt: string;

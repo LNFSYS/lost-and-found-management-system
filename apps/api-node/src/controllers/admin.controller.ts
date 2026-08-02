@@ -91,6 +91,7 @@ const warehouseProcessSchema = z.object({
   status: z.enum(["DISPOSED", "DONATED", "TRANSFERRED"]),
   note: z.string().trim().min(2).max(1000)
 });
+const warehouseProcessStatuses = new Set(["DISPOSED", "DONATED", "TRANSFERRED"]);
 const nearExpirySchema = z.object({
   daysAhead: z.coerce.number().int().min(1).max(90).default(7)
 });
@@ -115,6 +116,14 @@ function idParam(request: Request) {
     throw new HttpError(400, "Missing id");
   }
   return id;
+}
+
+function warehouseWriteInput(body: unknown) {
+  const input = warehouseSchema.parse(body);
+  if (input.status && warehouseProcessStatuses.has(input.status)) {
+    throw new HttpError(409, "Terminal warehouse statuses can only be set through the overdue processing endpoint");
+  }
+  return input;
 }
 
 function csvCell(value: unknown) {
@@ -315,11 +324,11 @@ export const adminController = {
   async createWarehouseItem(request: Request, response: Response) {
     response
       .status(201)
-      .json(ok(await adminRepository.createWarehouseItem(warehouseSchema.parse(request.body), request.auth!.sub)));
+      .json(ok(await adminRepository.createWarehouseItem(warehouseWriteInput(request.body), request.auth!.sub)));
   },
 
   async updateWarehouseItem(request: Request, response: Response) {
-    response.json(ok(await adminRepository.updateWarehouseItem(idParam(request), warehouseSchema.parse(request.body), request.auth!.sub)));
+    response.json(ok(await adminRepository.updateWarehouseItem(idParam(request), warehouseWriteInput(request.body), request.auth!.sub)));
   },
 
   async updateWarehouseItemStatus(request: Request, response: Response) {

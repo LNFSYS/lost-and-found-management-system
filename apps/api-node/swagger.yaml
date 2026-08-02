@@ -397,6 +397,264 @@ paths:
       responses:
         "200":
           description: Handover point detail
+  /posts/{id}/verification-questions/suggest:
+    post:
+      security:
+        - bearerAuth: []
+      summary: Suggest private verification questions for a FOUND post
+      description: Returns deterministic item/category/OCR-aware suggestions. It never returns an expected answer.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Question suggestions }
+        "403": { description: Only the post owner, Staff or Admin may manage questions }
+  /posts/{id}/verification-questions:
+    get:
+      security:
+        - bearerAuth: []
+      summary: List verification questions visible to the current actor
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Redacted verification-question list }
+    post:
+      security:
+        - bearerAuth: []
+      summary: Create a reviewer-approved verification question
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [prompt, questionType, sourceSignal, expectedAnswer]
+              properties:
+                prompt: { type: string, minLength: 8, maxLength: 500 }
+                questionType: { type: string, enum: [TEXT, MASKED_SERIAL, MULTIPLE_CHOICE, VISUAL_DETAIL] }
+                sourceSignal: { type: string }
+                expectedAnswer: { type: string, writeOnly: true }
+                options:
+                  type: array
+                  minItems: 2
+                  maxItems: 8
+                  items: { type: string }
+                weight: { type: number, minimum: 0.1, maximum: 1, default: 0.5 }
+                privacyLevel: { type: string, enum: [PRIVATE, HIGHLY_PRIVATE] }
+                approved: { type: boolean, default: false }
+      responses:
+        "201": { description: Question saved with a hashed expected answer }
+  /posts/{id}/verification-questions/{questionId}/status:
+    patch:
+      security:
+        - bearerAuth: []
+      summary: Approve or disable a verification question
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: questionId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [APPROVED, DISABLED] }
+      responses:
+        "200": { description: Question status updated }
+  /claims/{id}/verification-questions:
+    get:
+      security:
+        - bearerAuth: []
+      summary: List version-pinned verification questions for a claim
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Claimant-safe or reviewer-safe question view according to role }
+  /claims/{id}/verification-questions/{questionId}/answer:
+    post:
+      security:
+        - bearerAuth: []
+      summary: Submit a private verification answer
+      description: The claimant never receives the expected answer or a correctness result.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: questionId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [answer]
+              properties:
+                answer: { type: string, minLength: 1, maxLength: 500, writeOnly: true }
+      responses:
+        "200": { description: Answer accepted for review }
+        "429": { description: Attempt limit reached }
+  /admin/radar/events:
+    get:
+      security:
+        - bearerAuth: []
+      summary: List sourced campus events for Radar
+      responses:
+        "200": { description: Staff/Admin event list }
+    post:
+      security:
+        - bearerAuth: []
+      summary: Create a sourced campus event (Admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [eventType, sourceType, sourceReference, startsAt, endsAt]
+              properties:
+                eventType: { type: string, enum: [ACADEMIC, SPORTS, CULTURAL, CAMPUS_OPERATIONS, WEATHER, OTHER] }
+                sourceType: { type: string, enum: [OFFICIAL_CALENDAR, CAMPUS_NOTICE, SECURITY_LOG, WEATHER_BULLETIN] }
+                sourceReference: { type: string, minLength: 3, maxLength: 255 }
+                areaId: { type: string, format: uuid, nullable: true }
+                buildingId: { type: string, format: uuid, nullable: true }
+                startsAt: { type: string, format: date-time }
+                endsAt: { type: string, format: date-time }
+      responses:
+        "201": { description: Event created }
+        "403": { description: Admin role required }
+  /admin/radar/events/{id}/analyze:
+    post:
+      security:
+        - bearerAuth: []
+      summary: Analyze LOST anomalies for a sourced event (Admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Sliding-window analysis result }
+  /admin/radar/alerts:
+    get:
+      security:
+        - bearerAuth: []
+      summary: List privacy-preserving Campus Radar alerts
+      responses:
+        "200": { description: Staff/Admin alert list }
+  /admin/radar/alerts/{id}/status:
+    patch:
+      security:
+        - bearerAuth: []
+      summary: Acknowledge, resolve or dismiss a Radar alert
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, reason]
+              properties:
+                status: { type: string, enum: [ACKNOWLEDGED, RESOLVED, DISMISSED] }
+                reason: { type: string, enum: [REVIEWED_NO_ACTION, MONITORING, OPERATIONAL_FOLLOW_UP, FALSE_POSITIVE] }
+      responses:
+        "200": { description: Alert disposition updated }
+  /admin/radar/alerts/{id}/posts:
+    get:
+      security:
+        - bearerAuth: []
+      summary: List public post summaries in a Radar alert scope
+      description: Returns only LOST post identifiers, titles, status, time, category and campus location; no contact, media, evidence or OCR data.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        "200": { description: Staff/Admin related post summaries }
+        "403": { description: Staff/Admin role required }
+        "404": { description: Radar alert not found }
+  /admin/radar/audit:
+    get:
+      security:
+        - bearerAuth: []
+      summary: Get Campus Radar audit data (Admin only)
+      responses:
+        "200": { description: Radar audit data }
+  /admin/visual-hunt:
+    post:
+      security:
+        - bearerAuth: []
+      summary: Rank LOST candidates from one explicit Staff/Admin scan image
+      description: Accepts a captured frame or uploaded image. Raw input is not persisted and no post state changes automatically.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image]
+              properties:
+                image: { type: string, format: binary }
+                targetType: { type: string, enum: [LOST, FOUND], default: LOST }
+                categoryId: { type: string, format: uuid }
+                areaId: { type: string, format: uuid }
+                maxResults: { type: integer, minimum: 1, maximum: 20, default: 20 }
+      responses:
+        "200": { description: Ranked candidate cards with advisory signals }
+        "400": { description: Invalid type, signature, size or request }
+        "403": { description: Staff/Admin role required }
+  /admin/visual-hunt/feedback:
+    post:
+      security:
+        - bearerAuth: []
+      summary: Record Staff/Admin Visual Hunt candidate feedback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [postId, decision, source]
+              properties:
+                postId: { type: string, format: uuid }
+                decision: { type: string, enum: [CANDIDATE, NOT_RELEVANT] }
+                similarityScore: { type: number, minimum: 0, maximum: 1, nullable: true }
+                source: { type: string, enum: [CAMERA, IMAGE, VIDEO_FRAMES, BATCH_IMAGES] }
+      responses:
+        "200": { description: Feedback recorded without changing item status }
   /docs:
     get:
       summary: OpenAPI document

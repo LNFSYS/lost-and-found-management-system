@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { env } from "../config/env.js";
+import { validateAccessSession } from "../services/access-session.service.js";
 import { isConfigured } from "../utils/configured.js";
 import { HttpError } from "../utils/http-error.js";
 
@@ -8,6 +9,7 @@ export interface AccessTokenPayload {
   sub: string;
   email: string;
   roles: string[];
+  sessionVersion?: number;
 }
 
 declare module "express-serve-static-core" {
@@ -16,7 +18,7 @@ declare module "express-serve-static-core" {
   }
 }
 
-export function requireAuth(request: Request, _response: Response, next: NextFunction) {
+export async function requireAuth(request: Request, _response: Response, next: NextFunction) {
   const authHeader = request.header("authorization");
   const token = authHeader?.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
 
@@ -32,14 +34,19 @@ export function requireAuth(request: Request, _response: Response, next: NextFun
   }
 
   try {
-    request.auth = jwt.verify(token, accessSecret) as AccessTokenPayload;
+    const payload = jwt.verify(token, accessSecret) as AccessTokenPayload;
+    if (!(await validateAccessSession(payload))) {
+      next(new HttpError(401, "Session is no longer active"));
+      return;
+    }
+    request.auth = payload;
     next();
   } catch {
     next(new HttpError(401, "Invalid or expired token"));
   }
 }
 
-export function optionalAuth(request: Request, _response: Response, next: NextFunction) {
+export async function optionalAuth(request: Request, _response: Response, next: NextFunction) {
   const authHeader = request.header("authorization");
   const token = authHeader?.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
 
@@ -55,7 +62,10 @@ export function optionalAuth(request: Request, _response: Response, next: NextFu
   }
 
   try {
-    request.auth = jwt.verify(token, accessSecret) as AccessTokenPayload;
+    const payload = jwt.verify(token, accessSecret) as AccessTokenPayload;
+    if (await validateAccessSession(payload)) {
+      request.auth = payload;
+    }
     next();
   } catch {
     next();

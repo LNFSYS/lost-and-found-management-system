@@ -115,10 +115,12 @@ async function main() {
       roles: ["STUDENT"]
     })
   }, adminToken, 201);
+  const tokenBeforeLock = await login(createdUserEmail);
   await request(`/admin/users/${user.id}/status`, {
     method: "PATCH",
     body: JSON.stringify({ status: "LOCKED" })
   }, adminToken);
+  await request("/auth/me", {}, tokenBeforeLock, 401);
   await request(`/admin/users/${user.id}/roles`, {
     method: "PATCH",
     body: JSON.stringify({ roles: ["USER", "LECTURER"] })
@@ -141,6 +143,16 @@ async function main() {
   await request(`/admin/users/${user.id}/status`, {
     method: "PATCH",
     body: JSON.stringify({ status: "ACTIVE" })
+  }, adminToken);
+  const tokenBeforeRoleChange = await login(createdUserEmail);
+  await request(`/admin/users/${user.id}/roles`, {
+    method: "PATCH",
+    body: JSON.stringify({ roles: ["USER", "STUDENT"] })
+  }, adminToken);
+  await request("/auth/me", {}, tokenBeforeRoleChange, 401);
+  await request(`/admin/users/${user.id}/roles`, {
+    method: "PATCH",
+    body: JSON.stringify({ roles: ["USER", "LECTURER"] })
   }, adminToken);
   const createdUserToken = await login(createdUserEmail);
   const userActivity = await request<{

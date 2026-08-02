@@ -135,32 +135,43 @@ export const claimRepository = {
     approximateLostAt?: Date | null;
     approximateLocation: string;
   }) {
-    await dbPool.execute(
-      `
-        INSERT INTO claims (
-          id, post_id, claimant_id, description, secret_answer_hash, has_private_signal,
-          approximate_lost_at, approximate_location
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        input.id,
-        input.postId,
-        input.claimantId,
-        input.description ?? null,
-        input.secretAnswerHash,
-        input.hasPrivateSignal,
-        input.approximateLostAt ?? null,
-        input.approximateLocation
-      ]
-    );
-    await dbPool.execute(
-      `
-        INSERT INTO claim_state_logs (id, claim_id, from_status, to_status, actor_id, note)
-        VALUES (UUID(), ?, NULL, 'PENDING', ?, 'Claim submitted')
-      `,
-      [input.id, input.claimantId]
-    );
+    const connection = await dbPool.getConnection();
+    try {
+      await connection.beginTransaction();
+      await connection.execute(
+        `INSERT INTO claims (
+           id, post_id, claimant_id, description, secret_answer_hash, has_private_signal,
+           approximate_lost_at, approximate_location
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          input.id,
+          input.postId,
+          input.claimantId,
+          input.description ?? null,
+          input.secretAnswerHash,
+          input.hasPrivateSignal,
+          input.approximateLostAt ?? null,
+          input.approximateLocation
+        ]
+      );
+      await connection.execute(
+        `INSERT INTO claim_verification_assignments (claim_id, question_id)
+         SELECT ?, id FROM item_verification_questions
+         WHERE post_id = ? AND status = 'APPROVED'`,
+        [input.id, input.postId]
+      );
+      await connection.execute(
+        `INSERT INTO claim_state_logs (id, claim_id, from_status, to_status, actor_id, note)
+         VALUES (UUID(), ?, NULL, 'PENDING', ?, 'Claim submitted')`,
+        [input.id, input.claimantId]
+      );
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
 
     return this.findById(input.id);
   },

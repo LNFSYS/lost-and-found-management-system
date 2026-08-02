@@ -2,14 +2,17 @@ import { Router } from "express";
 import { claimController } from "../controllers/claim.controller.js";
 import { mediaController } from "../controllers/media.controller.js";
 import { postController } from "../controllers/post.controller.js";
+import { verificationQuestionController } from "../controllers/verification-question.controller.js";
 import { optionalAuth, requireAnyRole, requireAuth } from "../middlewares/auth.middleware.js";
 import { rateLimit } from "../middlewares/rate-limit.middleware.js";
 import { memoryUpload } from "../middlewares/upload.middleware.js";
+import { requireFeatureFlag } from "../middlewares/feature-flag.middleware.js";
 
 export const postRoutes = Router();
 export const searchRoutes = Router();
 const postWriteLimit = rateLimit({ keyPrefix: "post-write", windowMs: 10 * 60 * 1000, max: 30 });
 const postUploadLimit = rateLimit({ keyPrefix: "post-upload", windowMs: 10 * 60 * 1000, max: 15 });
+const verificationQuestionsEnabled = requireFeatureFlag("ai.verification_questions_enabled");
 
 postRoutes.post("/", requireAuth, postWriteLimit, (request, response, next) => {
   postController.create(request, response).catch(next);
@@ -29,6 +32,22 @@ postRoutes.get("/my/match-suggestions", requireAuth, (request, response, next) =
 
 postRoutes.get("/:id/claims", requireAuth, (request, response, next) => {
   claimController.listForPost(request, response).catch(next);
+});
+
+postRoutes.post("/:id/verification-questions/suggest", requireAuth, postWriteLimit, verificationQuestionsEnabled, (request, response, next) => {
+  verificationQuestionController.suggest(request, response).catch(next);
+});
+
+postRoutes.get("/:id/verification-questions", requireAuth, verificationQuestionsEnabled, (request, response, next) => {
+  verificationQuestionController.listForPost(request, response).catch(next);
+});
+
+postRoutes.post("/:id/verification-questions", requireAuth, postWriteLimit, verificationQuestionsEnabled, (request, response, next) => {
+  verificationQuestionController.create(request, response).catch(next);
+});
+
+postRoutes.patch("/:id/verification-questions/:questionId/status", requireAuth, postWriteLimit, verificationQuestionsEnabled, (request, response, next) => {
+  verificationQuestionController.updateStatus(request, response).catch(next);
 });
 
 postRoutes.get("/:id/matches", requireAuth, (request, response, next) => {
@@ -78,6 +97,10 @@ postRoutes.post(
 
 postRoutes.delete("/:id/media/:mediaId", requireAuth, (request, response, next) => {
   mediaController.deletePostMedia(request, response).catch(next);
+});
+
+postRoutes.get("/:id/media/:mediaId/image", requireAuth, (request, response, next) => {
+  mediaController.postEvidenceImage(request, response).catch(next);
 });
 
 postRoutes.delete("/:id", requireAuth, (request, response, next) => {

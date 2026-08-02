@@ -61,6 +61,8 @@ async function installMockApi(
     onAppointmentProof?: () => void;
     onCompleteAppointment?: () => void;
     onAppointmentFeedback?: (payload: Record<string, unknown>) => void;
+    aiFeatures?: boolean;
+    radarCategoryAlert?: boolean;
   } = {}
 ) {
   const user = makeUser(role);
@@ -98,7 +100,11 @@ async function installMockApi(
     } else if (path === "/handover-points") {
       data = { handoverPoints: [] };
     } else if (path === "/config/public") {
-      data = { entries: [] };
+      data = { entries: options.aiFeatures ? [
+        { key: "ai.verification_questions_enabled", value: true, valueType: "BOOLEAN", description: null },
+        { key: "ai.campus_radar_enabled", value: true, valueType: "BOOLEAN", description: null },
+        { key: "ai.visual_hunt_enabled", value: true, valueType: "BOOLEAN", description: null }
+      ] : [] };
     } else if (path === "/posts/my/match-suggestions") {
       data = { suggestions: [] };
     } else if (path === "/posts" && method === "POST") {
@@ -264,7 +270,7 @@ async function installMockApi(
         }
       };
     } else if (path === "/admin/categories") {
-      data = { categories: [] };
+      data = { categories: options.radarCategoryAlert ? [{ id: "category-wallet", name: "Ví", parentId: null, status: "ACTIVE" }] : [] };
     } else if (path === "/admin/users") {
       data = { users: [] };
     } else if (path === "/admin/reports") {
@@ -285,6 +291,61 @@ async function installMockApi(
       data = { capacity: { activeItems: 0, capacity: 100, warningAt: 80, usageRatio: 0, isFull: false, isNearFull: false } };
     } else if (path === "/admin/return-feedback") {
       data = { feedback: [] };
+    } else if (path === "/admin/visual-hunt" && method === "POST") {
+      data = {
+        providerAvailable: true,
+        fallback: { used: false, mode: "NONE", reason: null },
+        safetyStatus: "CLEAR",
+        resultCount: 1,
+        results: [{
+          postId: "post-existing",
+          type: "LOST",
+          status: "OPEN",
+          title: "Ví màu nâu",
+          category: { id: "category-wallet", name: "Ví" },
+          area: { id: "area-alpha", name: "Alpha" },
+          building: { id: "building-alpha", name: "Tòa Alpha" },
+          lostFoundAt: now,
+          createdAt: now,
+          similarityScore: 0.87,
+          signals: { visual: 0.9, ocr: 0.75 },
+          matchMode: "VISUAL_METADATA"
+        }]
+      };
+    } else if (path === "/admin/visual-hunt/feedback" && method === "POST") {
+      data = { feedback: { id: "visual-feedback-1" } };
+    } else if (path === "/admin/radar/events") {
+      data = { events: options.radarCategoryAlert ? [{
+        id: "radar-event-alpha",
+        eventType: "ACADEMIC",
+        source: { type: "OFFICIAL_CALENDAR", reference: "DEMO-EXAM" },
+        area: { id: "area-alpha", name: "Alpha" },
+        building: { id: "building-alpha", name: "Tòa Alpha" },
+        startsAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+        endsAt: new Date().toISOString(),
+        status: "ACTIVE",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }] : [] };
+    } else if (path === "/admin/radar/alerts") {
+      data = { alerts: options.radarCategoryAlert ? [{
+        id: "radar-alert-wallet",
+        eventId: "radar-event-alpha",
+        category: { id: "category-wallet", name: "Ví" },
+        scope: "CATEGORY",
+        window: { startsAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(), endsAt: new Date().toISOString(), minutes: 60, stepMinutes: 15 },
+        baseline: { startsAt: new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString(), endsAt: new Date().toISOString(), windowCount: 20, expectedMean: 2, standardDeviation: 1 },
+        observedCount: 11,
+        zScore: 9,
+        observedRatio: 5.5,
+        severity: "CRITICAL",
+        status: "OPEN",
+        occurrenceCount: 1,
+        emissionCount: 1,
+        lastDetectedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }] : [], advisory: "Aggregate advisory only." };
     } else {
       data = { items: [], page: 1, pageSize: 12, total: 0 };
     }
@@ -388,6 +449,105 @@ test("admin sees dashboard, user, report and configuration navigation", async ({
   await expect(page.getByRole("button", { name: "Báo cáo", exact: true })).toHaveClass(/active/);
   await page.getByRole("button", { name: "Cấu hình", exact: true }).click();
   await expect(page.getByRole("button", { name: "Cấu hình", exact: true })).toHaveClass(/active/);
+});
+
+test("staff Radar shows the selected category count without requiring an all-category alert", async ({ page }) => {
+  await installMockApi(page, "STAFF", { aiFeatures: true, radarCategoryAlert: true });
+  await login(page, "STAFF");
+  await page.getByRole("button", { name: "Mở menu tài khoản" }).click();
+  await page.getByRole("button", { name: "Mở bảng nhân viên" }).click();
+  await page.getByRole("button", { name: "Radar campus" }).click();
+
+  await page.getByLabel("Bộ lọc radar").getByLabel("Danh mục").selectOption("category-wallet");
+  await expect(page.getByText("11 báo mất", { exact: true })).toBeVisible();
+});
+
+test("staff Visual Hunt handles denied camera and batch image fallback", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia: () => Promise.reject(new DOMException("Denied", "NotAllowedError")) }
+    });
+  });
+  await installMockApi(page, "STAFF", { aiFeatures: true });
+  await login(page, "STAFF");
+  await page.getByRole("button", { name: "Mở menu tài khoản" }).click();
+  await page.getByRole("button", { name: "Mở bảng nhân viên" }).click();
+  await page.getByRole("button", { name: "Visual Hunt" }).click();
+
+  await page.getByRole("button", { name: "Mở camera" }).click();
+  await expect(page.getByText(/Quyền camera bị từ chối/)).toBeVisible();
+
+  const imageInput = page.locator('input[type="file"][accept*="image/jpeg"]');
+  await imageInput.setInputFiles([
+    { name: "shelf-1.png", mimeType: "image/png", buffer: Buffer.from("89504e470d0a1a0a", "hex") },
+    { name: "shelf-2.png", mimeType: "image/png", buffer: Buffer.from("89504e470d0a1a0a", "hex") }
+  ]);
+  await page.getByRole("button", { name: "Phân tích ảnh" }).click();
+  await expect(page.getByText("87%")).toBeVisible();
+  await page.getByRole("button", { name: "Đánh dấu candidate" }).click();
+  await expect(page.getByText(/Đã ghi nhận candidate/)).toBeVisible();
+});
+
+test("staff Visual Hunt handles unavailable camera and local video-frame fallback", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia: () => Promise.reject(new DOMException("Missing", "NotFoundError")) }
+    });
+
+    const originalCreateElement = Document.prototype.createElement;
+    Document.prototype.createElement = function createElement(tagName: string, options?: ElementCreationOptions) {
+      const element = originalCreateElement.call(this, tagName, options);
+      if (tagName.toLowerCase() !== "video") return element;
+
+      const video = element as HTMLVideoElement;
+      let currentTime = 0;
+      Object.defineProperties(video, {
+        duration: { configurable: true, get: () => 4 },
+        videoWidth: { configurable: true, get: () => 96 },
+        videoHeight: { configurable: true, get: () => 64 },
+        readyState: { configurable: true, get: () => HTMLMediaElement.HAVE_ENOUGH_DATA },
+        currentTime: {
+          configurable: true,
+          get: () => currentTime,
+          set: (value: number) => {
+            currentTime = value;
+            window.setTimeout(() => video.dispatchEvent(new Event("seeked")), 0);
+          }
+        },
+        src: {
+          configurable: true,
+          get: () => "blob:visual-hunt-test",
+          set: () => window.setTimeout(() => video.dispatchEvent(new Event("loadedmetadata")), 10)
+        }
+      });
+      video.load = () => undefined;
+      return video;
+    } as typeof Document.prototype.createElement;
+
+    CanvasRenderingContext2D.prototype.drawImage = () => undefined;
+    URL.createObjectURL = () => "blob:visual-hunt-test";
+    URL.revokeObjectURL = () => undefined;
+  });
+
+  await installMockApi(page, "STAFF", { aiFeatures: true });
+  await login(page, "STAFF");
+  await page.getByRole("button", { name: "Mở menu tài khoản" }).click();
+  await page.getByRole("button", { name: "Mở bảng nhân viên" }).click();
+  await page.getByRole("button", { name: "Visual Hunt" }).click();
+
+  await page.getByRole("button", { name: "Mở camera" }).click();
+  await expect(page.getByText("Không tìm thấy camera phù hợp trên thiết bị này.")).toBeVisible();
+
+  await page.locator('input[type="file"][accept="video/*"]').setInputFiles({
+    name: "warehouse-shelf.webm",
+    mimeType: "video/webm",
+    buffer: Buffer.from("1a45dfa3", "hex")
+  });
+  await expect(page.getByText("Đã trích 3 khung hình. Video gốc vẫn ở trên thiết bị.")).toBeVisible();
+  await page.getByRole("button", { name: "Phân tích ảnh" }).click();
+  await expect(page.getByText("87%")).toBeVisible();
 });
 
 test("student opens a FOUND post route and submits an ownership claim", async ({ page }) => {

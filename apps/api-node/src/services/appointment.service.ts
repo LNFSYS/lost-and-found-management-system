@@ -150,9 +150,6 @@ export const appointmentService = {
     if (Number.isNaN(proposedAt.getTime()) || proposedAt.getTime() <= Date.now()) {
       throw new HttpError(422, "Appointment time must be in the future");
     }
-    if (await appointmentRepository.hasScheduleConflict(input)) {
-      throw new HttpError(409, "This handover point already has another appointment near that time");
-    }
     const creation = await appointmentRepository.create(input, auth.sub);
     if (creation.status === "CLAIM_NOT_FOUND") {
       throw new HttpError(404, "Claim not found");
@@ -162,6 +159,9 @@ export const appointmentService = {
     }
     if (creation.status === "ACTIVE_APPOINTMENT_EXISTS") {
       throw new HttpError(409, "This claim already has an active appointment");
+    }
+    if (creation.status === "SCHEDULE_CONFLICT") {
+      throw new HttpError(409, "This handover point already has another appointment near that time");
     }
     const appointment = creation.appointment;
     if (!appointment) {
@@ -196,7 +196,14 @@ export const appointmentService = {
     if (appointment.status !== "PENDING" && appointment.status !== "RESCHEDULED") {
       throw new HttpError(409, "Only pending or rescheduled appointments can be accepted");
     }
-    const updated = await appointmentRepository.accept(appointmentId);
+    const transition = await appointmentRepository.accept(appointmentId, appointment);
+    if (transition.status !== "ACCEPTED") {
+      throw new HttpError(409, "Only pending or rescheduled appointments can be accepted");
+    }
+    const updated = transition.appointment;
+    if (!updated) {
+      throw new HttpError(500, "Unable to load the accepted appointment");
+    }
     await notifyAppointmentUsers(
       { ...appointment, id: appointmentId },
       "APPOINTMENT_ACCEPTED",
@@ -212,7 +219,14 @@ export const appointmentService = {
     if (appointment.status !== "PENDING" && appointment.status !== "RESCHEDULED") {
       throw new HttpError(409, "Only pending or rescheduled appointments can be rejected");
     }
-    const updated = await appointmentRepository.reject(appointmentId, reason.trim());
+    const transition = await appointmentRepository.reject(appointmentId, reason.trim(), appointment);
+    if (transition.status !== "REJECTED") {
+      throw new HttpError(409, "Only pending or rescheduled appointments can be rejected");
+    }
+    const updated = transition.appointment;
+    if (!updated) {
+      throw new HttpError(500, "Unable to load the rejected appointment");
+    }
     await notifyAppointmentUsers(
       { ...appointment, id: appointmentId },
       "APPOINTMENT_REJECTED",
@@ -228,7 +242,14 @@ export const appointmentService = {
     if (appointment.status === "COMPLETED" || appointment.status === "CANCELLED" || appointment.status === "REJECTED") {
       throw new HttpError(409, "This appointment can no longer be cancelled");
     }
-    const updated = await appointmentRepository.cancel(appointmentId, reason.trim());
+    const transition = await appointmentRepository.cancel(appointmentId, reason.trim(), appointment);
+    if (transition.status !== "CANCELLED") {
+      throw new HttpError(409, "This appointment can no longer be cancelled");
+    }
+    const updated = transition.appointment;
+    if (!updated) {
+      throw new HttpError(500, "Unable to load the cancelled appointment");
+    }
     await notifyAppointmentUsers(
       { ...appointment, id: appointmentId },
       "APPOINTMENT_CANCELLED",
@@ -254,10 +275,17 @@ export const appointmentService = {
     if (Number.isNaN(proposedAt.getTime()) || proposedAt.getTime() <= Date.now()) {
       throw new HttpError(422, "Appointment time must be in the future");
     }
-    if (await appointmentRepository.hasScheduleConflict({ ...input, appointmentId })) {
+    const transition = await appointmentRepository.reschedule(appointmentId, input, appointment);
+    if (transition.status === "SCHEDULE_CONFLICT") {
       throw new HttpError(409, "This handover point already has another appointment near that time");
     }
-    const updated = await appointmentRepository.reschedule(appointmentId, input);
+    if (transition.status !== "RESCHEDULED") {
+      throw new HttpError(409, "This appointment can no longer be rescheduled");
+    }
+    const updated = transition.appointment;
+    if (!updated) {
+      throw new HttpError(500, "Unable to load the rescheduled appointment");
+    }
     await notifyAppointmentUsers(
       { ...appointment, id: appointmentId },
       "APPOINTMENT_RESCHEDULED",

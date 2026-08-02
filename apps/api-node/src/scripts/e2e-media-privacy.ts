@@ -15,7 +15,13 @@ interface Envelope<T> {
 
 interface PostDetail {
   post: { id: string; contactInfo?: string | null; contactInfoHidden?: boolean };
-  media: Array<{ id: string; mediaKind?: "ITEM" | "EVIDENCE"; secureUrl: string }>;
+  media: Array<{
+    id: string;
+    mediaKind?: "ITEM" | "EVIDENCE";
+    secureUrl?: string;
+    publicId?: string;
+    imagePath?: string;
+  }>;
 }
 
 async function request<T>(path: string, init: RequestInit = {}, token?: string, expectedStatus = 200) {
@@ -113,8 +119,20 @@ async function main() {
     await request(`/posts/${created.post.id}/media`, { method: "POST", body: upload }, ownerToken, 201);
 
     const ownerDetail = await request<PostDetail>(`/posts/${created.post.id}`, {}, ownerToken);
-    if (!ownerDetail.media.some((media) => media.mediaKind === "EVIDENCE")) {
+    const postEvidence = ownerDetail.media.find((media) => media.mediaKind === "EVIDENCE");
+    if (!postEvidence?.imagePath) {
       throw new Error("Expected owner to see their private post evidence media.");
+    }
+    if (postEvidence.secureUrl || postEvidence.publicId || /https?:\/\//i.test(JSON.stringify(postEvidence))) {
+      throw new Error("Private post evidence exposed a raw storage URL or identifier.");
+    }
+    const unrelatedPostEvidence = await imageRequest(postEvidence.imagePath, unrelatedToken);
+    if (unrelatedPostEvidence.status !== 403) {
+      throw new Error(`Unrelated user must receive 403 for private post evidence, got ${unrelatedPostEvidence.status}.`);
+    }
+    const ownerPostEvidence = await imageRequest(postEvidence.imagePath, ownerToken);
+    if (ownerPostEvidence.status !== 200 || !ownerPostEvidence.contentType.startsWith("image/")) {
+      throw new Error("Authorized owner could not stream private post evidence.");
     }
 
     const viewerDetail = await request<PostDetail>(`/posts/${created.post.id}`, {}, viewerToken);

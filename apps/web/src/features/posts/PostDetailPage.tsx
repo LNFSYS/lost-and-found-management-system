@@ -5,6 +5,7 @@ import { formNullable, locationText } from "../../app/helpers";
 import { api, hasAccessToken, type BoardPost } from "../../services/api";
 import { ClaimAppointmentPanel } from "../claims/ClaimWorkflowPanels";
 import { MatchReviewPanel } from "./MatchReviewPanel";
+import { VerificationQuestionManager } from "../ai-tools";
 import "./post-detail.css";
 
 export function PostDetailPage(props: {
@@ -13,6 +14,7 @@ export function PostDetailPage(props: {
   handoverPoints: Array<{ id: string; name: string }>;
   currentUserId?: string;
   canReviewClaims: boolean;
+  verificationQuestionsEnabled: boolean;
   onClose: () => void;
   onClaim: (post: BoardPost) => void;
 }) {
@@ -24,12 +26,52 @@ export function PostDetailPage(props: {
   const [editOpen, setEditOpen] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const post = props.detail?.post;
+  const canManagePost = Boolean(post && props.currentUserId === post.userId);
+  const canManageVerification = Boolean(props.verificationQuestionsEnabled && post?.type === "FOUND" && (canManagePost || props.canReviewClaims));
   const queryClient = useQueryClient();
   const claimsQuery = useQuery({
     queryKey: ["post-claims", post?.id],
     queryFn: () => api.postClaims(post!.id),
     enabled: Boolean(post?.id && hasAccessToken() && post.type === "FOUND"),
     retry: false
+  });
+  const verificationQuestionsQuery = useQuery({
+    queryKey: ["post-verification-questions", post?.id],
+    queryFn: () => api.postVerificationQuestions(post!.id),
+    enabled: Boolean(post?.id && canManageVerification),
+    retry: false
+  });
+  const verificationSuggestionsQuery = useQuery({
+    queryKey: ["verification-question-suggestions", post?.id],
+    queryFn: () => api.suggestVerificationQuestions(post!.id),
+    enabled: Boolean(post?.id && canManageVerification),
+    retry: false
+  });
+  const verificationQuestionMutation = useMutation({
+    mutationFn: async (input: { question: string; expectedAnswer: string }) => {
+      const suggestion = verificationSuggestionsQuery.data?.suggestions.find((item) => item.prompt === input.question);
+      return api.createVerificationQuestion(post!.id, {
+        prompt: input.question,
+        questionType: suggestion?.questionType ?? "TEXT",
+        sourceSignal: suggestion?.sourceSignal ?? "manual_private_detail",
+        expectedAnswer: input.expectedAnswer,
+        weight: suggestion?.privacyLevel === "HIGHLY_PRIVATE" ? 0.9 : 0.7,
+        privacyLevel: suggestion?.privacyLevel ?? "PRIVATE",
+        approved: true
+      });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["post-verification-questions", post?.id] });
+    }
+  });
+  const disableVerificationQuestionMutation = useMutation({
+    mutationFn: async () => {
+      const current = verificationQuestionsQuery.data?.questions.find((question) => question.status === "APPROVED");
+      if (current) await api.updateVerificationQuestionStatus(post!.id, current.id, "DISABLED");
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["post-verification-questions", post?.id] });
+    }
   });
   const appointmentMutation = useMutation({
     mutationFn: (input: Record<string, unknown>) => api.createAppointment(input),
@@ -81,17 +123,53 @@ export function PostDetailPage(props: {
     setActionMessage(null);
   }, [post?.id]);
 
+  const [privateMediaUrls, setPrivateMediaUrls] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const evidenceMedia = props.detail?.media.filter((media) => media.mediaKind === "EVIDENCE" && media.imagePath) ?? [];
+    let cancelled = false;
+    const createdUrls: string[] = [];
+
+    Promise.all(
+      evidenceMedia.map(async (media) => {
+        const url = await api.postEvidenceImage(props.detail!.post.id, media.id);
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return null;
+        }
+        createdUrls.push(url);
+        return [media.id, url] as const;
+      })
+    )
+      .then((entries) => {
+        if (!cancelled) {
+          setPrivateMediaUrls(Object.fromEntries(entries.filter((entry) => entry !== null)));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPrivateMediaUrls({});
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      createdUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [props.detail]);
+
   const images = useMemo(() => {
     const list: string[] = [];
     if (props.detail?.media && props.detail.media.length > 0) {
       props.detail.media.forEach((m) => {
-        if (m.optimizedUrl || m.secureUrl) list.push(m.optimizedUrl ?? m.secureUrl);
+        const imageUrl = m.optimizedUrl ?? m.secureUrl ?? privateMediaUrls[m.id];
+        if (imageUrl) list.push(imageUrl);
       });
     } else if (post?.coverImageUrl) {
       list.push(post.coverImageUrl);
     }
     return list;
-  }, [props.detail?.media, post?.coverImageUrl]);
+  }, [privateMediaUrls, props.detail?.media, post?.coverImageUrl]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -167,8 +245,6 @@ export function PostDetailPage(props: {
     const year = date.getFullYear();
     return `${capitalizedWeekday}, ${day} tháng ${month}, ${year}`;
   })() : "Chưa rõ thời gian";
-
-  const canManagePost = Boolean(post && props.currentUserId === post.userId);
 
   return (
     <>
@@ -307,6 +383,42 @@ export function PostDetailPage(props: {
                     ))}
                   </div>
                 </div>
+              )}
+
+              {canManageVerification && (
+                <VerificationQuestionManager
+                  configuration={(() => {
+                    const question = verificationQuestionsQuery.data?.questions.find((item) => item.status === "APPROVED")
+                      ?? verificationQuestionsQuery.data?.questions.find((item) => item.status === "DRAFT");
+                    return question ? {
+                      question: question.prompt,
+                      status: question.status,
+                      hasExpectedAnswer: true,
+                      updatedAt: question.approvedAt ?? question.createdAt
+                    } : null;
+                  })()}
+                  suggestions={(verificationSuggestionsQuery.data?.suggestions ?? []).map((suggestion) => ({
+                    id: suggestion.sourceSignal,
+                    question: suggestion.prompt,
+                    rationale: suggestion.reason
+                  }))}
+                  busy={verificationQuestionMutation.isPending || disableVerificationQuestionMutation.isPending}
+                  error={
+                    verificationQuestionMutation.error instanceof Error
+                      ? verificationQuestionMutation.error.message
+                      : disableVerificationQuestionMutation.error instanceof Error
+                        ? disableVerificationQuestionMutation.error.message
+                        : verificationQuestionsQuery.error instanceof Error
+                          ? verificationQuestionsQuery.error.message
+                          : null
+                  }
+                  onApprove={async (input) => {
+                    await verificationQuestionMutation.mutateAsync(input);
+                  }}
+                  onDisable={async () => {
+                    await disableVerificationQuestionMutation.mutateAsync();
+                  }}
+                />
               )}
 
               {(props.canReviewClaims || props.currentUserId === post.userId) && props.detail.matches.length > 0 && (

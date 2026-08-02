@@ -41,7 +41,7 @@ Use this checklist before demo, merge, or submission. Keep evidence screenshots/
 - [x] Confirm CI passes Redis-backed runtime hardening, two-instance Socket.IO isolation, performance artifact, activity-log compatibility and API/web container builds (`30250868954`).
 - [x] Run Playwright routing/back-forward smoke plus API-mocked Student create-LOST/create-FOUND, Student FOUND-detail-to-claim, Staff claim review/appointment lifecycle, proof upload/completion/feedback, match feedback, Staff permission/warehouse, category-scoped Radar count and Admin navigation flows; database-backed login remains conditional on demo credentials.
 - [x] Run `npm run build:api` (passed on 2026-08-02 after safe Google Vision provider-error diagnostics were added).
-- [x] Run `npm run build:web` (passed on 2026-08-01).
+- [x] Run `npm run build:web` (passed on 2026-08-02).
 - [x] Run `npm run typecheck:mobile`.
 - [x] Run `npm run e2e:core` when the local API/database are ready.
 - [x] Run `npm run e2e:roles` to verify Staff vs Admin permissions.

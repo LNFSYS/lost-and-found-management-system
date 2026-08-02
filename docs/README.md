@@ -41,6 +41,7 @@ Local verification on 2026-08-01 passed API/web builds, migration smoke with 36 
 | `Checklist/master-dev-checklist.md` | Canonical UC assignment/status |
 | `Checklist/pending-tasks.md` | Remaining work and backlog |
 | `Checklist/release-checklist.md` | Pre-demo/pre-release technical and product checks |
+| `Checklist/implementation-report-2026-08-02.md` | Detailed implementation, files, endpoints, verification evidence, and remaining runtime work for commit `2c65c2a` |
 | `Checklist/project-independent-reassessment-2026-07-27.md` | Current independent weighted reassessment with verified findings and fix priorities |
 | `Checklist/deep-research-report-27-07-2026.md` | Earlier readiness snapshot retained for comparison with the independent reassessment |
 

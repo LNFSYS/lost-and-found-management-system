@@ -6,11 +6,14 @@ import { requireAuth } from "../middlewares/auth.middleware.js";
 import { rateLimit } from "../middlewares/rate-limit.middleware.js";
 import { memoryUpload } from "../middlewares/upload.middleware.js";
 import { requireFeatureFlag } from "../middlewares/feature-flag.middleware.js";
+import { proofVaultController } from "../controllers/proof-vault.controller.js";
 
 export const claimRoutes = Router();
 const claimWriteLimit = rateLimit({ keyPrefix: "claim-write", windowMs: 10 * 60 * 1000, max: 30 });
 const claimUploadLimit = rateLimit({ keyPrefix: "claim-upload", windowMs: 10 * 60 * 1000, max: 15 });
 const verificationQuestionsEnabled = requireFeatureFlag("ai.verification_questions_enabled");
+const privateProofVaultEnabled = requireFeatureFlag("evidence.private_proof_vault_enabled");
+const consistencyMapEnabled = requireFeatureFlag("evidence.consistency_map_enabled");
 
 claimRoutes.post("/", requireAuth, claimWriteLimit, (request, response, next) => {
   claimController.create(request, response).catch(next);
@@ -22,6 +25,26 @@ claimRoutes.get("/:id", requireAuth, (request, response, next) => {
 
 claimRoutes.get("/:id/verification", requireAuth, (request, response, next) => {
   claimController.verification(request, response).catch(next);
+});
+
+claimRoutes.get("/:id/consistency-map", requireAuth, consistencyMapEnabled, (request, response, next) => {
+  claimController.consistencyMap(request, response).catch(next);
+});
+
+claimRoutes.get("/:id/proof-vault", requireAuth, privateProofVaultEnabled, (request, response, next) => {
+  proofVaultController.listAttached(request, response).catch(next);
+});
+
+claimRoutes.post("/:id/proof-vault/:proofId", requireAuth, claimWriteLimit, privateProofVaultEnabled, (request, response, next) => {
+  proofVaultController.attach(request, response).catch(next);
+});
+
+claimRoutes.delete("/:id/proof-vault/:proofId", requireAuth, claimWriteLimit, privateProofVaultEnabled, (request, response, next) => {
+  proofVaultController.detach(request, response).catch(next);
+});
+
+claimRoutes.get("/:id/proof-vault/:proofId/media", requireAuth, privateProofVaultEnabled, (request, response, next) => {
+  proofVaultController.attachedMedia(request, response).catch(next);
 });
 
 claimRoutes.get("/:id/verification-questions", requireAuth, verificationQuestionsEnabled, (request, response, next) => {

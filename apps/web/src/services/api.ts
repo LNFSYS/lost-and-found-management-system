@@ -315,6 +315,8 @@ export interface BoardPost {
   id: string;
   userId: string;
   type: PostType;
+  visibilityMode: "PUBLIC" | "PRIVATE_DETAILS";
+  privateDetailsHidden?: boolean;
   status: PostStatus;
   title: string;
   description: string;
@@ -407,12 +409,14 @@ export interface ClaimDetail {
 
 export interface ClaimVerification {
   claimId: string;
-  ownershipConfidence: number;
-  level: "LOW" | "MEDIUM" | "HIGH";
+  ownershipConfidence?: number;
+  level?: "LOW" | "MEDIUM" | "HIGH";
+  reviewStatus?: "EVIDENCE_RECEIVED" | "NEEDS_MORE_INFO" | "UNDER_REVIEW";
   reviewConfidenceTier?: "LOW" | "MEDIUM" | "HIGH_REVIEW" | "STRONG_REVIEW";
-  isSystemVerified: boolean;
+  isSystemVerified?: boolean;
+  humanDecisionRequired: boolean;
   note: string;
-  breakdown: {
+  breakdown?: {
     matchScore: number;
     textScore: number;
     locationScore: number;
@@ -423,7 +427,7 @@ export interface ClaimVerification {
     privateQuestionScore?: number | null;
     privateQuestionCompleteness?: number;
   };
-  signals: {
+  signals?: {
     hasClaimantMatchedLostPost: boolean;
     evidenceCount: number;
     hasEvidenceOcrText: boolean;
@@ -431,7 +435,139 @@ export interface ClaimVerification {
     hasApproximateLostTime: boolean;
     hasApproximateLocation: boolean;
     hasVerificationQuestions?: boolean;
+    attachedProofCount?: number;
   };
+  consistencyMap?: EvidenceConsistencySignal[];
+  consistencyLegend?: string;
+}
+
+export interface EvidenceConsistencySignal {
+  key: string;
+  label: string;
+  source: "RULE_BASED" | "AI_OCR" | "USER_PROVIDED" | "HUMAN_REVIEW";
+  status: "STRONG_MATCH" | "PARTIAL_MATCH" | "CONFLICT" | "MISSING" | "NOT_EVALUATED";
+  contribution: number | null;
+  reason: string;
+  reviewerOnly: boolean;
+}
+
+export type PrivateProofType = "PURCHASE_RECEIPT" | "PRE_LOSS_IMAGE" | "SERIAL_SUFFIX" | "UNIQUE_MARK" | "ACCESSORY" | "OWNERSHIP_NOTE";
+
+export interface PrivateProof {
+  id: string;
+  itemName: string;
+  proofType: PrivateProofType;
+  privateDescription: string | null;
+  maskedValue: string | null;
+  hasSecretValue?: boolean;
+  hasMedia: boolean;
+  mediaPath: string | null;
+  status?: "ACTIVE" | "ARCHIVED";
+  attachedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface AiPostDraft {
+  draft: {
+    type: PostType;
+    title: string;
+    description: string;
+    categoryCandidates: Array<{ id: string; name: string; score: number }>;
+    tags: Array<{ tag: string; confidence: number; source: string }>;
+    ocrText: string;
+    privacyWarnings: string[];
+    missingFields: string[];
+  };
+  provider: { name: string; status: "AVAILABLE" | "FALLBACK"; reason: string | null };
+  explanations: string[];
+}
+
+export type SearchCompanionField = "primaryColor" | "secondaryColor" | "brand" | "distinguishingMarks" | "accessories" | "lastSeenAt" | "routeAreas" | "partialSerial";
+
+export interface SearchCompanionState {
+  profile: {
+    answers: Partial<Record<SearchCompanionField, string | string[]>>;
+    skippedFields: SearchCompanionField[];
+    revision: number;
+    appliedRevision: number;
+    updatedAt: string | null;
+  };
+  questions: Array<{
+    field: SearchCompanionField;
+    prompt: string;
+    help: string;
+    sensitive?: boolean;
+    answered: boolean;
+    skipped: boolean;
+  }>;
+  nextQuestion: SearchCompanionState["questions"][number] | null;
+  completionPercent: number;
+}
+
+export interface SearchCompanionPreview {
+  advisory: string;
+  candidates: Array<{
+    candidateId: string;
+    beforeScore: number;
+    afterScore: number;
+    tier: "WEAK" | "SUGGESTION" | "NOTIFY" | "HIGH_CONFIDENCE";
+    componentDeltas: Record<"text" | "category" | "location" | "time" | "image" | "ocr", number>;
+    reasons: string[];
+    penalties: string[];
+    candidate: BoardPost;
+  }>;
+}
+
+export interface RecoveryTimeline {
+  postId: string;
+  currentState: string;
+  nextAction: string | null;
+  generatedFrom: "BUSINESS_RECORDS_AND_AUDIT_LOGS";
+  privateEvidenceExcluded: boolean;
+  events: Array<{
+    id: string;
+    type: string;
+    entityType: string;
+    entityId: string;
+    actor: "YOU" | "PARTICIPANT" | "SYSTEM";
+    state: string | null;
+    title: string;
+    message: string;
+    createdAt: string;
+  }>;
+}
+
+export interface FinderQuickScanSession {
+  id: string;
+  status: "ANALYZED" | "DRAFT_READY" | "PUBLISHED" | "EXPIRED";
+  draft: {
+    type: "FOUND";
+    title: string;
+    description: string;
+    categoryCandidates: Array<{ id: string; name: string; score: number }>;
+    tags: Array<{ tag: string; confidence: number; source: string }>;
+    privacyWarnings: string[];
+    missingFields: string[];
+    userReviewRequired: boolean;
+  };
+  candidates: Array<{
+    postId: string;
+    score: number | null;
+    tier: "SUGGESTION" | "NOTIFY" | "HIGH_CONFIDENCE" | "FILTER_ONLY";
+    title: string;
+    category: { id: string; name: string | null } | null;
+    area: { id: string; name: string | null } | null;
+    building: { id: string; name: string | null } | null;
+    lostFoundAt: string | null;
+  }>;
+  weakCandidateCount: number;
+  providerStatus: "AVAILABLE" | "FALLBACK";
+  providerReason: string | null;
+  selectedLostPostId: string | null;
+  createdPostId: string | null;
+  expiresAt: string;
+  advisory: string;
 }
 
 export type VerificationQuestionType = "TEXT" | "MASKED_SERIAL" | "MULTIPLE_CHOICE" | "VISUAL_DETAIL";
@@ -774,6 +910,46 @@ export const api = {
       body: data
     });
   },
+  createAiPostDraft(file: File, input: { text?: string; type?: PostType }) {
+    const data = new FormData();
+    data.append("image", file);
+    if (input.text) data.append("text", input.text);
+    if (input.type) data.append("type", input.type);
+    return request<AiPostDraft>("/posts/ai-draft", { method: "POST", body: data });
+  },
+  searchCompanion(postId: string) {
+    return request<SearchCompanionState>(`/posts/${postId}/search-companion`);
+  },
+  answerSearchCompanion(postId: string, input: { field: SearchCompanionField; value: string | string[] }) {
+    return request<SearchCompanionState>(`/posts/${postId}/search-companion/answers`, { method: "POST", body: JSON.stringify(input) });
+  },
+  skipSearchCompanion(postId: string, field: SearchCompanionField) {
+    return request<SearchCompanionState>(`/posts/${postId}/search-companion/skip`, { method: "POST", body: JSON.stringify({ field }) });
+  },
+  undoSearchCompanion(postId: string) {
+    return request<SearchCompanionState>(`/posts/${postId}/search-companion/undo`, { method: "POST" });
+  },
+  recalculateSearchCompanion(postId: string) {
+    return request<SearchCompanionPreview>(`/posts/${postId}/search-companion/recalculate`, { method: "POST" });
+  },
+  applySearchCompanion(postId: string) {
+    return request<{ post: BoardPost; privateAnswersRemainPrivate: boolean }>(`/posts/${postId}/search-companion/apply`, { method: "POST" });
+  },
+  recoveryTimeline(postId: string) {
+    return request<RecoveryTimeline>(`/posts/${postId}/recovery-timeline`);
+  },
+  finderQuickScan(file: File, input: { idempotencyKey: string; categoryId?: string; areaId?: string; maxResults?: number; source: "CAMERA" | "IMAGE" | "SAMPLE" }) {
+    const data = new FormData();
+    data.append("image", file);
+    Object.entries(input).forEach(([key, value]) => value !== undefined && data.append(key, String(value)));
+    return request<FinderQuickScanSession>("/posts/finder-quick-scan", { method: "POST", body: data });
+  },
+  createFinderScanDraft(sessionId: string, selectedLostPostId: string | null) {
+    return request<FinderQuickScanSession>(`/posts/finder-quick-scan/${sessionId}/create-draft`, { method: "POST", body: JSON.stringify({ selectedLostPostId }) });
+  },
+  publishFinderScan(sessionId: string, input: Record<string, unknown>) {
+    return request<{ post: BoardPost; reused: boolean; humanReviewRequired: boolean }>(`/posts/finder-quick-scan/${sessionId}/publish`, { method: "POST", body: JSON.stringify(input) });
+  },
   claimEvidenceImage(claimId: string, evidenceId: string) {
     return fetchAuthorizedBlobUrl(`/claims/${claimId}/evidence/${evidenceId}/image`);
   },
@@ -793,6 +969,38 @@ export const api = {
   },
   claimVerification(id: string) {
     return request<{ verification: ClaimVerification }>(`/claims/${id}/verification`);
+  },
+  privateProofs() {
+    return request<{ proofs: PrivateProof[] }>("/proof-vault");
+  },
+  createPrivateProof(input: Record<string, unknown>) {
+    return request<{ proof: PrivateProof }>("/proof-vault", { method: "POST", body: JSON.stringify(input) });
+  },
+  updatePrivateProof(id: string, input: Record<string, unknown>) {
+    return request<{ proof: PrivateProof }>(`/proof-vault/${id}`, { method: "PATCH", body: JSON.stringify(input) });
+  },
+  archivePrivateProof(id: string) {
+    return request<{ archived: boolean }>(`/proof-vault/${id}`, { method: "DELETE" });
+  },
+  uploadPrivateProofMedia(id: string, file: File) {
+    const data = new FormData();
+    data.append("media", file);
+    return request<{ proof: PrivateProof }>(`/proof-vault/${id}/media`, { method: "POST", body: data });
+  },
+  privateProofMedia(id: string) {
+    return fetchAuthorizedBlobUrl(`/proof-vault/${id}/media`);
+  },
+  attachedPrivateProofs(claimId: string) {
+    return request<{ proofs: PrivateProof[] }>(`/claims/${claimId}/proof-vault`);
+  },
+  attachPrivateProof(claimId: string, proofId: string) {
+    return request<{ attached: boolean }>(`/claims/${claimId}/proof-vault/${proofId}`, { method: "POST" });
+  },
+  detachPrivateProof(claimId: string, proofId: string) {
+    return request<{ detached: boolean }>(`/claims/${claimId}/proof-vault/${proofId}`, { method: "DELETE" });
+  },
+  attachedPrivateProofMedia(claimId: string, proofId: string) {
+    return fetchAuthorizedBlobUrl(`/claims/${claimId}/proof-vault/${proofId}/media`);
   },
   claimVerificationQuestions(id: string) {
     return request<{ questions: VerificationQuestion[] }>(`/claims/${id}/verification-questions`);

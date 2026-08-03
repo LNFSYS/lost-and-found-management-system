@@ -1,6 +1,6 @@
 # Functional and Non-Functional Requirements
 
-Last audit: 2026-08-01
+Last audit: 2026-08-03
 
 This document uses the canonical 100-UC set from `docs/Checklist/master-dev-checklist.md`. Each UC has exactly one primary owner and the set is grouped by current team member assignment: TL, VQ, QD, and AK.
 
@@ -66,3 +66,22 @@ This document uses the canonical 100-UC set from `docs/Checklist/master-dev-chec
 - Do not create UCs above `UC-100` unless the master checklist is intentionally re-baselined.
 - Do not assign UCs to Tran Nguyen Phong as he has left the team.
 - Current MVP wording should use "Google Vision assisted OCR/tags" and "rule-based/hybrid matching", not "custom trained AI model".
+
+## Private Assistance Requirements (2026-08-03)
+
+| ID | Requirement | Related UC | Priority | Status |
+| --- | --- | --- | --- | --- |
+| FR-AI-06 | An authenticated user may request an ephemeral AI-assisted draft from a validated image. Provider/fallback status, redacted OCR, privacy warnings and explainable suggestions must be returned; no post is created automatically. | UC-019, UC-020, UC-070, UC-076 | P1 | Implemented |
+| FR-POST-07 | A FOUND author may select `PRIVATE_DETAILS`; backend public serializers must hide exact location, original media, contact, OCR and identifying details while matching retains internal access. | UC-020, UC-022, UC-023, UC-076 | P0 | Implemented |
+| FR-CLAIM-09 | Student/Lecturer users may manage owner-scoped private proofs and attach active proofs to editable claims. Private media must use authenticated proxy delivery and archive must preserve claim history. | UC-045, UC-048, UC-049, UC-054 | P0 | Implemented |
+| FR-CLAIM-10 | Authorized reviewers may view an explainable Evidence Consistency Map; claimants receive only a general review state and no expected answer or reviewer-only signal. | UC-049, UC-052, UC-054, UC-089 | P0 | Implemented |
+
+## User Recovery Assistance Requirements (2026-08-03)
+
+| ID | Requirement | Related UC | Priority | Status |
+| --- | --- | --- | --- | --- |
+| FR-AI-07 | The owner of an active LOST post may answer, skip, undo and review item-specific Search Companion questions. Private answers may improve an advisory match preview, but only public-safe values may be applied to the post and no candidate details may be disclosed through the questions. | UC-040, UC-041, UC-068, UC-070, UC-076 | P1 | Implemented in code; database E2E pending clean migration |
+| FR-POST-08 | An authenticated finder may explicitly capture or upload one image, receive advisory LOST candidates, edit a FOUND draft and publish it once. The scan image is ephemeral, weak matches remain hidden, publishing is idempotent and does not establish ownership or change a LOST post state. | UC-040, UC-041, UC-068, UC-070, UC-076, UC-086 | P1 | Implemented in code; database E2E pending clean migration |
+| FR-RECOVERY-01 | Authorized participants may view a Recovery Timeline derived from persisted post, match, claim, evidence, appointment, warehouse and feedback events. The timeline must omit private notes and storage identifiers and provide only a human-workflow next action. | UC-021, UC-024, UC-045, UC-052, UC-054, UC-059, UC-073 | P1 | Implemented in code; database E2E pending clean migration |
+
+Release note: migrations 035-036 must initialize their seven assistance flags as disabled. Enabling a flag requires checksum-clean migration smoke and the corresponding isolated database E2E.

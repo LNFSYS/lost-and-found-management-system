@@ -1,4 +1,4 @@
-import type { ResultSetHeader, RowDataPacket } from "mysql2/promise";
+import type { PoolConnection, ResultSetHeader, RowDataPacket } from "mysql2/promise";
 import { randomUUID } from "node:crypto";
 import { dbPool } from "../config/db.js";
 import { notificationRepository } from "./notification.repository.js";
@@ -6,11 +6,13 @@ import type { ListPostsQuery } from "../validators/post.validator.js";
 
 export type PostType = "LOST" | "FOUND";
 export type PostStatus = "OPEN" | "MATCHED" | "RESOLVED" | "CLOSED" | "EXPIRED" | "HIDDEN";
+export type PostVisibility = "PUBLIC" | "PRIVATE_DETAILS";
 
 interface PostRow extends RowDataPacket {
   id: string;
   user_id: string;
   type: PostType;
+  visibility_mode: PostVisibility;
   status: PostStatus;
   title: string;
   description: string;
@@ -89,6 +91,7 @@ interface MatchPostRow extends RowDataPacket {
   id: string;
   user_id: string;
   type: PostType;
+  visibility_mode: PostVisibility;
   title: string;
   status: PostStatus;
   title_normalized: string;
@@ -140,6 +143,7 @@ export interface MatchCandidatePost {
   id: string;
   userId: string;
   type: PostType;
+  visibilityMode: PostVisibility;
   title: string;
   status: PostStatus;
   text: string;
@@ -153,10 +157,11 @@ export interface MatchCandidatePost {
   lostFoundAt: string | null;
 }
 
-type CreatePostRecord = {
+export type CreatePostRecord = {
   id: string;
   userId: string;
   type: PostType;
+  visibilityMode: PostVisibility;
   title: string;
   titleNormalized: string;
   description: string;
@@ -180,6 +185,7 @@ function mapPost(row: PostRow) {
     id: row.id,
     userId: row.user_id,
     type: row.type,
+    visibilityMode: row.visibility_mode,
     status: row.status,
     title: row.title,
     description: row.description,
@@ -221,7 +227,7 @@ function mapPost(row: PostRow) {
 function basePostSelect() {
   return `
     SELECT
-      p.id, p.user_id, p.type, p.status, p.title, p.description,
+      p.id, p.user_id, p.type, p.visibility_mode, p.status, p.title, p.description,
       p.category_id, c.name AS category_name,
       p.area_id, a.name AS area_name,
       p.building_id, b.name AS building_name,
@@ -264,10 +270,10 @@ function buildListWhere(query: ListPostsQuery, userId?: string, options: { inclu
       .filter((term) => term.length >= 2)
       .map((term) => `${term}*`);
     if (fullTextTerms.length > 0) {
-      where.push("MATCH(p.title_normalized, p.description_normalized) AGAINST (? IN BOOLEAN MODE)");
+      where.push("(p.visibility_mode = 'PUBLIC' AND MATCH(p.title_normalized, p.description_normalized) AGAINST (? IN BOOLEAN MODE))");
       values.push(fullTextTerms.join(" "));
     } else {
-      where.push("(p.title_normalized LIKE ? OR p.description_normalized LIKE ?)");
+      where.push("(p.visibility_mode = 'PUBLIC' AND (p.title_normalized LIKE ? OR p.description_normalized LIKE ?))");
       values.push(`${query.q}%`, `${query.q}%`);
     }
   }
@@ -312,6 +318,7 @@ function mapMatchPost(row: MatchPostRow): MatchCandidatePost {
     id: row.id,
     userId: row.user_id,
     type: row.type,
+    visibilityMode: row.visibility_mode,
     title: row.title,
     status: row.status,
     text: `${row.title_normalized} ${row.description_normalized} ${row.room_text ?? ""}`.trim(),
@@ -330,6 +337,7 @@ interface EditablePostRow extends RowDataPacket {
   id: string;
   user_id: string;
   type: PostType;
+  visibility_mode: PostVisibility;
   status: PostStatus;
   title: string;
   description: string;
@@ -423,16 +431,17 @@ export const postRepository = {
     await dbPool.execute(
       `
         INSERT INTO posts (
-          id, user_id, type, title, title_normalized, description, description_normalized,
+          id, user_id, type, visibility_mode, title, title_normalized, description, description_normalized,
           category_id, area_id, building_id, room_text, custom_location, contact_info, lost_found_at,
           handover_point_id, secret_verification_hash, expires_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         input.id,
         input.userId,
         input.type,
+        input.visibilityMode,
         input.title,
         input.titleNormalized,
         input.description,
@@ -451,6 +460,36 @@ export const postRepository = {
     );
 
     return this.findById(input.id);
+  },
+
+  async insertWithConnection(connection: PoolConnection, input: CreatePostRecord) {
+    await connection.execute(
+      `INSERT INTO posts (
+         id, user_id, type, visibility_mode, title, title_normalized, description, description_normalized,
+         category_id, area_id, building_id, room_text, custom_location, contact_info, lost_found_at,
+         handover_point_id, secret_verification_hash, expires_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        input.id,
+        input.userId,
+        input.type,
+        input.visibilityMode,
+        input.title,
+        input.titleNormalized,
+        input.description,
+        input.descriptionNormalized,
+        input.categoryId,
+        input.areaId ?? null,
+        input.buildingId ?? null,
+        input.roomText ?? null,
+        input.customLocation ?? null,
+        input.contactInfo ?? null,
+        input.lostFoundAt ?? null,
+        input.handoverPointId ?? null,
+        input.secretVerificationHash ?? null,
+        input.expiresAt ?? null
+      ]
+    );
   },
 
   async findById(id: string) {
@@ -663,7 +702,7 @@ export const postRepository = {
     const [rows] = await dbPool.query<MatchPostRow[]>(
       `
         SELECT
-          p.id, p.user_id, p.type, p.status, p.title, p.title_normalized, p.description_normalized,
+          p.id, p.user_id, p.type, p.visibility_mode, p.status, p.title, p.title_normalized, p.description_normalized,
           tags.ai_tag_text, tags.image_tag_text, tags.ocr_tag_text,
           p.category_id, c.parent_id AS parent_category_id,
           p.area_id, p.building_id, p.room_text, p.lost_found_at
@@ -700,7 +739,7 @@ export const postRepository = {
     const [rows] = await dbPool.query<MatchPostRow[]>(
       `
         SELECT
-          p.id, p.user_id, p.type, p.status, p.title, p.title_normalized, p.description_normalized,
+          p.id, p.user_id, p.type, p.visibility_mode, p.status, p.title, p.title_normalized, p.description_normalized,
           tags.ai_tag_text, tags.image_tag_text, tags.ocr_tag_text,
           p.category_id, c.parent_id AS parent_category_id,
           p.area_id, p.building_id, p.room_text, p.lost_found_at
@@ -1006,7 +1045,7 @@ export const postRepository = {
   async findEditableState(id: string) {
     const [rows] = await dbPool.query<EditablePostRow[]>(
       `
-        SELECT id, user_id, type, status, title, description, category_id,
+        SELECT id, user_id, type, visibility_mode, status, title, description, category_id,
                area_id, building_id, room_text, custom_location, contact_info,
                lost_found_at, handover_point_id,
                (secret_verification_hash IS NOT NULL) AS has_secret_verification
@@ -1149,6 +1188,7 @@ export const postRepository = {
 
     const fields: Array<[keyof UpdatePostRecord, string]> = [
       ["type", "type"],
+      ["visibilityMode", "visibility_mode"],
       ["title", "title"],
       ["titleNormalized", "title_normalized"],
       ["description", "description"],

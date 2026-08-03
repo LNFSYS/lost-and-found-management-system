@@ -17,6 +17,8 @@
     "e2e:verification-questions": "tsx src/scripts/e2e-verification-questions.ts",
     "e2e:admin-crud": "tsx src/scripts/e2e-admin-crud.ts",
     "e2e:runtime-hardening": "tsx src/scripts/e2e-runtime-hardening.ts",
+    "e2e:private-assistance": "tsx src/scripts/e2e-private-assistance.ts",
+    "e2e:user-recovery-tools": "tsx src/scripts/e2e-user-recovery-tools.ts",
     "e2e:socket-scaleout": "tsx src/scripts/e2e-socket-scaleout.ts",
     "seed:demo": "tsx src/scripts/seed-demo.ts",
     "repair:encoding": "tsx src/scripts/repair-mojibake.ts",

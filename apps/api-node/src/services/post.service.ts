@@ -17,6 +17,7 @@ import type {
 } from "../validators/post.validator.js";
 import { matchingService } from "./matching.service.js";
 import { matchingWorkerService } from "./matching-worker.service.js";
+import { configRepository } from "../repositories/config.repository.js";
 
 function assertPostOwnerOrAdmin(auth: AccessTokenPayload, ownerId: string) {
   if (auth.sub !== ownerId && !auth.roles.includes("ADMIN")) {
@@ -51,6 +52,63 @@ function redactContactInfo<T extends { userId: string; contactInfo?: string | nu
   }
 
   return { ...post, contactInfo: null, contactInfoHidden: Boolean(post.contactInfo) };
+}
+
+export function redactPrivateFound<
+  T extends {
+    userId: string;
+    type: string;
+    visibilityMode?: string;
+    title: string;
+    description: string;
+    category?: { name?: string | null } | null;
+    location: {
+      areaId?: string | null;
+      areaName?: string | null;
+      buildingId?: string | null;
+      buildingName?: string | null;
+      roomText?: string | null;
+      roomName?: string | null;
+      customLocation?: string | null;
+    };
+    contactInfo?: string | null;
+    handoverPoint?: unknown;
+    coverImageUrl?: string | null;
+    lostFoundAt?: string | null;
+  }
+>(post: T, auth?: AccessTokenPayload) {
+  const contactSafe = redactContactInfo(post, auth);
+  const isPrivate = post.type === "FOUND" && post.visibilityMode === "PRIVATE_DETAILS";
+  if (!isPrivate || canViewContactInfo(auth, post.userId)) {
+    return { ...contactSafe, privateDetailsHidden: false };
+  }
+  const day = post.lostFoundAt?.slice(0, 10) ?? null;
+  return {
+    ...contactSafe,
+    title: `${post.category?.name ?? "Vật phẩm"} được tìm thấy`,
+    description: "Thông tin nhận dạng chi tiết được giữ riêng tư để hạn chế yêu cầu nhận đồ không chính xác.",
+    location: {
+      ...post.location,
+      buildingId: null,
+      buildingName: null,
+      roomText: null,
+      roomName: null,
+      customLocation: null
+    },
+    handoverPoint: null,
+    coverImageUrl: null,
+    lostFoundAt: day ? `${day}T00:00:00.000Z` : null,
+    privateDetailsHidden: true
+  };
+}
+
+async function assertVisibilityEnabled(type: string, visibilityMode: string) {
+  if (visibilityMode === "PRIVATE_DETAILS") {
+    if (type !== "FOUND") throw new HttpError(422, "Private details mode is only available for FOUND posts");
+    if (!(await configRepository.booleanValue("privacy.private_found_enabled"))) {
+      throw new HttpError(404, "Private FOUND mode is not enabled");
+    }
+  }
 }
 
 function parseOptionalDate(value: string | null | undefined) {
@@ -112,6 +170,40 @@ function normalizeQuery(query: ListPostsQuery): ListPostsQuery {
   };
 }
 
+export async function prepareCreatePostRecord(auth: AccessTokenPayload, input: CreatePostInput) {
+  await assertVisibilityEnabled(input.type, input.visibilityMode);
+  await validateReferences(input);
+
+  const lostFoundAt = parseOptionalDate(input.lostFoundAt);
+  const expirationDays = await postRepository.getConfigNumber("post.expiration_days", 30);
+  const expiresAt = new Date(Date.now() + expirationDays * 24 * 60 * 60 * 1000);
+  const secretVerificationHash =
+    input.type === "LOST" && input.secretVerification
+      ? await bcrypt.hash(input.secretVerification, env.bcryptSaltRounds)
+      : null;
+
+  return {
+    id: randomUUID(),
+    userId: auth.sub,
+    type: input.type,
+    visibilityMode: input.visibilityMode,
+    title: input.title.trim(),
+    titleNormalized: normalizeText(input.title),
+    description: input.description.trim(),
+    descriptionNormalized: normalizeText(input.description),
+    categoryId: input.categoryId,
+    areaId: input.areaId ?? null,
+    buildingId: input.buildingId ?? null,
+    roomText: input.roomText?.trim() || null,
+    customLocation: input.customLocation?.trim() ?? null,
+    contactInfo: input.contactInfo?.trim() || null,
+    lostFoundAt,
+    handoverPointId: input.handoverPointId ?? null,
+    secretVerificationHash,
+    expiresAt
+  };
+}
+
 function databaseDateToIso(value: string | null) {
   if (!value) {
     return null;
@@ -145,46 +237,31 @@ async function recordSuggestionImpressions(
 
 function redactMatchSuggestions<
   Suggestion extends {
-    post: { userId: string; contactInfo?: string | null };
+    post: {
+      userId: string;
+      type: string;
+      visibilityMode?: string;
+      title: string;
+      description: string;
+      category?: { name?: string | null } | null;
+      location: Record<string, string | null>;
+      contactInfo?: string | null;
+      handoverPoint?: unknown;
+      coverImageUrl?: string | null;
+      lostFoundAt?: string | null;
+    };
   }
 >(suggestions: Suggestion[], auth: AccessTokenPayload) {
   return suggestions.map((suggestion) => ({
     ...suggestion,
-    post: redactContactInfo(suggestion.post, auth)
+    post: redactPrivateFound(suggestion.post, auth)
   }));
 }
 
 export const postService = {
   async createPost(auth: AccessTokenPayload, input: CreatePostInput) {
-    await validateReferences(input);
-
-    const lostFoundAt = parseOptionalDate(input.lostFoundAt);
-    const expirationDays = await postRepository.getConfigNumber("post.expiration_days", 30);
-    const expiresAt = new Date(Date.now() + expirationDays * 24 * 60 * 60 * 1000);
-    const secretVerificationHash =
-      input.type === "LOST" && input.secretVerification
-        ? await bcrypt.hash(input.secretVerification, env.bcryptSaltRounds)
-        : null;
-
-    const post = await postRepository.create({
-      id: randomUUID(),
-      userId: auth.sub,
-      type: input.type,
-      title: input.title.trim(),
-      titleNormalized: normalizeText(input.title),
-      description: input.description.trim(),
-      descriptionNormalized: normalizeText(input.description),
-      categoryId: input.categoryId,
-      areaId: input.areaId ?? null,
-      buildingId: input.buildingId ?? null,
-      roomText: input.roomText?.trim() || null,
-      customLocation: input.customLocation?.trim() ?? null,
-      contactInfo: input.contactInfo?.trim() || null,
-      lostFoundAt,
-      handoverPointId: input.handoverPointId ?? null,
-      secretVerificationHash,
-      expiresAt
-    });
+    const record = await prepareCreatePostRecord(auth, input);
+    const post = await postRepository.create(record);
 
     if (!post) {
       throw new HttpError(500, "Unable to create post");
@@ -200,7 +277,7 @@ export const postService = {
     });
     return {
       ...result,
-      items: result.items.map((post) => redactContactInfo(post, auth))
+      items: result.items.map((post) => redactPrivateFound(post, auth))
     };
   },
 
@@ -248,10 +325,14 @@ export const postService = {
     const canViewPrivateMedia = canViewContactInfo(auth, detail.post.userId);
     return {
       ...detail,
-      post: redactContactInfo(detail.post, auth),
+      post: redactPrivateFound(detail.post, auth),
       tags: canViewPrivateMedia ? detail.tags : detail.tags.filter((tag) => tag.source !== "OCR"),
       media: detail.media
-        .filter((media) => media.mediaKind !== "EVIDENCE" || canViewPrivateMedia)
+        .filter((media) =>
+          detail.post.visibilityMode === "PRIVATE_DETAILS" && !canViewPrivateMedia
+            ? false
+            : media.mediaKind !== "EVIDENCE" || canViewPrivateMedia
+        )
         .map((media) =>
           media.mediaKind === "EVIDENCE"
             ? {
@@ -331,6 +412,7 @@ export const postService = {
     const nextType = current.type;
     const finalState = finalPostStateSchema.parse({
       type: nextType,
+      visibilityMode: input.visibilityMode ?? current.visibility_mode,
       title: input.title ?? current.title,
       description: input.description ?? current.description,
       categoryId: input.categoryId ?? current.category_id,
@@ -344,6 +426,7 @@ export const postService = {
       hasSecretVerification: Boolean(input.secretVerification?.trim()) || current.has_secret_verification === 1
     });
     await validateReferences(finalState);
+    await assertVisibilityEnabled(nextType, finalState.visibilityMode);
 
     const secretVerificationHash =
       nextType === "LOST" && input.secretVerification
@@ -351,6 +434,7 @@ export const postService = {
         : undefined;
     const post = await postRepository.update(postId, {
       title: input.title?.trim(),
+      visibilityMode: input.visibilityMode,
       titleNormalized: input.title ? normalizeText(input.title) : undefined,
       description: input.description?.trim(),
       descriptionNormalized: input.description ? normalizeText(input.description) : undefined,

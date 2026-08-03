@@ -4,9 +4,11 @@ const optionalUuid = z.string().uuid().nullable().optional();
 
 export const postTypeSchema = z.enum(["LOST", "FOUND"]);
 export const postStatusSchema = z.enum(["OPEN", "MATCHED", "RESOLVED", "CLOSED", "HIDDEN"]);
+export const postVisibilitySchema = z.enum(["PUBLIC", "PRIVATE_DETAILS"]);
 
 const postBaseSchema = z.object({
   type: postTypeSchema,
+  visibilityMode: postVisibilitySchema,
   title: z.string().trim().min(3).max(255),
   description: z.string().trim().min(10),
   categoryId: z.string().uuid(),
@@ -22,6 +24,7 @@ const postBaseSchema = z.object({
 
 type BusinessRuleInput = {
   type: z.infer<typeof postTypeSchema>;
+  visibilityMode?: z.infer<typeof postVisibilitySchema>;
   areaId?: string | null;
   buildingId?: string | null;
   roomText?: string | null;
@@ -32,6 +35,13 @@ type BusinessRuleInput = {
 };
 
 function applyPostBusinessRules(input: BusinessRuleInput, context: z.RefinementCtx) {
+  if (input.type !== "FOUND" && input.visibilityMode === "PRIVATE_DETAILS") {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["visibilityMode"],
+      message: "Private details mode is only available for FOUND posts"
+    });
+  }
   const hasHoldingLocation = Boolean(
     input.handoverPointId ||
       input.roomText?.trim() ||
@@ -66,6 +76,7 @@ function applyPostBusinessRules(input: BusinessRuleInput, context: z.RefinementC
 }
 
 export const createPostSchema = postBaseSchema
+  .extend({ visibilityMode: postVisibilitySchema.default("PUBLIC") })
   .superRefine((input, context) => {
     applyPostBusinessRules(
       { ...input, hasSecretVerification: Boolean(input.secretVerification?.trim()) },
@@ -75,7 +86,10 @@ export const createPostSchema = postBaseSchema
 
 export const finalPostStateSchema = postBaseSchema
   .omit({ secretVerification: true })
-  .extend({ hasSecretVerification: z.boolean() })
+  .extend({
+    visibilityMode: postVisibilitySchema.default("PUBLIC"),
+    hasSecretVerification: z.boolean()
+  })
   .superRefine(applyPostBusinessRules);
 
 export const updatePostSchema = postBaseSchema.partial();

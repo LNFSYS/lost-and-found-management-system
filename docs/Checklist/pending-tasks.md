@@ -277,3 +277,31 @@ Recommended order is documented in `docs/Overall/ai-training-roadmap.md`: collec
 - [x] Add migration smoke verification script.
 - [x] Verify blank-schema migration automatically in CI MySQL; rerun locally before final submission when Docker/MySQL is available.
 - [x] Verify full build before submission.
+
+## Private Assistance Delivery (2026-08-03)
+
+- [x] Implement owner-scoped Private Proof Vault with hashed secrets and authenticated media proxy.
+- [x] Implement transactional proof attach/detach and archive-safe claim history.
+- [x] Implement FOUND `PRIVATE_DETAILS` backend redaction and safe matching notification copy.
+- [x] Implement ephemeral AI-assisted draft with Vision fallback, OCR redaction and Safe Search guard.
+- [x] Implement role-aware Evidence Consistency Map while preserving `ownershipConfidence`.
+- [x] Add independent backend feature flags and migrations 034-035.
+- [x] Add API unit tests and a real `e2e:private-assistance` security/privacy flow.
+- [ ] Resolve the local migration-031 checksum drift through a reviewed database backup/ledger audit, then apply migrations 034-035 on a checksum-clean schema and pass `smoke:migration` plus `e2e:private-assistance`.
+- [ ] Restore Google Vision billing/quota before demonstrating the live provider path; fallback remains supported.
+
+## User Recovery Assistance Delivery (2026-08-03)
+
+- [x] Implement owner-only Search Companion for active LOST posts with answer, skip, undo and private profile persistence.
+- [x] Recalculate advisory matches without writing match results, changing post status or sending notifications.
+- [x] Limit Search Companion public apply to non-sensitive fields and retain only the final four serial characters privately.
+- [x] Implement a role-filtered Recovery Timeline derived from persisted workflow events.
+- [x] Implement Finder Quick Scan with explicit camera/upload, media validation, Safe Search and ephemeral image handling.
+- [x] Hide 45-59% weak scan matches, show candidates from 60%, and keep all results advisory.
+- [x] Implement transaction-locked, idempotent scan publishing with normal post validation and post-commit matching enqueue.
+- [x] Add API unit tests, OpenAPI contracts and `e2e:user-recovery-tools`.
+- [x] Default all migrations 035-036 assistance flags to disabled and add a migration regression test.
+- [x] Reject Finder draft recreation after a scan session is published or expired.
+- [ ] Apply migration 036 on a checksum-clean blank/test database and run `npm run smoke:migration`.
+- [ ] Run `npm run e2e:user-recovery-tools` against the isolated migrated database; do not run it against the shared demo database.
+- [ ] Rehearse Finder Quick Scan on a phone over HTTPS; retain gallery upload and provider-fallback screenshots.

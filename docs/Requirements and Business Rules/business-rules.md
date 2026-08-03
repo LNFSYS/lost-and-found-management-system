@@ -1,6 +1,6 @@
 # Business Rules
 
-Last audit: 2026-08-01
+Last audit: 2026-08-03
 
 Business rules are grouped by major business area and trace back to the canonical 100-UC set in `docs/Checklist/master-dev-checklist.md`. Each UC has exactly one primary owner.
 
@@ -47,3 +47,22 @@ Business rules are grouped by major business area and trace back to the canonica
 - Do not assign UCs to Tran Nguyen Phong as he has left the team.
 - If a minor rule arises, add it to an existing BR group instead of creating a new micro-UC.
 - Current MVP uses Google Vision assisted OCR/tags plus rule-based/hybrid matching with tiered score explanations; custom AI training and native mobile remain planned scope.
+
+## Private Assistance Rules (2026-08-03)
+
+| ID | Rule | Related UC | Status |
+| --- | --- | --- | --- |
+| BR-35 | Private Proof Vault records belong to one user. Secrets are hash-only, raw storage identifiers are never returned, and claim participants/reviewers access media only through an authenticated proxy. | UC-045, UC-048, UC-049, UC-054 | Implemented |
+| BR-36 | Proof attachment is claimant-only while a claim is editable. Attach/archive operations lock claim/proof rows; archive never deletes the claim snapshot or history. | UC-048, UC-049, UC-054 | Implemented |
+| BR-37 | `PRIVATE_DETAILS` applies only to FOUND posts. Public serializers and matching notifications must not disclose exact location, original media, contact, OCR or identifying text; owner/Staff/Admin retain authorized access. | UC-020, UC-022, UC-023, UC-076 | Implemented |
+| BR-38 | AI-assisted draft and Evidence Consistency Map are advisory. Unsafe input is rejected, provider failure is reported honestly, claimant data is role-redacted, and human decision is mandatory. | UC-049, UC-054, UC-070, UC-076, UC-089 | Implemented |
+
+## User Recovery Assistance Rules (2026-08-03)
+
+| ID | Rule | Related UC | Status |
+| --- | --- | --- | --- |
+| BR-39 | Search Companion is owner-only and applies only to active LOST posts. Questions must be generated from the LOST item context, not from hidden FOUND details. Serial input is reduced to its final four characters, private answers remain outside the public post, and recalculation never writes match results or sends notifications. | UC-040, UC-041, UC-068, UC-070, UC-076 | Implemented in code; database E2E pending |
+| BR-40 | Finder Quick Scan requires an explicit user capture/upload. Raw frames are not persisted, Safe Search and media validation run before analysis, only LOST candidates at or above the suggestion threshold are disclosed, and publish uses a locked idempotent transaction. Only analyzed/draft-ready sessions may prepare a draft; published/expired sessions are terminal. A scan must never auto-match, auto-resolve or prove ownership. | UC-040, UC-041, UC-068, UC-070, UC-076, UC-086 | Implemented in code; database E2E pending |
+| BR-41 | Recovery Timeline is a derived read model, not a second workflow state machine. Only the post owner, related claimant and authorized Staff/Admin may read it; claimant visibility is limited to the relevant claim and the response excludes evidence URLs, storage identifiers, private answers and internal notes. | UC-021, UC-024, UC-045, UC-052, UC-054, UC-059, UC-073 | Implemented in code; database E2E pending |
+
+Release rule: migrations 035-036 initialize new assistance flags as disabled. Human-reviewed isolated smoke/E2E evidence is required before enabling them on a demo or pilot schema.

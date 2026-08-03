@@ -49,3 +49,22 @@ This document links Business Rules, Requirements, and the canonical 100-UC set i
 | Lowest UC | UC-001 |
 | Highest UC | UC-100 |
 | Deprecated old UC above UC-100 | Not used |
+
+## Private Assistance Traceability (2026-08-03)
+
+| Business rule | Requirements | Use cases | Evidence |
+| --- | --- | --- | --- |
+| BR-35 | FR-CLAIM-09, NFR-PRIV-01, NFR-SEC-01 | UC-045, UC-048, UC-049, UC-054 | Migrations 034-035, `proof-vault.*`, authenticated media proxy, private-assistance E2E |
+| BR-36 | FR-CLAIM-09, NFR-DATA-01 | UC-048, UC-049, UC-054 | Transactional attach, proof row lock, archive-safe claim snapshot |
+| BR-37 | FR-POST-07, NFR-PRIV-01 | UC-020, UC-022, UC-023, UC-076 | Backend serializer tests, generic private match notification |
+| BR-38 | FR-AI-06, FR-CLAIM-10, NFR-AI-01, NFR-AI-02 | UC-049, UC-054, UC-070, UC-076, UC-089 | OCR redaction tests, reviewer-only map, feature flags |
+
+## User Recovery Assistance Traceability (2026-08-03)
+
+| Business rule | Requirements | Use cases | Evidence |
+| --- | --- | --- | --- |
+| BR-39 | FR-AI-07, FR-MATCH-01, NFR-AI-01, NFR-PRIV-01 | UC-040, UC-041, UC-068, UC-070, UC-076 | Migration 036, `search-companion.*`, advisory preview tests, owner/active-LOST guards |
+| BR-40 | FR-POST-08, FR-AI-01, FR-MATCH-01, NFR-AI-01, NFR-AI-02 | UC-040, UC-041, UC-068, UC-070, UC-076, UC-086 | Migration 036, `finder-quick-scan.*`, media/Safe Search tests, terminal-session regression and locked idempotent publish |
+| BR-41 | FR-RECOVERY-01, FR-NOTI-01, NFR-PRIV-01, NFR-AUDIT-01 | UC-021, UC-024, UC-045, UC-052, UC-054, UC-059, UC-073 | Migration 036, `recovery-timeline.*`, authorization query and privacy unit tests |
+
+Migrations 035-036 have a schema regression test proving all seven assistance flags default to disabled until release gates pass.

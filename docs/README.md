@@ -64,3 +64,9 @@ Local verification on 2026-08-01 passed API/web builds, migration smoke with 36 
 - Put future AI/mobile ideas into `Overall/mvp-scope-and-future-work.md` or `Checklist/pending-tasks.md`, not into separate claim-heavy documents.
 - Do not describe mobile or custom AI training as current MVP unless implemented and verified.
 - Keep dated audit reports as evidence during thesis defense, but do not use them as the primary reading path.
+
+## Latest Implementation Evidence
+
+- [Private assistance implementation report (2026-08-03)](Checklist/implementation-report-2026-08-03-private-assistance.md): AI-assisted draft, private FOUND, Private Proof Vault and Evidence Consistency Map.
+- [User recovery tools implementation report (2026-08-03)](Checklist/implementation-report-2026-08-03-user-recovery-tools.md): Search Companion, Recovery Timeline and Finder Quick Scan, including security invariants and unresolved DB release gates.
+- [Full project verification report (2026-08-03)](Checklist/implementation-report-2026-08-03-full-verification.md): source audit, complete command matrix, defects fixed, migration/E2E blockers and conditional release recommendation.

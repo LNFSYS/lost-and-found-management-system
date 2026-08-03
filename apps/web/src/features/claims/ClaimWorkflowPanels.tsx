@@ -334,6 +334,26 @@ function ClaimExtraActions(props: { claim: PostClaimSummary; currentUserId?: str
     enabled: detailOpen,
     retry: false
   });
+  const vaultQuery = useQuery({
+    queryKey: ["private-proof-vault"],
+    queryFn: () => api.privateProofs(),
+    enabled: detailOpen && canUploadEvidence,
+    retry: false
+  });
+  const attachedProofsQuery = useQuery({
+    queryKey: ["claim-private-proofs", claim.id],
+    queryFn: () => api.attachedPrivateProofs(claim.id),
+    enabled: detailOpen,
+    retry: false
+  });
+  const attachProofMutation = useMutation({
+    mutationFn: (proofId: string) => api.attachPrivateProof(claim.id, proofId),
+    onSuccess: async () => {
+      setMessage("Đã attach bằng chứng từ Private Proof Vault.");
+      await queryClient.invalidateQueries({ queryKey: ["claim-private-proofs", claim.id] });
+      await queryClient.invalidateQueries({ queryKey: ["claim-verification", claim.id] });
+    }
+  });
 
   const actionMutation = useMutation({
     mutationFn: (input: { action: "accept" | "more-info" | "reject" | "cancel"; reason?: string }) => {
@@ -440,6 +460,25 @@ function ClaimExtraActions(props: { claim: PostClaimSummary; currentUserId?: str
         </form>
       )}
 
+      {detailOpen && canUploadEvidence && (
+        <div className="claim-vault-attach">
+          <strong>Private Proof Vault</strong>
+          {vaultQuery.isLoading && <small>Đang tải bằng chứng riêng tư...</small>}
+          {(vaultQuery.data?.proofs ?? []).filter((proof) => proof.status === "ACTIVE").length > 0 ? (
+            <select defaultValue="" onChange={(event) => {
+              if (event.target.value) attachProofMutation.mutate(event.target.value);
+              event.target.value = "";
+            }}>
+              <option value="">Chọn proof để attach vào claim</option>
+              {(vaultQuery.data?.proofs ?? []).filter((proof) => proof.status === "ACTIVE").map((proof) => (
+                <option key={proof.id} value={proof.id}>{proof.itemName} · {proof.proofType}</option>
+              ))}
+            </select>
+          ) : !vaultQuery.isLoading && <small>Vault chưa có proof ACTIVE. Bạn có thể tạo trong Hồ sơ.</small>}
+          {vaultQuery.error instanceof Error && <div className="notice error">{vaultQuery.error.message}</div>}
+        </div>
+      )}
+
       {detailOpen && (
         <div className="claim-evidence-panel">
           {detailQuery.isLoading && <small>Đang tải bằng chứng...</small>}
@@ -451,6 +490,14 @@ function ClaimExtraActions(props: { claim: PostClaimSummary; currentUserId?: str
             </figure>
           ))}
           {detail && detail.evidence.length === 0 && <small>Claim chưa có file bằng chứng.</small>}
+          {(attachedProofsQuery.data?.proofs ?? []).map((proof) => (
+            <div className="attached-private-proof" key={proof.id}>
+              <strong>{proof.itemName}</strong>
+              <span>{proof.proofType}{proof.maskedValue ? ` · ${proof.maskedValue}` : ""}</span>
+              <small>{proof.privateDescription || "Không có mô tả riêng."}</small>
+            </div>
+          ))}
+          {attachedProofsQuery.error instanceof Error && <div className="notice error">{attachedProofsQuery.error.message}</div>}
           {detailQuery.error instanceof Error && <div className="notice error">{detailQuery.error.message}</div>}
         </div>
       )}

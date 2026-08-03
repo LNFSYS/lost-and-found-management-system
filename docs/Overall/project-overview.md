@@ -161,3 +161,11 @@ Known remaining work:
 | `docs/Requirements and Business Rules/requirements.md` | FR/NFR requirements |
 | `docs/Requirements and Business Rules/business-rules.md` | Business rules |
 | `docs/Requirements and Business Rules/traceability-matrix.md` | BR/FR/NFR/UC traceability |
+
+## Current User-Facing Assistance
+
+The web MVP includes AI-assisted draft creation, an optional private-details mode for FOUND posts, an owner-scoped Private Proof Vault, and a reviewer-only Evidence Consistency Map. It also provides an owner-only Search Companion for refining active LOST posts, a privacy-filtered Recovery Timeline, and Finder Quick Scan for explicitly capturing/uploading one image before reviewing LOST candidates and preparing an editable FOUND draft.
+
+Each capability has a backend-enforced feature flag. Matching, scan candidates and evidence confidence remain advisory; none of these tools confirms ownership, accepts a claim, changes a LOST post state or returns an item automatically. Migration 036 and the database-backed recovery-tools E2E must pass on a checksum-clean isolated schema before the three newest flags are enabled.
+
+Migrations 035-036 initialize all seven new assistance flags as `false`. The current source/build/unit-test verification is green, but the release remains conditional because migrations 034-036 and their E2E scripts have not passed on an isolated schema. See `docs/Checklist/implementation-report-2026-08-03-full-verification.md`.

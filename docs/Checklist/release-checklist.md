@@ -24,8 +24,9 @@ Use this checklist before demo, merge, or submission. Keep evidence screenshots/
 
 - [x] Run migrations 001-025 from a blank isolated MySQL 8 database in the prior CI baseline.
 - [x] Apply migrations 026-033 locally, including session invalidation, notification idempotency, operational indexes, AI-assisted feature schemas/flags and bounded operational thresholds.
-- [x] Run `npm run smoke:migration` locally and verify all 36 migration records plus active-appointment, session-version, notification-dedupe, AI feature-table/threshold and guard-index invariants.
+- [x] Run the pre-delivery `npm run smoke:migration` locally for migrations 001-033 and verify active-appointment, session-version, notification-dedupe, AI feature-table/threshold and guard-index invariants.
 - [ ] Retain a green CI run proving migrations 001-033 from blank MySQL on the new commit.
+- [ ] Apply migrations 034-035 on a blank or checksum-clean MySQL schema and pass the updated `npm run smoke:migration`. The current local schema is blocked by checksum drift at migration 031 and must not be bypassed by editing migration history.
 - [x] Run `npm run seed:demo` only on the isolated CI database; the workflow does not seed the shared primary demo database.
 - [x] Verify demo accounts for Student/Lecturer/Staff/Admin can log in through the isolated API E2E suite.
 - [ ] Run `npm run repair:encoding` against a copy of the demo database if old records display mojibake; review output before using `npm run repair:encoding -- --apply`.
@@ -98,3 +99,31 @@ Use this checklist before demo, merge, or submission. Keep evidence screenshots/
 - [x] Describe matching as hybrid/rule-based with Google Vision assisted OCR, not a custom trained AI model.
 - [x] Describe native mobile and custom AI training as future work unless the code is complete.
 - [x] Use the fallback path in `docs/Overall/demo-release-runbook.md` when Google Vision, Cloudinary, or email delivery is unavailable.
+
+## 7. Private Assistance Release Gate
+
+- [x] Existing FOUND records default to `PUBLIC`; LOST cannot select `PRIVATE_DETAILS`.
+- [x] Public/private serializer and OCR redaction unit tests pass.
+- [x] Vault responses contain proxy paths only, never raw Cloudinary URL/public ID or secret hash.
+- [x] Claimant receives general verification state; reviewer receives Evidence Consistency Map.
+- [x] Four backend feature flags independently fail closed for new endpoints/features.
+- [x] Migration 035 initializes all four Private Assistance flags as disabled.
+- [ ] Enable the four feature flags only after migrations 034-035 pass on the target schema.
+- [ ] Run `npm run e2e:private-assistance` against the final seeded defense database.
+- [ ] Verify the live Vision path after Google billing/quota is enabled; retain fallback screenshots.
+
+## 8. User Recovery Assistance Release Gate
+
+- [x] Search Companion is restricted to the owner of an active LOST post.
+- [x] Search Companion questions do not use or reveal hidden FOUND candidate details.
+- [x] Match preview is read-only and reports score deltas without persisted match/status/notification side effects.
+- [x] Recovery Timeline suppresses private notes, raw evidence/storage identifiers and unrelated claims.
+- [x] Finder Quick Scan validates media, runs Safe Search and does not persist the raw frame.
+- [x] Finder Quick Scan hides weak candidates and never auto-confirms ownership or changes LOST state.
+- [x] Finder publish uses a locked idempotency key and the standard post validation path.
+- [x] Finder draft creation rejects terminal `PUBLISHED`/`EXPIRED` sessions.
+- [x] Migration 036 initializes all three User Recovery flags as disabled.
+- [x] API/web builds and API unit tests pass for the new capabilities.
+- [ ] Apply migration 036 on a checksum-clean isolated schema and pass `smoke:migration`.
+- [ ] Pass `e2e:user-recovery-tools` on the final isolated test database.
+- [ ] Enable the three new feature flags only after the target schema passes migration smoke.

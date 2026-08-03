@@ -1,5 +1,5 @@
-import { Upload, ShieldCheck } from "lucide-react";
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { Upload, ShieldCheck, Sparkles, LockKeyhole } from "lucide-react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { api, type Category, type PostMatchSuggestion, type PostType } from "../../services/api";
 import type { ImageUploadRules } from "../../app/types";
@@ -11,6 +11,7 @@ import {
   validateImageFiles
 } from "../../app/helpers";
 import "./create-post.css";
+import { FinderQuickScanPanel } from "./FinderQuickScanPanel";
 
 export function CreatePostView(props: {
   signedIn: boolean;
@@ -18,9 +19,17 @@ export function CreatePostView(props: {
   areas: Array<{ id: string; name: string }>;
   handoverPoints: Array<{ id: string; name: string }>;
   imageRules: ImageUploadRules;
+  quickDraftEnabled: boolean;
+  privateFoundEnabled: boolean;
+  finderQuickScanEnabled: boolean;
   onCreated: (postId: string, suggestions: PostMatchSuggestion[]) => Promise<void>;
 }) {
   const [type, setType] = useState<PostType>("LOST");
+  const [visibilityMode, setVisibilityMode] = useState<"PUBLIC" | "PRIVATE_DETAILS">("PUBLIC");
+  const [draftFile, setDraftFile] = useState<File | null>(null);
+  const [draftContext, setDraftContext] = useState("");
+  const [finderSessionId, setFinderSessionId] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   const [selectedParentCategoryId, setSelectedParentCategoryId] = useState("");
   const [selectedChildCategoryId, setSelectedChildCategoryId] = useState("");
   const [selectedAreaId, setSelectedAreaId] = useState("");
@@ -43,6 +52,33 @@ export function CreatePostView(props: {
   const selectedCategoryId = childCategories.length > 0 ? selectedChildCategoryId : selectedParentCategoryId;
   const totalSelectedFiles = itemFiles.length + evidenceFiles.length;
 
+  const draftMutation = useMutation({
+    mutationFn: () => {
+      if (!draftFile) throw new Error("Chọn một ảnh trước khi tạo draft.");
+      return api.createAiPostDraft(draftFile, { text: draftContext, type });
+    },
+    onSuccess: (result) => {
+      const form = formRef.current;
+      if (!form) return;
+      const title = form.elements.namedItem("title") as HTMLInputElement | null;
+      const description = form.elements.namedItem("description") as HTMLTextAreaElement | null;
+      if (title) title.value = result.draft.title;
+      if (description) description.value = result.draft.description;
+      setType(result.draft.type);
+      setItemFiles([draftFile!]);
+      const category = props.categories.find((item) => item.id === result.draft.categoryCandidates[0]?.id);
+      if (category) {
+        setSelectedParentCategoryId(category.parentId ?? category.id);
+        setSelectedChildCategoryId(category.parentId ? category.id : "");
+      }
+      setMessage(
+        result.provider.status === "AVAILABLE"
+          ? "Đã tạo AI-assisted draft. Hãy kiểm tra, sửa và bổ sung các trường còn thiếu trước khi đăng."
+          : "Google Vision chưa khả dụng. Draft fallback chỉ dùng nội dung bạn nhập; hãy hoàn thiện thủ công."
+      );
+    }
+  });
+
   useEffect(() => {
     const urls = itemFiles.map((file) => URL.createObjectURL(file));
     setItemImagePreviews(urls);
@@ -57,8 +93,9 @@ export function CreatePostView(props: {
 
   const createMutation = useMutation({
     mutationFn: async (formData: FormData) => {
-      const result = await api.createPost({
+      const payload = {
         type,
+        visibilityMode: type === "FOUND" ? visibilityMode : "PUBLIC",
         title: String(formData.get("title")),
         description: String(formData.get("description")),
         categoryId: selectedCategoryId,
@@ -70,12 +107,19 @@ export function CreatePostView(props: {
         lostFoundAt: toDateTimeIso(formData.get("lostFoundAt")),
         handoverPointId: type === "FOUND" ? emptyToNull(formData.get("handoverPointId")) : null,
         secretVerification: type === "LOST" ? String(formData.get("secretVerification")) : null
-      });
+      };
+      const standardResult = finderSessionId
+        ? null
+        : await api.createPost(payload);
+      const finderResult = finderSessionId
+        ? await api.publishFinderScan(finderSessionId, payload)
+        : null;
+      const createdPost = finderResult?.post ?? standardResult!.post;
 
-      let matchSuggestions = result.matchSuggestions ?? [];
+      let matchSuggestions = standardResult?.matchSuggestions ?? [];
       let suggestedCategory: { id: string; name: string; score: number } | null = null;
       if (totalSelectedFiles > 0) {
-        const mediaResult = await api.uploadPostImages(result.post.id, itemFiles, evidenceFiles);
+        const mediaResult = await api.uploadPostImages(createdPost.id, itemFiles, evidenceFiles);
         if (mediaResult.matchSuggestions.length > 0) {
           matchSuggestions = mediaResult.matchSuggestions;
         }
@@ -84,7 +128,7 @@ export function CreatePostView(props: {
           .sort((left, right) => right.score - left.score)[0] ?? null;
       }
 
-      return { post: result.post, matchSuggestions, suggestedCategory };
+      return { post: createdPost, matchSuggestions, suggestedCategory };
     },
     onSuccess: async (result) => {
       if (
@@ -182,15 +226,62 @@ export function CreatePostView(props: {
             <p>Điền đủ thông tin để cộng đồng và hệ thống matching có thể giúp bạn tìm lại hoặc trả đồ đúng người.</p>
       </section>
 
-      <form className="form-panel create-report-form" onSubmit={submit}>
+      <FinderQuickScanPanel
+        enabled={props.finderQuickScanEnabled}
+        categories={props.categories}
+        areas={props.areas}
+        onDraftReady={(file, session) => {
+          setType("FOUND");
+          setFinderSessionId(session.id);
+          setItemFiles([file]);
+          const form = formRef.current;
+          const title = form?.elements.namedItem("title") as HTMLInputElement | null;
+          const description = form?.elements.namedItem("description") as HTMLTextAreaElement | null;
+          if (title) title.value = session.draft.title;
+          if (description) description.value = session.draft.description;
+          const category = props.categories.find((item) => item.id === session.draft.categoryCandidates[0]?.id);
+          if (category) {
+            setSelectedParentCategoryId(category.parentId ?? category.id);
+            setSelectedChildCategoryId(category.parentId ? category.id : "");
+          }
+          setMessage(session.selectedLostPostId
+            ? "Đã tạo FOUND draft và liên kết ứng viên LOST. Hãy kiểm tra đầy đủ trước khi đăng."
+            : "Đã tạo FOUND draft. Hãy bổ sung thời gian, vị trí và nơi đang giữ vật phẩm.");
+        }}
+      />
+
+      {props.quickDraftEnabled && (
+        <section className="quick-draft-panel" aria-labelledby="quick-draft-title">
+          <div><Sparkles size={20} /><strong id="quick-draft-title">Tạo nhanh từ ảnh</strong></div>
+          <p>Google Vision assisted OCR/tags chỉ tạo draft. Ảnh chưa được lưu cho đến khi bạn xác nhận đăng bài.</p>
+          <div className="quick-draft-controls">
+            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setDraftFile(event.target.files?.[0] ?? null)} />
+            <input value={draftContext} onChange={(event) => setDraftContext(event.target.value)} placeholder="Ghi chú hoặc transcript giọng nói (không bắt buộc)" />
+            <button className="secondary-button" disabled={!draftFile || draftMutation.isPending} type="button" onClick={() => draftMutation.mutate()}>
+              <Sparkles size={16} /> {draftMutation.isPending ? "Đang phân tích..." : "Tạo AI-assisted draft"}
+            </button>
+          </div>
+          {draftMutation.error instanceof Error && <div className="notice error">{draftMutation.error.message}</div>}
+          {draftMutation.data?.draft.privacyWarnings.map((warning) => <small key={warning} className="privacy-warning">{warning}</small>)}
+        </section>
+      )}
+
+      <form ref={formRef} className="form-panel create-report-form" onSubmit={submit}>
       <div className="segmented">
-        <button className={type === "LOST" ? "active" : ""} type="button" onClick={() => setType("LOST")}>
+        <button className={type === "LOST" ? "active" : ""} type="button" onClick={() => { setType("LOST"); setVisibilityMode("PUBLIC"); setFinderSessionId(null); }}>
             Tôi làm mất
         </button>
         <button className={type === "FOUND" ? "active" : ""} type="button" onClick={() => setType("FOUND")}>
             Tôi nhặt được
         </button>
       </div>
+      {type === "FOUND" && props.privateFoundEnabled && (
+        <label className="private-found-toggle">
+          <input type="checkbox" checked={visibilityMode === "PRIVATE_DETAILS"} onChange={(event) => setVisibilityMode(event.target.checked ? "PRIVATE_DETAILS" : "PUBLIC")} />
+          <LockKeyhole size={18} />
+          <span><strong>Đăng FOUND riêng tư</strong><small>Ẩn ảnh gốc, vị trí chính xác và chi tiết nhận dạng khỏi người xem công khai để hạn chế claim giả.</small></span>
+        </label>
+      )}
       <div className="form-section-heading">
         <span>01</span>
         <div>

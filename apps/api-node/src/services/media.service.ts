@@ -35,7 +35,7 @@ function canViewClaim(auth: AccessTokenPayload, claim: { claimant: { id: string 
   );
 }
 
-async function assertImageFile(file: Express.Multer.File) {
+export async function assertImageFile(file: Express.Multer.File) {
   const format = imageFormatForMime(file.mimetype);
   if (!format) {
     throw new HttpError(422, "Only JPG, PNG and WEBP images are allowed");
@@ -59,7 +59,7 @@ async function assertImageFile(file: Express.Multer.File) {
   }
 }
 
-function requireFile(file: Express.Multer.File | undefined, fieldName: string) {
+export function requireImageFile(file: Express.Multer.File | undefined, fieldName: string) {
   if (!file) {
     throw new HttpError(400, `Missing uploaded file field: ${fieldName}`);
   }
@@ -89,7 +89,7 @@ export interface PostMediaUpload {
 
 export const mediaService = {
   async uploadAvatar(auth: AccessTokenPayload, file: Express.Multer.File | undefined) {
-    const image = requireFile(file, "avatar");
+    const image = requireImageFile(file, "avatar");
     await assertImageFile(image);
 
     const currentUser = await userRepository.findById(auth.sub);
@@ -253,7 +253,7 @@ export const mediaService = {
     file: Express.Multer.File | undefined,
     body: ClaimEvidenceBody
   ) {
-    const image = requireFile(file, "evidence");
+    const image = requireImageFile(file, "evidence");
     await assertImageFile(image);
 
     const currentClaim = await claimRepository.findById(claimId);
@@ -310,7 +310,7 @@ export const mediaService = {
   },
 
   async uploadClaimChatImage(auth: AccessTokenPayload, claimId: string, file: Express.Multer.File | undefined) {
-    const image = requireFile(file, "image");
+    const image = requireImageFile(file, "image");
     await assertImageFile(image);
 
     if (!(await chatRepository.canUseClaimChat(claimId, auth.sub, auth.roles))) {

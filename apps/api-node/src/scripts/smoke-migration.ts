@@ -107,7 +107,11 @@ async function main() {
     "visual_hunt_feedback",
     "campus_radar_events",
     "campus_radar_alerts",
-    "campus_radar_audit_logs"
+    "campus_radar_audit_logs",
+    "private_proofs",
+    "claim_private_proofs",
+    "lost_search_profiles",
+    "finder_scan_sessions"
   ]) {
     await assertTable(table);
   }
@@ -151,7 +155,15 @@ async function main() {
     ["campus_radar_alerts", "cooldown_until"],
     ["campus_radar_alerts", "observed_count"],
     ["campus_radar_alerts", "z_score"],
-    ["campus_radar_audit_logs", "metadata"]
+    ["campus_radar_audit_logs", "metadata"],
+    ["posts", "visibility_mode"],
+    ["private_proofs", "secret_value_hash"],
+    ["private_proofs", "media_public_id"],
+    ["claim_private_proofs", "item_name_snapshot"],
+    ["lost_search_profiles", "answers_json"],
+    ["lost_search_profiles", "applied_revision"],
+    ["finder_scan_sessions", "idempotency_key"],
+    ["finder_scan_sessions", "created_post_id"]
   ] as const) {
     await assertColumn(tableName, columnName);
   }
@@ -170,8 +182,8 @@ async function main() {
   await assertIndex("campus_radar_audit_logs", "idx_campus_radar_audit_event_created");
 
   const migrationCount = await count("SELECT COUNT(*) AS total FROM schema_migrations", []);
-  if (migrationCount < 33) {
-    throw new Error(`Expected at least 33 applied migrations, got ${migrationCount}`);
+  if (migrationCount < 36) {
+    throw new Error(`Expected at least 36 applied migrations, got ${migrationCount}`);
   }
 
   const aiFeatureFlags = await count(
@@ -181,6 +193,33 @@ async function main() {
   if (aiFeatureFlags !== 3) {
     throw new Error(`Expected 3 AI feature flags, got ${aiFeatureFlags}`);
   }
+
+  const privateAssistanceFlags = await count(
+    "SELECT COUNT(*) AS total FROM config_entries WHERE config_key IN (?, ?, ?, ?)",
+    [
+      "ai.quick_post_draft_enabled",
+      "privacy.private_found_enabled",
+      "evidence.private_proof_vault_enabled",
+      "evidence.consistency_map_enabled"
+    ]
+  );
+  if (privateAssistanceFlags !== 4) {
+    throw new Error(`Expected 4 private assistance feature flags, got ${privateAssistanceFlags}`);
+  }
+
+  const userRecoveryFlags = await count(
+    "SELECT COUNT(*) AS total FROM config_entries WHERE config_key IN (?, ?, ?)",
+    ["ai.search_companion_enabled", "ai.finder_quick_scan_enabled", "recovery.timeline_enabled"]
+  );
+  if (userRecoveryFlags !== 3) {
+    throw new Error(`Expected 3 user recovery feature flags, got ${userRecoveryFlags}`);
+  }
+
+  await assertIndex("posts", "idx_posts_visibility_status");
+  await assertIndex("private_proofs", "idx_private_proofs_owner_status");
+  await assertIndex("claim_private_proofs", "idx_claim_private_proofs_claim");
+  await assertUniqueIndex("lost_search_profiles", "uq_lost_search_profiles_post");
+  await assertUniqueIndex("finder_scan_sessions", "uq_finder_scan_actor_idempotency");
 
   const aiThresholds = await count(
     "SELECT COUNT(*) AS total FROM config_entries WHERE config_key IN (?, ?, ?, ?)",

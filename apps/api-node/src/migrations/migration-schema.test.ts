@@ -28,3 +28,29 @@ test("CREATE TABLE migrations declare the canonical InnoDB charset and collation
     );
   }
 });
+
+test("new assistance feature flags default to disabled until release gates pass", async () => {
+  const expectedFlags = new Map([
+    ["035_private_assistance_feature_flags.sql", [
+      "ai.quick_post_draft_enabled",
+      "privacy.private_found_enabled",
+      "evidence.private_proof_vault_enabled",
+      "evidence.consistency_map_enabled"
+    ]],
+    ["036_search_companion_timeline_and_finder_scan.sql", [
+      "ai.search_companion_enabled",
+      "ai.finder_quick_scan_enabled",
+      "recovery.timeline_enabled"
+    ]]
+  ]);
+
+  for (const [filename, flags] of expectedFlags) {
+    const sql = await readFile(path.join(migrationsDirectory, filename), "utf8");
+    for (const flag of flags) {
+      assert.ok(
+        sql.includes(`SELECT UUID(), '${flag}', 'false'`),
+        `${flag} must default to disabled in ${filename}`
+      );
+    }
+  }
+});

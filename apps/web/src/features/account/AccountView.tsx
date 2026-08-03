@@ -5,6 +5,7 @@ import { api, saveTokens, type PublicUser } from "../../services/api";
 import { formatDate } from "../../app/helpers";
 import type { AuthEntryMode, AuthMode, ImageUploadRules } from "../../app/types";
 import { AuthForm, AvatarForm, LoginForm, ProfileForm, RegisterForm } from "./AccountForms";
+import { ProofVaultPanel } from "./ProofVaultPanel";
 import "./account.css";
 
 export function AccountView(props: {
@@ -106,6 +107,7 @@ export function AccountView(props: {
         </div>
         <ProfileForm user={props.user} onUpdated={props.onAuthChange} />
         <AvatarForm imageRules={props.imageRules} onUploaded={props.onAuthChange} />
+        <ProofVaultPanel />
         <div className="account-grid">
           <article className="mini-panel">
             <Bell size={18} />

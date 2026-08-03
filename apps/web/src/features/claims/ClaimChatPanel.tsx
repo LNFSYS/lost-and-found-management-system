@@ -28,10 +28,33 @@ export function ClaimVerificationBadge(props: { claimId: string }) {
     return null;
   }
 
+  if (verification.ownershipConfidence === undefined || !verification.level || !verification.breakdown) {
+    const statusLabel = verification.reviewStatus === "NEEDS_MORE_INFO"
+      ? "Cần bổ sung bằng chứng"
+      : verification.reviewStatus === "EVIDENCE_RECEIVED"
+        ? "Đã nhận bằng chứng"
+        : "Đang review";
+    return <small className="claim-verification-badge level-medium">{statusLabel}. Human decision required.</small>;
+  }
+
   return (
-    <small className={`claim-verification-badge level-${verification.level.toLowerCase()}`}>
-      M&#7913;c h&#7895; tr&#7907; x&#225;c th&#7921;c: {verification.ownershipConfidence}% - match {verification.breakdown.matchScore}% - b&#7857;ng ch&#7913;ng {verification.breakdown.evidenceScore}%
-    </small>
+    <div className="evidence-consistency-card">
+      <strong className={`claim-verification-badge level-${verification.level.toLowerCase()}`}>
+        Review confidence: {verification.ownershipConfidence}% · match {verification.breakdown.matchScore}% · bằng chứng {verification.breakdown.evidenceScore}%
+      </strong>
+      {verification.consistencyMap && (
+        <div className="consistency-signal-list" aria-label="Evidence Consistency Map">
+          {verification.consistencyMap.map((signal) => (
+            <div className={`consistency-signal status-${signal.status.toLowerCase()}`} key={signal.key}>
+              <span><strong>{signal.label}</strong><small>{signal.source.replace(/_/g, " ")}</small></span>
+              <span className="consistency-status">{signal.status.replace(/_/g, " ")}</span>
+              <p>{signal.reason}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      <small>{verification.consistencyLegend ?? verification.note}</small>
+    </div>
   );
 }
 

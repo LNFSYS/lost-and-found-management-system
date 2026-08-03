@@ -38,6 +38,16 @@ export const claimController = {
     response.json(ok({ verification: result }));
   },
 
+  async consistencyMap(request: Request, response: Response) {
+    const claimId = requireStringParam(request.params.id, "id");
+    const result = await claimService.verifyClaimEvidence(request.auth!, claimId);
+    if (!("consistencyMap" in result)) {
+      throw new HttpError(403, "Only the post owner, Staff or Admin can view the Evidence Consistency Map");
+    }
+    response.setHeader("Cache-Control", "private, no-store");
+    response.json(ok({ verification: result }));
+  },
+
   async listForPost(request: Request, response: Response) {
     const claims = await claimService.listPostClaims(request.auth!, requireStringParam(request.params.id, "id"));
     response.json(ok({ claims }));

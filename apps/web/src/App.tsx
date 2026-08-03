@@ -73,6 +73,11 @@ export function App() {
   const verificationQuestionsEnabled = publicFeatureEnabled("ai.verification_questions_enabled");
   const campusRadarEnabled = publicFeatureEnabled("ai.campus_radar_enabled");
   const visualHuntEnabled = publicFeatureEnabled("ai.visual_hunt_enabled");
+  const quickDraftEnabled = publicFeatureEnabled("ai.quick_post_draft_enabled");
+  const privateFoundEnabled = publicFeatureEnabled("privacy.private_found_enabled");
+  const searchCompanionEnabled = publicFeatureEnabled("ai.search_companion_enabled");
+  const finderQuickScanEnabled = publicFeatureEnabled("ai.finder_quick_scan_enabled");
+  const recoveryTimelineEnabled = publicFeatureEnabled("recovery.timeline_enabled");
   useEffect(() => {
     if ((adminTab === "visual-hunt" && !visualHuntEnabled) || (adminTab === "radar" && !campusRadarEnabled)) {
       setAdminTab("overview");
@@ -273,6 +278,7 @@ export function App() {
     socket.on("notification:new", (notification: NotificationItem) => {
       setRealtimeToast(notification);
       void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      void queryClient.invalidateQueries({ queryKey: ["recovery-timeline"] });
       if (notification.type === "MATCH_FOUND") {
         void queryClient.invalidateQueries({ queryKey: ["my-match-suggestions"] });
       }
@@ -691,6 +697,9 @@ export function App() {
             areas={areasQuery.data?.areas ?? []}
             handoverPoints={handoverQuery.data?.handoverPoints ?? []}
             imageRules={imageRules}
+            quickDraftEnabled={quickDraftEnabled}
+            privateFoundEnabled={privateFoundEnabled}
+            finderQuickScanEnabled={finderQuickScanEnabled}
             onCreated={async (postId, suggestions) => {
               setView("board");
               await refreshBoard();
@@ -740,6 +749,8 @@ export function App() {
             currentUserId={meQuery.data?.user.id}
             canReviewClaims={canUseAdmin}
             verificationQuestionsEnabled={verificationQuestionsEnabled}
+            searchCompanionEnabled={searchCompanionEnabled}
+            recoveryTimelineEnabled={recoveryTimelineEnabled}
             onClose={closePost}
             onClaim={(post) => setClaimPost(post)}
           />

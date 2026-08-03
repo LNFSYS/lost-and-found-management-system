@@ -208,3 +208,53 @@
   color: #64748b;
   font-weight: 700;
 }
+
+.proof-vault-panel,
+.proof-vault-form,
+.proof-vault-list {
+  display: grid;
+  gap: 12px;
+}
+
+.proof-vault-panel {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.proof-vault-note {
+  margin: 0;
+  color: var(--muted);
+}
+
+.proof-vault-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.proof-vault-form textarea,
+.proof-vault-form button {
+  grid-column: 1 / -1;
+}
+
+.proof-vault-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.proof-vault-list article.archived { opacity: 0.62; }
+.proof-vault-list article > div:first-child { display: grid; gap: 3px; }
+.proof-vault-list article span,
+.proof-vault-list article small { color: var(--muted); }
+.proof-vault-actions { display: flex; align-items: center; gap: 6px; }
+.proof-media-badge { font-size: 0.75rem; font-weight: 750; }
+
+@media (max-width: 720px) {
+  .proof-vault-form { grid-template-columns: 1fr; }
+  .proof-vault-list article { grid-template-columns: 1fr; }
+}

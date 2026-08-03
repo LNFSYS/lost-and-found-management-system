@@ -255,6 +255,105 @@ paths:
       responses:
         "200":
           description: Post list
+  /posts/ai-draft:
+    post:
+      security:
+        - bearerAuth: []
+      summary: Create an ephemeral AI-assisted post draft from one image
+      description: Uses Google Vision assisted OCR/tags when available; user review is required and no draft is persisted.
+      responses:
+        "200":
+          description: Editable draft with honest provider or fallback status
+        "422":
+          description: Invalid or unsafe image
+  /posts/finder-quick-scan:
+    post:
+      security:
+        - bearerAuth: []
+      summary: Analyze one finder-selected image and create an idempotent FOUND draft session
+      description: Uses Google Vision assisted OCR/tags or filter fallback. Raw image and raw OCR are not persisted.
+      responses:
+        "200":
+          description: Draft session and redacted LOST candidate summaries
+        "422":
+          description: Invalid or unsafe image
+  /posts/finder-quick-scan/{sessionId}/create-draft:
+    post:
+      security:
+        - bearerAuth: []
+      summary: Confirm a candidate and prepare an editable FOUND draft
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Draft ready for human review
+  /posts/finder-quick-scan/{sessionId}/publish:
+    post:
+      security:
+        - bearerAuth: []
+      summary: Publish one FOUND post from a transaction-locked scan session
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Existing post returned for an idempotent retry
+        "201":
+          description: FOUND post created
+  /proof-vault:
+    get:
+      security:
+        - bearerAuth: []
+      summary: List current user's private proofs
+      responses:
+        "200":
+          description: Owner-only proof list without raw storage identifiers
+    post:
+      security:
+        - bearerAuth: []
+      summary: Create a private ownership proof
+      responses:
+        "201":
+          description: Secret value is write-only and hashed
+  /proof-vault/{id}:
+    patch:
+      security:
+        - bearerAuth: []
+      summary: Update an active owned proof
+      responses:
+        "200":
+          description: Private proof updated
+    delete:
+      security:
+        - bearerAuth: []
+      summary: Archive proof without breaking claim history
+      responses:
+        "200":
+          description: Private proof archived
+  /proof-vault/{id}/media:
+    get:
+      security:
+        - bearerAuth: []
+      summary: Stream owner-only proof media through an authenticated proxy
+      responses:
+        "200":
+          description: Protected image stream
+    post:
+      security:
+        - bearerAuth: []
+      summary: Upload or replace private proof media
+      responses:
+        "201":
+          description: Private proof media stored
   /posts/my:
     get:
       security:
@@ -283,6 +382,66 @@ paths:
       responses:
         "200":
           description: Post deleted
+  /posts/{id}/search-companion:
+    get:
+      security:
+        - bearerAuth: []
+      summary: Get the owner-only private search profile and next question
+      responses:
+        "200":
+          description: Search profile without FOUND private details
+        "403":
+          description: Not the active LOST post owner
+  /posts/{id}/search-companion/answers:
+    post:
+      security:
+        - bearerAuth: []
+      summary: Save one private Search Companion answer
+      responses:
+        "200":
+          description: Search profile revision updated
+  /posts/{id}/search-companion/skip:
+    post:
+      security:
+        - bearerAuth: []
+      summary: Skip one Search Companion question
+      responses:
+        "200":
+          description: Question skipped
+  /posts/{id}/search-companion/undo:
+    post:
+      security:
+        - bearerAuth: []
+      summary: Remove the most recently saved Search Companion answer
+      responses:
+        "200":
+          description: Last answer removed
+  /posts/{id}/search-companion/recalculate:
+    post:
+      security:
+        - bearerAuth: []
+      summary: Preview matching score changes without writing matches or statuses
+      responses:
+        "200":
+          description: Backend-redacted candidates and score deltas
+  /posts/{id}/search-companion/apply:
+    post:
+      security:
+        - bearerAuth: []
+      summary: Apply confirmed non-secret fields to the public LOST post
+      responses:
+        "200":
+          description: Post updated while private answers remain private
+  /posts/{id}/recovery-timeline:
+    get:
+      security:
+        - bearerAuth: []
+      summary: Get an authorized recovery timeline from business and audit records
+      responses:
+        "200":
+          description: Stable privacy-safe timeline
+        "403":
+          description: Not a participant or reviewer
   /posts/{id}/media:
     post:
       security:
@@ -345,6 +504,50 @@ paths:
       responses:
         "200":
           description: Claim detail
+  /claims/{id}/consistency-map:
+    get:
+      security:
+        - bearerAuth: []
+      summary: Reviewer-only Evidence Consistency Map
+      description: Advisory evidence consistency signals; human decision required.
+      responses:
+        "200":
+          description: Evidence consistency signals
+        "403":
+          description: Reviewer authorization required
+  /claims/{id}/proof-vault:
+    get:
+      security:
+        - bearerAuth: []
+      summary: List private proofs attached to an authorized claim
+      responses:
+        "200":
+          description: Attached proof snapshots without raw storage identifiers
+  /claims/{id}/proof-vault/{proofId}:
+    post:
+      security:
+        - bearerAuth: []
+      summary: Claimant attach an owned active proof
+      responses:
+        "201":
+          description: Proof attached transactionally
+    delete:
+      security:
+        - bearerAuth: []
+      summary: Claimant detach proof while claim is editable
+      responses:
+        "200":
+          description: Proof detached
+  /claims/{id}/proof-vault/{proofId}/media:
+    get:
+      security:
+        - bearerAuth: []
+      summary: Stream attached proof media for claim participants or reviewers
+      responses:
+        "200":
+          description: Protected image stream
+        "403":
+          description: Not a participant or reviewer
   /claims/{id}/evidence:
     post:
       security:

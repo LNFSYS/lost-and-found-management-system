@@ -15,6 +15,7 @@ import { categoryRoutes, handoverPointRoutes, locationRoutes } from "./lookup.ro
 import { postRoutes, searchRoutes } from "./post.routes.js";
 import { radarRoutes } from "./radar.routes.js";
 import { visualHuntRoutes } from "./visual-hunt.routes.js";
+import { proofVaultRoutes } from "./proof-vault.routes.js";
 
 export const apiRoutes = Router();
 
@@ -59,4 +60,5 @@ apiRoutes.use("/locations", locationRoutes);
 apiRoutes.use("/handover-points", handoverPointRoutes);
 apiRoutes.use("/docs", docsRoutes);
 apiRoutes.use("/posts", postRoutes);
+apiRoutes.use("/proof-vault", proofVaultRoutes);
 apiRoutes.use("/search", searchRoutes);

@@ -12,6 +12,7 @@ import { containsPrivateOwnershipSignal, protectClaimSecret } from "./claim-secr
 import { matchingService } from "./matching.service.js";
 import { verificationQuestionService } from "./verification-question.service.js";
 import { configRepository } from "../repositories/config.repository.js";
+import { proofVaultRepository } from "../repositories/proof-vault.repository.js";
 
 function canReviewClaims(auth: AccessTokenPayload, ownerId: string) {
   return auth.sub === ownerId || auth.roles.includes("STAFF") || auth.roles.includes("ADMIN");
@@ -66,6 +67,14 @@ function overlapScore(left: string | null | undefined, right: string | null | un
     }
   }
   return Math.min(1, overlap / Math.min(leftTokens.size, rightTokens.size));
+}
+
+function consistencyStatus(score: number, present = true) {
+  if (!present) return "MISSING" as const;
+  if (score >= 0.75) return "STRONG_MATCH" as const;
+  if (score >= 0.35) return "PARTIAL_MATCH" as const;
+  if (score > 0) return "CONFLICT" as const;
+  return "NOT_EVALUATED" as const;
 }
 
 function timeConfidence(claimTime: string | null | undefined, postTime: string | null | undefined) {
@@ -328,7 +337,17 @@ export const claimService = {
   async verifyClaimEvidence(auth: AccessTokenPayload, claimId: string) {
     const detail = await this.getClaim(auth, claimId);
     if (!canReviewClaims(auth, detail.claim.postOwnerId)) {
-      throw new HttpError(403, "Only the post owner, Staff or Admin can view verification scoring details");
+      return {
+        claimId,
+        reviewStatus:
+          detail.claim.status === "NEED_MORE_INFO"
+            ? "NEEDS_MORE_INFO"
+            : detail.evidence.length > 0
+              ? "EVIDENCE_RECEIVED"
+              : "UNDER_REVIEW",
+        humanDecisionRequired: true,
+        note: "Chi tiết đối chiếu riêng tư chỉ hiển thị cho người có thẩm quyền review."
+      };
     }
     const post = await postRepository.findById(detail.claim.postId);
     if (!post) {
@@ -392,6 +411,93 @@ export const claimService = {
           : ownershipConfidence >= 45
             ? "MEDIUM"
             : "LOW";
+    const consistencyMapEnabled = await configRepository.booleanValue("evidence.consistency_map_enabled");
+    const attachedProofs = consistencyMapEnabled ? await proofVaultRepository.listAttached(claimId) : [];
+    const consistencyMap = consistencyMapEnabled
+      ? [
+          {
+            key: "matched_post",
+            label: "Bài LOST liên quan",
+            source: "RULE_BASED",
+            status: consistencyStatus(matchScore, Boolean(claimantMatch)),
+            contribution: Math.round(matchScore * 100),
+            reason: claimantMatch ? `Có candidate matching ở mức ${Math.round(matchScore * 100)}%.` : "Chưa có candidate matching thuộc claimant.",
+            reviewerOnly: true
+          },
+          {
+            key: "description",
+            label: "Mô tả vật phẩm",
+            source: "RULE_BASED",
+            status: consistencyStatus(textScore, Boolean(claimText.trim())),
+            contribution: Math.round(textScore * 100),
+            reason: claimText.trim() ? "So sánh token mô tả claim với bài FOUND." : "Claim chưa có mô tả đủ để so sánh.",
+            reviewerOnly: true
+          },
+          {
+            key: "location",
+            label: "Vị trí gần đúng",
+            source: "RULE_BASED",
+            status: consistencyStatus(locationScore, Boolean(detail.claim.approximateLocation)),
+            contribution: Math.round(locationScore * 100),
+            reason: detail.claim.approximateLocation ? "Đối chiếu vị trí claimant cung cấp với dữ liệu bài." : "Chưa có vị trí gần đúng.",
+            reviewerOnly: true
+          },
+          {
+            key: "time",
+            label: "Thời gian",
+            source: "RULE_BASED",
+            status: consistencyStatus(timeScore, Boolean(detail.claim.approximateLostAt && post.lostFoundAt)),
+            contribution: Math.round(timeScore * 100),
+            reason: detail.claim.approximateLostAt ? "Đối chiếu khoảng cách thời gian LOST/FOUND." : "Chưa có thời gian mất gần đúng.",
+            reviewerOnly: true
+          },
+          {
+            key: "uploaded_evidence",
+            label: "Bằng chứng đã tải",
+            source: "USER_PROVIDED",
+            status: detail.evidence.length > 0 ? consistencyStatus(evidenceScore) : "MISSING",
+            contribution: Math.round(evidenceScore * 100),
+            reason: detail.evidence.length > 0 ? `${detail.evidence.length} bằng chứng đã được nhận qua media proxy riêng tư.` : "Claim chưa có ảnh bằng chứng.",
+            reviewerOnly: true
+          },
+          {
+            key: "proof_vault",
+            label: "Private Proof Vault",
+            source: "USER_PROVIDED",
+            status: attachedProofs.length > 0 ? "PARTIAL_MATCH" : "MISSING",
+            contribution: null,
+            reason: attachedProofs.length > 0 ? `${attachedProofs.length} proof riêng tư đã attach; reviewer cần xem nội dung và đối chiếu thủ công.` : "Chưa attach proof từ Vault.",
+            reviewerOnly: true
+          },
+          {
+            key: "private_question",
+            label: "Câu hỏi xác minh riêng",
+            source: "USER_PROVIDED",
+            status: questionReview.score === null ? "NOT_EVALUATED" : consistencyStatus(questionReview.score, questionReview.hasQuestions),
+            contribution: questionReview.score === null ? null : Math.round(questionReview.score * 100),
+            reason: questionReview.hasQuestions ? "Đáp án đã được so khớp với hash; không hiển thị expected answer." : "Không có câu hỏi xác minh được gán.",
+            reviewerOnly: true
+          },
+          {
+            key: "ocr_receipt",
+            label: "OCR hóa đơn/tài liệu",
+            source: "AI_OCR",
+            status: detail.evidence.some((item) => item.description?.includes("OCR:")) ? "PARTIAL_MATCH" : "NOT_EVALUATED",
+            contribution: null,
+            reason: detail.evidence.some((item) => item.description?.includes("OCR:")) ? "Có OCR hỗ trợ; reviewer phải đối chiếu bản gốc." : "Không có OCR bằng chứng để đánh giá.",
+            reviewerOnly: true
+          },
+          {
+            key: "human_review",
+            label: "Quyết định của người review",
+            source: "HUMAN_REVIEW",
+            status: detail.claim.status === "ACCEPTED" ? "STRONG_MATCH" : detail.claim.status === "REJECTED" ? "CONFLICT" : "NOT_EVALUATED",
+            contribution: null,
+            reason: ["ACCEPTED", "REJECTED"].includes(detail.claim.status) ? `Claim đã được người có thẩm quyền chuyển sang ${detail.claim.status}.` : "Chưa có quyết định cuối cùng của người review.",
+            reviewerOnly: true
+          }
+        ]
+      : undefined;
 
     return {
       claimId,
@@ -399,6 +505,7 @@ export const claimService = {
       level: ownershipConfidence >= 70 ? "HIGH" : ownershipConfidence >= 45 ? "MEDIUM" : "LOW",
       reviewConfidenceTier,
       isSystemVerified: false,
+      humanDecisionRequired: true,
       note: "Mức hỗ trợ xác thực chỉ là điểm tham khảo. Staff hoặc chủ bài FOUND phải đối chiếu bằng chứng riêng trước khi trả đồ.",
       breakdown: {
         matchScore: Math.round(matchScore * 100),
@@ -418,8 +525,13 @@ export const claimService = {
         hasPrivateSignal: privateSignal > 0,
         hasApproximateLostTime: Boolean(detail.claim.approximateLostAt),
         hasApproximateLocation: Boolean(detail.claim.approximateLocation),
-        hasVerificationQuestions: questionReview.hasQuestions
-      }
+        hasVerificationQuestions: questionReview.hasQuestions,
+        attachedProofCount: attachedProofs.length
+      },
+      consistencyMap,
+      consistencyLegend: consistencyMapEnabled
+        ? "Evidence consistency is review assistance only. STRONG_MATCH is not ownership approval; human decision required."
+        : undefined
     };
   }
 };

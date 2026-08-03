@@ -117,3 +117,17 @@ See [node-java-service-boundary.md](node-java-service-boundary.md) for the owner
 - More automated coverage for OTP provider delivery, reconnect/offline behavior and full browser workflows.
 - Native mobile hardening: push notifications, offline retry, device testing, app store packaging, and optional separate Flutter app.
 - Production custom AI training/MLOps pipeline.
+
+## Implemented Privacy/AI Assistance
+
+- AI-assisted draft from one image with honest Google Vision/fallback status; no draft persistence or automatic publishing.
+- FOUND `PRIVATE_DETAILS` mode with backend redaction of exact location, original media, contact and identifying description for public viewers.
+- Private Proof Vault with hashed secret values, authenticated media proxy, claim attachment and archive-safe history.
+- Evidence Consistency Map separating rule-based, AI/OCR, user-provided and human-reviewed signals. Human decision required.
+- Search Companion for owner-only, question-guided refinement of active LOST posts with private answers and read-only match previews.
+- Recovery Timeline derived from actual workflow records with role-aware privacy and a human next-action hint.
+- Finder Quick Scan using explicit camera/upload input, Google Vision assisted OCR/tags or an honest filter fallback, advisory LOST candidates and an editable FOUND draft.
+
+These three newest capabilities are implemented in web/Node code and unit-tested. They remain disabled until migration 036 and the database-backed E2E pass on a checksum-clean isolated schema. Phone-camera rehearsal over HTTPS and the live Google Vision provider path are release checks, not proof of a custom-trained model.
+
+The same release rule applies to the four Private Assistance capabilities from migration 035. All seven flags now default to disabled. Current readiness is conditional: source gates pass, while blank-schema migration, database E2E, live Vision and phone-camera rehearsal remain open.

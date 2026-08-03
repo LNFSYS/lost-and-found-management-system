@@ -468,6 +468,40 @@ export const openApiDocument = withPathParameters({
         responses: { "200": { description: "Post list" } }
       }
     },
+    "/posts/ai-draft": {
+      post: {
+        security: [{ bearerAuth: [] }],
+        summary: "Create an ephemeral AI-assisted post draft from one image",
+        description: "Uses Google Vision assisted OCR/tags when available. The image and draft are not persisted; user review is required before create post.",
+        responses: { "200": { description: "Editable draft with provider/fallback status" }, "422": { description: "Invalid or unsafe image" } }
+      }
+    },
+    "/posts/finder-quick-scan": {
+      post: {
+        security: [{ bearerAuth: [] }],
+        summary: "Analyze one finder-selected image and create an idempotent FOUND draft session",
+        description: "Uses Google Vision assisted OCR/tags or a filter fallback. The raw image and raw OCR are not persisted; returned LOST candidates are advisory.",
+        responses: { "200": { description: "Draft session and redacted candidate summaries" }, "422": { description: "Invalid or unsafe image" } }
+      }
+    },
+    "/posts/finder-quick-scan/{sessionId}/create-draft": {
+      post: { security: [{ bearerAuth: [] }], summary: "Confirm the scan candidate and prepare an editable FOUND draft", parameters: [uuidPathParameter("sessionId")], responses: { "200": { description: "Draft ready for human review" } } }
+    },
+    "/posts/finder-quick-scan/{sessionId}/publish": {
+      post: { security: [{ bearerAuth: [] }], summary: "Publish one FOUND post from a locked scan session", parameters: [uuidPathParameter("sessionId")], description: "Concurrent retries return the same post. Matching remains advisory and cannot confirm ownership.", responses: { "201": { description: "FOUND post created" }, "200": { description: "Existing post returned for an idempotent retry" } } }
+    },
+    "/proof-vault": {
+      get: { security: [{ bearerAuth: [] }], summary: "List current user's private proofs", responses: { "200": { description: "Owner-only proof list without raw storage identifiers" } } },
+      post: { security: [{ bearerAuth: [] }], summary: "Create a private ownership proof", responses: { "201": { description: "Secret value is write-only and hashed" } } }
+    },
+    "/proof-vault/{id}": {
+      patch: { security: [{ bearerAuth: [] }], summary: "Update an active owned proof", parameters: [uuidPathParameter("id")], responses: { "200": { description: "Private proof updated" } } },
+      delete: { security: [{ bearerAuth: [] }], summary: "Archive proof without breaking claim history", parameters: [uuidPathParameter("id")], responses: { "200": { description: "Private proof archived" } } }
+    },
+    "/proof-vault/{id}/media": {
+      get: { security: [{ bearerAuth: [] }], summary: "Stream owner-only proof media through the authenticated proxy", parameters: [uuidPathParameter("id")], responses: { "200": { description: "Protected image stream" } } },
+      post: { security: [{ bearerAuth: [] }], summary: "Upload or replace private proof media", parameters: [uuidPathParameter("id")], responses: { "201": { description: "Private proof media stored" } } }
+    },
     "/posts/my": {
       get: {
         security: [{ bearerAuth: [] }],
@@ -573,6 +607,46 @@ export const openApiDocument = withPathParameters({
         summary: "Calculate claim evidence ownership verification percentage",
         responses: { "200": { description: "Claim verification confidence" } }
       }
+    },
+    "/claims/{id}/consistency-map": {
+      get: {
+        security: [{ bearerAuth: [] }],
+        summary: "Reviewer-only Evidence Consistency Map",
+        description: "Advisory rule/OCR/user/human signals. Human decision required; no automatic ownership approval.",
+        parameters: [uuidPathParameter("id")],
+        responses: { "200": { description: "Evidence consistency signals" }, "403": { description: "Reviewer authorization required" } }
+      }
+    },
+    "/posts/{id}/search-companion": {
+      get: { security: [{ bearerAuth: [] }], summary: "Get the owner-only private search profile and next safe question", parameters: [uuidPathParameter("id")], responses: { "200": { description: "Search profile without FOUND private details" }, "403": { description: "Not the active LOST post owner" } } }
+    },
+    "/posts/{id}/search-companion/answers": {
+      post: { security: [{ bearerAuth: [] }], summary: "Save one private Search Companion answer", parameters: [uuidPathParameter("id")], responses: { "200": { description: "Profile revision updated" } } }
+    },
+    "/posts/{id}/search-companion/skip": {
+      post: { security: [{ bearerAuth: [] }], summary: "Skip one Search Companion question", parameters: [uuidPathParameter("id")], responses: { "200": { description: "Question skipped" } } }
+    },
+    "/posts/{id}/search-companion/undo": {
+      post: { security: [{ bearerAuth: [] }], summary: "Remove the most recently saved Search Companion answer", parameters: [uuidPathParameter("id")], responses: { "200": { description: "Last answer removed" } } }
+    },
+    "/posts/{id}/search-companion/recalculate": {
+      post: { security: [{ bearerAuth: [] }], summary: "Preview matching score changes without writing matches or statuses", parameters: [uuidPathParameter("id")], responses: { "200": { description: "Backend-redacted candidates and score deltas" } } }
+    },
+    "/posts/{id}/search-companion/apply": {
+      post: { security: [{ bearerAuth: [] }], summary: "Apply only confirmed non-secret fields to the public LOST post", parameters: [uuidPathParameter("id")], responses: { "200": { description: "Post updated; private answers remain private" } } }
+    },
+    "/posts/{id}/recovery-timeline": {
+      get: { security: [{ bearerAuth: [] }], summary: "Get an authorized recovery timeline derived from business and audit records", parameters: [uuidPathParameter("id")], responses: { "200": { description: "Stable, privacy-safe timeline" }, "403": { description: "Not a participant or reviewer" } } }
+    },
+    "/claims/{id}/proof-vault": {
+      get: { security: [{ bearerAuth: [] }], summary: "List private proofs attached to an authorized claim", parameters: [uuidPathParameter("id")], responses: { "200": { description: "Attached proof snapshots without raw storage identifiers" } } }
+    },
+    "/claims/{id}/proof-vault/{proofId}": {
+      post: { security: [{ bearerAuth: [] }], summary: "Claimant attach an owned active proof", parameters: [uuidPathParameter("id"), uuidPathParameter("proofId")], responses: { "201": { description: "Proof attached transactionally" } } },
+      delete: { security: [{ bearerAuth: [] }], summary: "Claimant detach proof while claim is editable", parameters: [uuidPathParameter("id"), uuidPathParameter("proofId")], responses: { "200": { description: "Proof detached" } } }
+    },
+    "/claims/{id}/proof-vault/{proofId}/media": {
+      get: { security: [{ bearerAuth: [] }], summary: "Stream attached proof media for claim participants/reviewers", parameters: [uuidPathParameter("id"), uuidPathParameter("proofId")], responses: { "200": { description: "Protected image stream" }, "403": { description: "Not a claim participant or reviewer" } } }
     },
     "/claims/{id}/more-info": {
       patch: {

@@ -6,6 +6,8 @@ import { api, hasAccessToken, type BoardPost } from "../../services/api";
 import { ClaimAppointmentPanel } from "../claims/ClaimWorkflowPanels";
 import { MatchReviewPanel } from "./MatchReviewPanel";
 import { VerificationQuestionManager } from "../ai-tools";
+import { SearchCompanionPanel } from "./SearchCompanionPanel";
+import { RecoveryTimelinePanel } from "./RecoveryTimelinePanel";
 import "./post-detail.css";
 
 export function PostDetailPage(props: {
@@ -15,6 +17,8 @@ export function PostDetailPage(props: {
   currentUserId?: string;
   canReviewClaims: boolean;
   verificationQuestionsEnabled: boolean;
+  searchCompanionEnabled: boolean;
+  recoveryTimelineEnabled: boolean;
   onClose: () => void;
   onClaim: (post: BoardPost) => void;
 }) {
@@ -419,6 +423,14 @@ export function PostDetailPage(props: {
                     await disableVerificationQuestionMutation.mutateAsync();
                   }}
                 />
+              )}
+
+              {canManagePost && post.type === "LOST" && (
+                <SearchCompanionPanel postId={post.id} enabled={props.searchCompanionEnabled} />
+              )}
+
+              {props.currentUserId && (
+                <RecoveryTimelinePanel postId={post.id} enabled={props.recoveryTimelineEnabled} />
               )}
 
               {(props.canReviewClaims || props.currentUserId === post.userId) && props.detail.matches.length > 0 && (

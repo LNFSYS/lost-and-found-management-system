@@ -171,3 +171,23 @@ These capabilities reuse existing UCs and owners; they do not expand the canonic
 | Total UCs after consolidation | 100 |
 | ID range | UC-001 through UC-100 |
 | Active team members | TL, VQ, QD, AK |
+
+## Consolidated Private Assistance Capability
+
+| Done | Capability | Existing UC mapping | Evidence |
+| --- | --- | --- | --- |
+| [x] | Create and review AI-assisted post draft | UC-019, UC-020, UC-070, UC-076 | Ephemeral `/posts/ai-draft`, OCR redaction, provider/fallback status, editable web form |
+| [x] | Protect sensitive FOUND details | UC-020, UC-022, UC-023, UC-076 | `PRIVATE_DETAILS`, role-aware backend serializer, notification redaction |
+| [x] | Manage and attach private ownership proofs | UC-045, UC-048, UC-049, UC-054 | Proof Vault UI/API, hash-only secrets, proxy media, transaction-safe attachment |
+| [x] | Review evidence consistency | UC-049, UC-052, UC-054, UC-089 | Reviewer-only signal map; claimant general status; human decision required |
+
+## Consolidated User Recovery Assistance Capability
+
+These capabilities reuse the canonical UCs and do not increase the 100-UC baseline. A checked item means the implementation and unit/API test exist; the database release gate remains tracked separately.
+
+| Done | Capability | Existing UC mapping | Evidence |
+| --- | --- | --- | --- |
+| [x] | Refine a LOST search with Search Companion | UC-040, UC-041, UC-068, UC-070, UC-076 | Owner-only private profile, answer/skip/undo, advisory before/after preview and public-safe apply |
+| [x] | Follow the Recovery Timeline | UC-021, UC-024, UC-045, UC-052, UC-054, UC-059, UC-073 | Derived persisted events, participant authorization, private-field suppression and polling/realtime invalidation |
+| [x] | Scan and prepare a FOUND post with Finder Quick Scan | UC-040, UC-041, UC-068, UC-070, UC-076, UC-086 | Explicit camera/upload, Vision/fallback candidates, hidden weak tier, editable draft and locked idempotent publish |
+| [x] | Enforce assistance release gates | UC-062, UC-066, UC-070, UC-084, UC-085 | Migrations 035-036 default seven flags to `false`; migration regression test; terminal Finder sessions reject draft recreation |

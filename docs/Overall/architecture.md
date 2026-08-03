@@ -295,3 +295,23 @@ Use a restrained FPT University-inspired palette:
 - Blue `#0651A0` and `#008DDE` for trust, navigation, technology, and AI.
 - Green `#53B848` for campus, resolved status, and handover success.
 - Keep surfaces mostly white/off-white with crisp borders for a modern university system rather than a playful consumer app.
+
+## Private Assistance Boundary (2026-08-03)
+
+- Node.js remains the only write owner for private proofs, post visibility and claim-proof attachments.
+- `private_proofs` stores owner-scoped records; secret values are bcrypt-hashed and private media identifiers never leave the API.
+- `claim_private_proofs` stores an immutable descriptive snapshot so archiving a Vault record does not break claim history. Attach/archive uses row locks.
+- `PRIVATE_DETAILS` FOUND posts are redacted by backend serializers for public list/detail/search/match suggestions. Matching still reads full internal signals.
+- AI-assisted draft analyzes an ephemeral in-memory image with Google Vision assisted OCR/tags and returns an editable draft. It never creates a post automatically.
+- Evidence Consistency Map extends review confidence without automatic claim decisions. Detailed signals are reviewer-only; claimants receive a general review state.
+
+## User Recovery Assistance Boundary (2026-08-03)
+
+- Node.js remains the write owner for `lost_search_profiles`, `finder_scan_sessions`, post creation and match job enqueueing. Java does not write these flows.
+- Search Companion persists owner-private answers separately from the public LOST post. Its preview calls the existing matching calculation without saving match rows, changing state or sending notifications. Only public-safe fields can be applied to the post.
+- Recovery Timeline is a derived read model over existing persisted workflow records. It does not own workflow state and excludes raw evidence/media identifiers, private answers and internal notes.
+- Finder Quick Scan analyzes one explicitly captured/uploaded frame in memory. The stored session contains only safe draft/candidate snapshots; the raw image and raw OCR are not persisted.
+- Finder publish locks the scan session and inserts the FOUND post plus publish marker in one transaction. Repeated requests with the same session return the existing post.
+- Existing `notification:new` Socket.IO delivery invalidates the timeline cache, with a 30-second authenticated polling fallback. No public or cross-user Socket room is introduced.
+- Migrations 035-036 create all new feature flags with value `false`. Deployment must pass isolated migration smoke and the corresponding E2E before an operator enables them.
+- Finder draft preparation accepts only `ANALYZED` or `DRAFT_READY`; terminal `PUBLISHED`/`EXPIRED` sessions fail with `409`.

@@ -39,6 +39,23 @@ export interface MatchRunResult extends WeightedScores {
   explanation?: ScoreExplanation;
 }
 
+export interface MatchPreviewResult {
+  candidateId: string;
+  beforeScore: number;
+  afterScore: number;
+  tier: ScoreExplanation["tier"];
+  componentDeltas: {
+    text: number;
+    category: number;
+    location: number;
+    time: number;
+    image: number;
+    ocr: number;
+  };
+  reasons: string[];
+  penalties: string[];
+}
+
 const STOPWORDS = new Set([
   "bi",
   "can",
@@ -225,6 +242,10 @@ function timeScore(left: MatchCandidatePost, right: MatchCandidatePost) {
 
 function normalizeScore(value: number) {
   return Number(Math.max(0, Math.min(1, value)).toFixed(4));
+}
+
+function scoreDelta(value: number) {
+  return Number(Math.max(-1, Math.min(1, value)).toFixed(4));
 }
 
 function clampConfig(value: number, fallback: number) {
@@ -428,13 +449,15 @@ async function notifyHighConfidenceMatch(
   const lostPost = post.type === "LOST" ? post : candidate;
   const foundPost = post.type === "FOUND" ? post : candidate;
   const scoreText = percent(match.totalScore);
+  const privateFound = foundPost.visibilityMode === "PRIVATE_DETAILS";
+  const foundLabel = privateFound ? "Một bài FOUND riêng tư" : `"${foundPost.title}"`;
 
   await notificationRepository.createMany([
     {
       userId: lostPost.userId,
       type: "MATCH_FOUND",
       title: "Có vật nhặt được giống bài mất đồ của bạn",
-      body: `"${foundPost.title}" giống ${scoreText} với bài "${lostPost.title}". Hãy kiểm tra thông tin trước khi gửi yêu cầu nhận đồ.`,
+      body: `${foundLabel} giống ${scoreText} với bài "${lostPost.title}". Hãy kiểm tra thông tin đã được chia sẻ trước khi gửi yêu cầu nhận đồ.`,
       entityType: "POST",
       entityId: foundPost.id,
       dedupeKey: `match:${match.id}:lost-owner`
@@ -443,7 +466,7 @@ async function notifyHighConfidenceMatch(
       userId: foundPost.userId,
       type: "MATCH_FOUND",
       title: "Có bài mất đồ mới giống vật bạn đã đăng",
-      body: `"${lostPost.title}" giống ${scoreText} với bài "${foundPost.title}". Kết quả chỉ là gợi ý để đối chiếu.`,
+      body: `"${lostPost.title}" giống ${scoreText} với bài FOUND của bạn. Kết quả chỉ là gợi ý để đối chiếu.`,
       entityType: "POST",
       entityId: lostPost.id,
       dedupeKey: `match:${match.id}:found-owner`
@@ -481,6 +504,48 @@ async function buildMatchSuggestions(postId: string, matches: MatchRunResult[], 
 }
 
 export const matchingService = {
+  async previewForLostPost(postId: string, supplementalText: string): Promise<MatchPreviewResult[]> {
+    const post = await postRepository.findMatchPostById(postId);
+    if (!post || post.type !== "LOST") return [];
+
+    const [weights, candidateLimit, candidateWindowDays] = await Promise.all([
+      loadWeights(),
+      postRepository.getConfigNumber("matching.candidate_limit", 500),
+      postRepository.getConfigNumber("matching.candidate_window_days", 120)
+    ]);
+    const candidates = await postRepository.listOppositeOpenPosts(post, { candidateLimit, candidateWindowDays });
+    if (candidates.length === 0) return [];
+
+    const augmentedPost = { ...post, text: `${post.text} ${supplementalText}`.trim() };
+    const beforeVectors = buildTfidfVectors([post, ...candidates].map((item) => `${item.text} ${item.imageText} ${item.ocrText}`.trim()));
+    const afterVectors = buildTfidfVectors([augmentedPost, ...candidates].map((item) => `${item.text} ${item.imageText} ${item.ocrText}`.trim()));
+
+    return candidates
+      .map((candidate, index) => {
+        const before = buildScoreDetail(post, candidate, beforeVectors[0], beforeVectors[index + 1], weights);
+        const after = buildScoreDetail(augmentedPost, candidate, afterVectors[0], afterVectors[index + 1], weights);
+        return {
+          candidateId: candidate.id,
+          beforeScore: before.totalScore,
+          afterScore: after.totalScore,
+          tier: after.explanation.tier,
+          componentDeltas: {
+            text: scoreDelta(after.textScore - before.textScore),
+            category: scoreDelta(after.categoryScore - before.categoryScore),
+            location: scoreDelta(after.locationScore - before.locationScore),
+            time: scoreDelta(after.timeScore - before.timeScore),
+            image: scoreDelta(after.imageScore - before.imageScore),
+            ocr: scoreDelta(after.ocrScore - before.ocrScore)
+          },
+          reasons: after.explanation.reasons,
+          penalties: after.explanation.penalties
+        };
+      })
+      .filter((preview) => preview.afterScore >= weights.threshold || preview.beforeScore >= weights.threshold)
+      .sort((left, right) => right.afterScore - left.afterScore)
+      .slice(0, 20);
+  },
+
   async runForPost(postId: string) {
     const post = await postRepository.findMatchPostById(postId);
     if (!post) {
